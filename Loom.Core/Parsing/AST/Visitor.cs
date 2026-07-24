@@ -21,6 +21,32 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitIf(If @if) => CombineResults([Visit(@if.Condition), Visit(@if.ThenBranch), VisitWithDefault(@if.ElseBranch)]);
     public virtual T VisitElseBranch(ElseBranch elseBranch) => Visit(elseBranch.Branch);
 
+    public virtual T VisitMatchExpression(MatchExpression matchExpression) =>
+        CombineResults([Visit(matchExpression.Expression), VisitList(matchExpression.Arms)]);
+
+    public virtual T VisitMatchArm(MatchArm matchArm) =>
+        CombineResults([Visit(matchArm.Pattern), VisitWithDefault(matchArm.Guard), Visit(matchArm.Body)]);
+    public virtual T VisitWildcardPattern(WildcardPattern wildcardPattern) => DefaultValue(wildcardPattern);
+    public virtual T VisitIdentifierPattern(IdentifierPattern identifierPattern) => DefaultValue(identifierPattern);
+    public virtual T VisitLiteralPattern(LiteralPattern literalPattern) => DefaultValue(literalPattern);
+    public virtual T VisitOrPattern(OrPattern orPattern) => VisitList(orPattern.Patterns);
+    public virtual T VisitRangePattern(RangePattern rangePattern) =>
+        CombineResults([Visit(rangePattern.Minimum), Visit(rangePattern.Maximum)]);
+    public virtual T VisitLetPattern(LetPattern letPattern) => DefaultValue(letPattern);
+
+    public virtual T VisitTypedPattern(TypedPattern typedPattern) =>
+        CombineResults([Visit(typedPattern.Type), VisitWithDefault(typedPattern.ObjectPattern)]);
+
+    public virtual T VisitTypePattern(TypePattern typePattern) =>
+        CombineResults([Visit(typePattern.Type), VisitWithDefault(typePattern.ObjectPattern)]);
+
+    public virtual T VisitObjectPattern(ObjectPattern objectPattern) => VisitList(objectPattern.Fields);
+    public virtual T VisitObjectPatternField(ObjectPatternField objectPatternField) => Visit(objectPatternField.Pattern);
+    public virtual T VisitArrayPattern(ArrayPattern arrayPattern) =>
+        CombineResults([VisitList(arrayPattern.Elements), VisitWithDefault(arrayPattern.Rest)]);
+    public virtual T VisitRestPattern(RestPattern restPattern) => Visit(restPattern.Pattern);
+    public virtual T VisitNullPattern(NullPattern nullPattern) => DefaultValue(nullPattern);
+
     public virtual T VisitImplementBody(ImplementBody implementBody) => VisitList(implementBody.Implementations);
     public virtual T VisitImplement(Implement implement) => CombineResults([Visit(implement.TraitName), Visit(implement.InterfaceName), Visit(implement.Body)]);
     public virtual T VisitTraitBody(TraitBody traitBody) => VisitList(traitBody.Members);

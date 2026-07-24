@@ -179,4 +179,39 @@ public sealed partial class TypeChecker
         substituted = null;
         return type is Types.TypeParameter tp && substitution.TryGetValue(tp, out substituted);
     }
+
+    /// <summary>
+    /// A generic-valued argument (e.g. passing `id` where `id&lt;T&gt;(n: T): T`) is otherwise
+    /// compared structurally against its expected type with no attempt to specialize it first,
+    /// so a type-parameter-count mismatch (the argument has its own free type parameters, the
+    /// expected shape has none) fails immediately even when the expected shape fully determines
+    /// what the argument's type parameters should be. Infer and substitute them here so `id`
+    /// becomes e.g. `fn(number): number` before the normal assignability/unification check runs.
+    /// </summary>
+    private bool TryInstantiateGenericFunctionArgument(Node failNode, Type actual, Type expected, [NotNullWhen(true)] out Type? instantiated)
+    {
+        instantiated = null;
+        if (actual is not Types.FunctionType { TypeParameters.Count: > 0 } genericFunction
+            || expected is not Types.FunctionType expectedFunction
+            || genericFunction.TypeParameters.Count == expectedFunction.TypeParameters.Count)
+        {
+            return false;
+        }
+
+        var substitution = TypeInferrer.InferFunctionTypeArguments(genericFunction, expectedFunction.ParameterTypes);
+        foreach (var typeParameter in genericFunction.TypeParameters)
+        {
+            if (substitution.TryGetValue(typeParameter, out var substitutedType)
+                && typeParameter.Constraint != null
+                && !substitutedType.IsAssignableTo(typeParameter.Constraint))
+            {
+                return false;
+            }
+        }
+
+        var substitutedParameterTypes = SubstituteTypeParameters(failNode, genericFunction.ParameterTypes, substitution);
+        var substitutedReturnType = SubstituteTypeParameters(failNode, genericFunction.ReturnType, substitution);
+        instantiated = new Types.FunctionType([], substitutedParameterTypes, substitutedReturnType);
+        return true;
+    }
 }

@@ -4895,6 +4895,66 @@ public class TypeCheckerTest
             "Type '\"no\"' is not assignable to type 'number'."
         );
     }
+
+    [Fact]
+    public void Allows_Match_EmptyArrayArm_AsAnnotatedVariable()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = match 1 {
+                _ -> [],
+            };
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_EmptyArrayArm_AsFunctionReturn()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn empty(flag: bool): number[] {
+                return match flag {
+                    true -> [1],
+                    false -> [],
+                };
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_ArmBody_Mismatch_AgainstAnnotatedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let x: number = match 1 {
+                _ -> "no",
+            };
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NestedArrayLiteral_ElementMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = match true {
+                true -> [1, "no"],
+                false -> [],
+            };
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
     #endregion Bidirectional
 
     #region Events
@@ -5041,4 +5101,250 @@ public class TypeCheckerTest
         Assert.Single(diagnostics.Set, d => d.Code == InternalCodes.NonFunctionAttribute);
     }
     #endregion Events
+
+    #region Match
+    [Fact]
+    public void Allows_Match_LiteralAndWildcardArms()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { 0 -> "zero", _ -> "other" }""");
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_IdentifierBinding()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { x -> x }""");
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_LetPatternBinding()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { let name -> name }""");
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_TypedPattern_NarrowsBinding()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number = "hi";
+            match value {
+                text when string -> text,
+                n when number -> n,
+                _ -> 0,
+            }
+            """
+        );
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_ArrayAndRestBindings()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs = [1, 2, 3];
+            match xs {
+                [a, b, c] -> a,
+                [head, ..rest] -> head,
+                _ -> 0,
+            }
+            """
+        );
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_ObjectFieldBindings()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Box { value: number }
+            let box = new Box { value: 1 };
+            match box {
+                { value } -> value,
+                { value: v } -> v,
+                _ -> 0,
+            }
+            """
+        );
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_OrAndRangePatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            match 1 {
+                2 | 3 | 4 -> true,
+                0..5 -> false,
+                _ -> false,
+            }
+            """
+        );
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_Guard_IsBool()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            match 5 {
+                n when n > 0 -> n,
+                _ -> 0,
+            }
+            """
+        );
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Checks_Match_ResultType_IsUnionOfArms()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            match 1 {
+                0 -> "zero",
+                _ -> 1,
+            }
+            """
+        );
+
+        var union = Assert.IsType<UnionType>(type);
+        Assert.Contains(union.Types, t => t is LiteralType { Value: "zero" });
+        Assert.Contains(union.Types, t => t is LiteralType { Value: 1d } or LiteralType { Value: 1L } or LiteralType { Value: 1 });
+    }
+
+    [Fact]
+    public void Checks_Match_TypedPatternBinding_UsesNarrowedType()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            let value: string | number = "hi";
+            match value {
+                text when string -> text,
+                n when number -> "num",
+            }
+            """
+        );
+
+        Assert.Equal(PrimitiveType.String, type.Widen());
+    }
+
+    [Fact]
+    public void Checks_Match_ArrayRestBinding_IsArray()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            let xs = [1, 2, 3];
+            match xs {
+                [head, ..rest] -> rest,
+                _ -> xs,
+            }
+            """
+        );
+
+        var array = Assert.IsType<ArrayType>(type);
+        Assert.Equal(PrimitiveType.Number, array.ElementType.Widen());
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_LiteralPattern_TypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match "hi" { 1 -> true, _ -> false }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Pattern of type '1' cannot match value of type '\"hi\"'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_ArrayPattern_OnNonArray()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { [a] -> a, _ -> 0 }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Array pattern cannot match value of type '1'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_ObjectField_MissingProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Box { value: number }
+            let box = new Box { value: 1 };
+            match box { { missing } -> missing }
+            """
+        );
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAccess,
+            "Property 'missing' does not exist on type 'Box'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_Guard_NotBool()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            match 1 {
+                n when 1 + 1 -> n,
+                _ -> 0,
+            }
+            """
+        );
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'number' is not assignable to type 'bool'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_RangePattern_OnNonNumber()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match "hi" { 0..5 -> true, _ -> false }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Range pattern can only match values of type 'number', not '\"hi\"'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_NoIrrefutableArm()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { 0 -> "zero", 1 -> "one" }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_IrrefutablePatternGuarded()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { x when x > 0 -> x }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_Exhaustive_ViaOrPatternWildcard()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { 0 -> "zero", 1 | _ -> "other" }""");
+        Utility.AssertNoErrors(diagnostics);
+    }
+    #endregion Match
 }

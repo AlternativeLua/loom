@@ -151,4 +151,32 @@ public class FlowAnalyzerTest
     )]
     [InlineData("enum Colors { Red, Green, Blue }; Colors.Red;")]
     public void Allows(string source) => Utility.AssertNoErrors(Utility.FlowAnalyze(source).AnalyzerResult);
+
+    [Theory]
+    [InlineData("match 1 { x -> x }")]
+    [InlineData("match 1 { let name -> name }")]
+    [InlineData("match 1 { n when n > 0 -> n }")]
+    [InlineData("match 1 { [a, b, c] -> a }")]
+    [InlineData("match 1 { [head, ..rest] -> rest }")]
+    [InlineData("match 1 { { value } -> value }")]
+    [InlineData("match 1 { { ok: true, value: v } -> v }")]
+    [InlineData("match 1 { s when string -> s, _ -> \"\" }")]
+    [InlineData("mut x: number; match 1 { 0 -> (x = 1), _ -> (x = 2) }; x")]
+    public void Allows_Match(string source) => Utility.AssertNoErrors(Utility.FlowAnalyze(source).AnalyzerResult);
+
+    [Theory]
+    [InlineData("mut x: number; match 1 { _ -> (x = 1), _ -> 0 }; x")]
+    [InlineData("mut x: number; match 1 { 0 -> (x = 1), _ -> 0 }; x")]
+    public void ThrowsFor_Match_UseOfMaybeUninitialized(string source)
+    {
+        var diagnostics = Utility.FlowAnalyze(source).AnalyzerResult.Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.UseOfMaybeUninitialized, "Variable 'x' might not be initialized on this path.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_AssignToImmutablePatternBinding()
+    {
+        var diagnostics = Utility.FlowAnalyze("match 1 { x -> (x = 2) }").AnalyzerResult.Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AssignToImmutable, "Cannot assign to immutable variable 'x'.");
+    }
 }
