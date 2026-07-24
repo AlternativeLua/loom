@@ -48,6 +48,30 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         return result;
     }
 
+    public override bool VisitExportDeclaration(ExportDeclaration export)
+    {
+        if (export.Declaration is VariableDeclaration { Keyword.Kind: SyntaxKind.MutKeyword })
+        {
+            _diagnostics.Error(
+                export,
+                InternalCodes.CannotExportMutable,
+                "Mutable variables cannot be exported.",
+                "use 'let' instead of 'mut'"
+            );
+            return false;
+        }
+
+        if (!Visit(export.Declaration))
+        {
+            return false;
+        }
+
+        if (_semanticModel.GetDeclarationSymbol(export.Declaration) is { } symbol)
+            _semanticModel.Exports.Add(symbol);
+
+        return true;
+    }
+
     public override bool VisitImplement(Implement implement)
     {
         var traitNameSymbol = LookupTypeSymbol(implement.TraitName.Name.Text);

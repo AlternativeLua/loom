@@ -11,6 +11,7 @@ namespace Loom.Core.Resolving;
 public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolTable Declarations, SymbolTable References)
     : DiagnosedResult(Diagnostics)
 {
+    public List<Symbol> Exports { get; } = [];
     public bool DisableRuntimeLibraryImport { get; set; }
     public bool EmitDebugDiagnostics { get; set; }
     public bool MustImportRuntimeLibrary =>
