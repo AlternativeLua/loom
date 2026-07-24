@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Resolving;
 using Loom.Luau.AST;
 
@@ -18,12 +17,35 @@ namespace Loom.Core.Generation;
 /// </param>
 internal readonly record struct EventTarget(object? Instance, Symbol Event);
 
+/// <summary>
+/// Tracks event connections so a later '-=' can find the connection a '+=' produced. Connections
+/// are kept in a hidden module-level table per event target (rather than a local variable), since
+/// the connect and disconnect sites aren't guaranteed to share a Luau lexical scope - e.g. connecting
+/// inside one function and disconnecting from another function, or from the top level.
+/// </summary>
 internal sealed class EventConnectionTracker
 {
-    private readonly Dictionary<(EventTarget Target, Symbol Function), LuauExpression> _connections = [];
+    private readonly Dictionary<EventTarget, Identifier> _stores = [];
+    private readonly HashSet<(EventTarget Target, Symbol Function)> _connectedFunctions = [];
 
-    public void Track(EventTarget target, Symbol functionSymbol, LuauExpression connection) => _connections[(target, functionSymbol)] = connection;
+    public List<LuauStatement> StoreDeclarations { get; } = [];
 
-    public bool TryGetConnection(EventTarget target, Symbol functionSymbol, [MaybeNullWhen(false)] out LuauExpression connection) =>
-        _connections.TryGetValue((target, functionSymbol), out connection);
+    /// <summary>
+    /// Returns the identifier of the hidden table backing connections for <paramref name="target"/>,
+    /// declaring it (via <paramref name="allocateName"/>) the first time this target is seen.
+    /// </summary>
+    public Identifier GetOrCreateStore(EventTarget target, Func<string> allocateName)
+    {
+        if (_stores.TryGetValue(target, out var existing))
+            return existing;
+
+        var identifier = new Identifier(allocateName());
+        _stores[target] = identifier;
+        StoreDeclarations.Add(new LocalVariable(identifier.Name, null, Table.Empty));
+
+        return identifier;
+    }
+
+    public void MarkConnected(EventTarget target, Symbol function) => _connectedFunctions.Add((target, function));
+    public bool IsConnected(EventTarget target, Symbol function) => _connectedFunctions.Contains((target, function));
 }

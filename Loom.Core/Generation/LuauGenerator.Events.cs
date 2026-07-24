@@ -98,16 +98,19 @@ public sealed partial class LuauGenerator
         if (luauFunction is AnonymousFunction || function is not Identifier identifier || _semanticModel.GetSymbol(identifier) is not { } functionSymbol)
             return connect;
 
-        if (assignmentOperator.Parent is EqualsValueClause { Parent: VariableDeclaration declaration })
-        {
-            _eventConnections.Track(eventTarget, functionSymbol, new Luau.AST.Identifier(declaration.Name.Text));
-            return connect;
-        }
+        var store = GetConnectionStore(eventTarget);
+        _eventConnections.MarkConnected(eventTarget, functionSymbol);
 
-        var connectionVariable = _state.PushToVariable($"{identifier.Name.Text}_conn", connect);
-        _eventConnections.Track(eventTarget, functionSymbol, connectionVariable);
+        var connectionSlot = new Luau.AST.ElementAccess(store, luauFunction);
+        var assign = new BinaryOperator(connectionSlot, "=", connect);
 
-        return connectionVariable;
+        // A bare 'event += fn;' statement doesn't need the connection's value, so the store
+        // assignment can be emitted directly instead of stashed as a prereq of an unused expression.
+        if (assignmentOperator.Parent is ExpressionStatement)
+            return assign;
+
+        _state.Prereq(new Luau.AST.ExpressionStatement(assign));
+        return connectionSlot;
     }
 
     private LuauExpression GenerateEventDisconnect(AssignmentOperator assignmentOperator, EventTarget eventTarget)
@@ -115,9 +118,11 @@ public sealed partial class LuauGenerator
         var function = assignmentOperator.Right;
         if (function is Identifier identifier
             && _semanticModel.GetSymbol(identifier) is { } functionSymbol
-            && _eventConnections.TryGetConnection(eventTarget, functionSymbol, out var connection))
+            && _eventConnections.IsConnected(eventTarget, functionSymbol))
         {
-            return new Call(new Luau.AST.PropertyAccess(connection, ["Disconnect"]), [], true);
+            var store = GetConnectionStore(eventTarget);
+            var connectionSlot = new Luau.AST.ElementAccess(store, Visit(function));
+            return new Call(new Luau.AST.PropertyAccess(connectionSlot, ["Disconnect"]), [], true);
         }
 
         if (function is not Identifier && IsMethodReference(function))
@@ -140,4 +145,12 @@ public sealed partial class LuauGenerator
 
         return new NilLiteral();
     }
+
+    private Luau.AST.Identifier GetConnectionStore(EventTarget eventTarget) =>
+        _eventConnections.GetOrCreateStore(eventTarget, () => _state.Scope.AddIdentifier(ConnectionStoreBaseName(eventTarget)));
+
+    private static string ConnectionStoreBaseName(EventTarget eventTarget) =>
+        eventTarget.Instance is Symbol instanceSymbol
+            ? $"_{instanceSymbol.Name}_{eventTarget.Event.Name}_connections"
+            : $"_{eventTarget.Event.Name}_connections";
 }

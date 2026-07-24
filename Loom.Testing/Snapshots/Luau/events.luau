@@ -1,4 +1,5 @@
 const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
+local _my_event_connections = {}
 const my_event: Loom.Event<number> = Loom.Event.new()
 const function on_event(p: number): ()
   print("param: " .. tostring(p))
@@ -21,5 +22,6 @@ my_event:Connect(function(argument0)
   return table.insert({}, argument0)
 end)
 my_event:Fire(69420)
-const conn = my_event:Connect(on_event)
+_my_event_connections[on_event] = my_event:Connect(on_event)
+const conn = _my_event_connections[on_event]
 conn:Disconnect()
