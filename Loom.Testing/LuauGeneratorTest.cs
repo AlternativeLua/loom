@@ -2603,6 +2603,108 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_EventConnect_AcrossFunctionScopes_UsesModuleLevelConnectionStore()
+    {
+        // Regression test: the connection must be reachable from '-=' even though it's produced
+        // inside a different Luau function scope than where it's connected and disconnected.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            fn a -> abc += h;
+            a();
+            abc -= h;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(6, luauTree.Statements.Count);
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_abc_connections", store.Name);
+
+        var fn = Assert.IsType<Function>(luauTree.Statements[3]);
+        var connectStatement = Assert.IsType<ExpressionStatement>(fn.Body.Statements[0]);
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+        Assert.Equal("h", Assert.IsType<Identifier>(connectionSlot.Index).Name);
+
+        var returnStatement = Assert.IsType<Return>(fn.Body.Statements[1]);
+        var returnedSlot = Assert.IsType<ElementAccess>(returnStatement.Expression);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(returnedSlot.Target).Name);
+
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[5]);
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
+        Assert.Equal("h", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_DisconnectAfterIfBlock_UsesConnectionStore()
+    {
+        // The connect's local would be declared inside the if's 'then...end' block in Luau, so it's
+        // out of scope by the time the disconnect after the block runs - this must use the store.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            if true {
+                abc += h;
+            }
+            abc -= h;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(5, luauTree.Statements.Count);
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_abc_connections", store.Name);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var connectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_ConnectBeforeIf_DisconnectInsideIf_UsesLocal()
+    {
+        // The if's 'then...end' block is nested inside the connect's scope, so the connect's local
+        // is visible there as an upvalue - a plain local is safe and correct here.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            abc += h;
+            if true {
+                abc -= h;
+            }
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(4, luauTree.Statements.Count);
+
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("h_conn", connVariable.Name);
+        Assert.IsType<Call>(connVariable.Initializer);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        Assert.Equal("h_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
+    }
+
+    [Fact]
     public void ThrowsFor_EventDisconnect_WhenFunctionRequiresAnonymousWrapper()
     {
         const string source = """
