@@ -4,9 +4,17 @@
 [![Coverage Status](https://coveralls.io/repos/github/R-unic/loom/badge.svg?branch=master)](https://coveralls.io/github/R-unic/loom)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](https://opensource.org/licenses/apache-2.0)
 
-**A domain-specific language for Roblox that transpiles to Luau.**
+### A domain-specific language for Roblox that transpiles to Luau.
 
-> ⚠️ This project is a work-in-progress. Nothing is final. Breaking changes may occur at any time. Expect bugs.
+<br/>
+<img width="701" height="195" alt="image" src="https://github.com/user-attachments/assets/f6c34f43-b802-459f-9b27-a3d77c2b74e5" />
+<br/>
+<br/>
+
+> ⚠️ This project is a work-in-progress.
+> - Nothing is final.
+> - Breaking changes may occur at any time.
+> - Expect bugs.
 
 ## Features
 
