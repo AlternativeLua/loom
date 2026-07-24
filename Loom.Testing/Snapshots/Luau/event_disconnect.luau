@@ -1,5 +1,5 @@
 const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
-local _abc_connections = {}
+const _abc_connections = {}
 const abc: Loom.Event = Loom.Event.new()
 const function handler(): ()
   print("handled")

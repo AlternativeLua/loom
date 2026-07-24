@@ -26,6 +26,7 @@ public sealed partial class LuauGenerator
     private readonly SemanticModel _semanticModel;
     private readonly LuauState _state = new();
     private readonly RuntimeImport _runtimeImport;
+    private readonly HashSet<(EventTarget Target, Symbol Function)> _localSafeConnections;
 
     public LuauGenerator(SemanticModel semanticModel, RuntimeImport? runtimeImport = null)
         : base(_ => new NoOpStatement())
@@ -33,6 +34,7 @@ public sealed partial class LuauGenerator
         _semanticModel = semanticModel;
         _runtimeImport = runtimeImport ?? RuntimeImport.Default;
         _macroExpander = new MacroExpander(semanticModel, _state, _diagnostics);
+        _localSafeConnections = ComputeLocalSafeConnections();
     }
 
     public LuauGeneratorResult Generate()

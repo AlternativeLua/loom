@@ -98,9 +98,24 @@ public sealed partial class LuauGenerator
         if (luauFunction is AnonymousFunction || function is not Identifier identifier || _semanticModel.GetSymbol(identifier) is not { } functionSymbol)
             return connect;
 
-        var store = GetConnectionStore(eventTarget);
         _eventConnections.MarkConnected(eventTarget, functionSymbol);
 
+        // When every disconnect for this (event, function) pair provably shares a Luau scope with
+        // this connect, a plain local keeps the output as minimal as hand-written code would be.
+        if (_localSafeConnections.Contains((eventTarget, functionSymbol)))
+        {
+            if (assignmentOperator.Parent is EqualsValueClause { Parent: VariableDeclaration declaration })
+            {
+                _eventConnections.TrackLocalConnection(eventTarget, functionSymbol, new Luau.AST.Identifier(declaration.Name.Text));
+                return connect;
+            }
+
+            var connectionVariable = _state.PushToVariable($"{identifier.Name.Text}_conn", connect);
+            _eventConnections.TrackLocalConnection(eventTarget, functionSymbol, connectionVariable);
+            return connectionVariable;
+        }
+
+        var store = GetConnectionStore(eventTarget);
         var connectionSlot = new Luau.AST.ElementAccess(store, luauFunction);
         var assign = new BinaryOperator(connectionSlot, "=", connect);
 
@@ -120,9 +135,11 @@ public sealed partial class LuauGenerator
             && _semanticModel.GetSymbol(identifier) is { } functionSymbol
             && _eventConnections.IsConnected(eventTarget, functionSymbol))
         {
-            var store = GetConnectionStore(eventTarget);
-            var connectionSlot = new Luau.AST.ElementAccess(store, Visit(function));
-            return new Call(new Luau.AST.PropertyAccess(connectionSlot, ["Disconnect"]), [], true);
+            var connection = _eventConnections.TryGetLocalConnection(eventTarget, functionSymbol, out var localConnection)
+                ? (LuauExpression)localConnection
+                : new Luau.AST.ElementAccess(GetConnectionStore(eventTarget), Visit(function));
+
+            return new Call(new Luau.AST.PropertyAccess(connection, ["Disconnect"]), [], true);
         }
 
         if (function is not Identifier && IsMethodReference(function))
@@ -153,4 +170,145 @@ public sealed partial class LuauGenerator
         eventTarget.Instance is Symbol instanceSymbol
             ? $"_{instanceSymbol.Name}_{eventTarget.Event.Name}_connections"
             : $"_{eventTarget.Event.Name}_connections";
+
+    /// <summary>
+    /// Finds every '+=' whose matching '-=' calls (if any) are all provably reachable from a Luau
+    /// local declared at the '+=' site - i.e. the connection can be a plain local instead of an entry
+    /// in the hidden per-event connection store. Runs once up front so each '+=' knows, at the point
+    /// it's generated, whether a later '-=' elsewhere in the file will need the store.
+    /// </summary>
+    private HashSet<(EventTarget Target, Symbol Function)> ComputeLocalSafeConnections()
+    {
+        var connectsByKey = new Dictionary<(EventTarget, Symbol), List<AssignmentOperator>>();
+        var disconnectsByKey = new Dictionary<(EventTarget, Symbol), List<AssignmentOperator>>();
+
+        foreach (var assignment in _semanticModel.Tree.GetDescendants<AssignmentOperator>())
+        {
+            if (assignment.Operator.Kind is not (SyntaxKind.PlusEquals or SyntaxKind.MinusEquals))
+                continue;
+
+            if (ResolveEventTarget(assignment.Left) is not { } target)
+                continue;
+
+            if (assignment.Right is not Identifier identifier || _semanticModel.GetSymbol(identifier) is not { } functionSymbol)
+                continue;
+
+            var key = (target, functionSymbol);
+            var bucket = assignment.Operator.Kind == SyntaxKind.PlusEquals ? connectsByKey : disconnectsByKey;
+            if (!bucket.TryGetValue(key, out var list))
+                bucket[key] = list = [];
+
+            list.Add(assignment);
+        }
+
+        var localSafe = new HashSet<(EventTarget, Symbol)>();
+        foreach (var (key, connects) in connectsByKey)
+        {
+            // More than one '+=' for the same target/function means a single local can't represent
+            // both connections unambiguously, so fall back to the store.
+            if (connects.Count != 1)
+                continue;
+
+            if (!disconnectsByKey.TryGetValue(key, out var disconnects) || disconnects.TrueForAll(d => CanShareLocalScope(connects[0], d)))
+                localSafe.Add(key);
+        }
+
+        return localSafe;
+    }
+
+    /// <summary>
+    /// Whether a Luau local declared at <paramref name="connect"/> would still be in scope at
+    /// <paramref name="disconnect"/>: they must live in the exact same Luau scope, with the connect
+    /// coming first, or the disconnect must be nested somewhere inside a scope that starts after the
+    /// connect within that shared scope (nested scopes see enclosing locals as upvalues, but siblings
+    /// and outer scopes never see locals declared inside a nested one).
+    /// </summary>
+    private static bool CanShareLocalScope(Node connect, Node disconnect)
+    {
+        if (FindImmediateScope(connect) is not { } connectScope)
+            return false;
+
+        var current = disconnect;
+        while (FindImmediateScope(current) is { } found)
+        {
+            var (id, entry) = found;
+            if (id.Equals(connectScope.Id))
+                return IsAtOrAfter(id, connectScope.EntryChild, entry);
+
+            current = id.Owner;
+        }
+
+        return false;
+    }
+
+    private static bool IsAtOrAfter(ScopeId id, Node earlier, Node later)
+    {
+        if (earlier == later)
+            return true;
+
+        var statements = id.Owner switch
+        {
+            Block block => (IReadOnlyList<Node>)block.Statements,
+            Tree tree => tree.Statements,
+            _ => null
+        };
+
+        // Non-block scopes (a bare 'if cond stmt' body, etc.) hold exactly one statement, so distinct
+        // connect/disconnect nodes can only share one by also sharing a Block/Tree ancestor already
+        // handled above; treat any other equality-without-list case as unsafe.
+        if (statements == null)
+            return false;
+
+        var earlierIndex = IndexOf(statements, earlier);
+        var laterIndex = IndexOf(statements, later);
+        return earlierIndex >= 0 && laterIndex >= 0 && earlierIndex < laterIndex;
+    }
+
+    private static int IndexOf(IReadOnlyList<Node> list, Node item)
+    {
+        for (var i = 0; i < list.Count; i++)
+        {
+            if (ReferenceEquals(list[i], item))
+                return i;
+        }
+
+        return -1;
+    }
+
+    private readonly record struct ScopeId(Node Owner, int Branch = 0);
+
+    /// <summary>
+    /// Walks up from <paramref name="node"/> to the nearest Luau-scope-introducing ancestor (a Block,
+    /// the file root, an if-branch, or a while/for/after/function body), returning that scope's
+    /// identity plus the direct child of the scope that <paramref name="node"/> descends through.
+    /// </summary>
+    private static (ScopeId Id, Node EntryChild)? FindImmediateScope(Node node)
+    {
+        var current = node;
+        while (true)
+        {
+            if (current.Parent is not { } parent)
+                return null;
+
+            switch (parent)
+            {
+                case Tree or Block:
+                    return (new ScopeId(parent), current);
+                case If @if when current == @if.ThenBranch:
+                    return (new ScopeId(@if, 0), current);
+                case If @if when @if.ElseBranch?.Branch == current:
+                    return (new ScopeId(@if, 1), current);
+                case While @while when @while.Body == current:
+                    return (new ScopeId(@while), current);
+                case For @for when @for.Body == current:
+                    return (new ScopeId(@for), current);
+                case After after when after.Body == current:
+                    return (new ScopeId(after), current);
+                case FunctionDeclaration function when function.Body == current:
+                    return (new ScopeId(function), current);
+            }
+
+            current = parent;
+        }
+    }
 }

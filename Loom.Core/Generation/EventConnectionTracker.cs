@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Resolving;
 using Loom.Luau.AST;
 
@@ -18,14 +19,16 @@ namespace Loom.Core.Generation;
 internal readonly record struct EventTarget(object? Instance, Symbol Event);
 
 /// <summary>
-/// Tracks event connections so a later '-=' can find the connection a '+=' produced. Connections
-/// are kept in a hidden module-level table per event target (rather than a local variable), since
-/// the connect and disconnect sites aren't guaranteed to share a Luau lexical scope - e.g. connecting
-/// inside one function and disconnecting from another function, or from the top level.
+/// Tracks event connections so a later '-=' can find the connection a '+=' produced. Most connections
+/// stay a plain local Luau variable, matching what '+=' would generate on its own. Only connections
+/// whose '+=' and '-=' sites don't provably share a Luau lexical scope - e.g. connecting inside one
+/// function and disconnecting from another function, or from the top level - fall back to a hidden
+/// module-level table per event target, since a local wouldn't be visible at the disconnect site.
 /// </summary>
 internal sealed class EventConnectionTracker
 {
     private readonly Dictionary<EventTarget, Identifier> _stores = [];
+    private readonly Dictionary<(EventTarget Target, Symbol Function), Identifier> _localConnections = [];
     private readonly HashSet<(EventTarget Target, Symbol Function)> _connectedFunctions = [];
 
     public List<LuauStatement> StoreDeclarations { get; } = [];
@@ -41,10 +44,16 @@ internal sealed class EventConnectionTracker
 
         var identifier = new Identifier(allocateName());
         _stores[target] = identifier;
-        StoreDeclarations.Add(new LocalVariable(identifier.Name, null, Table.Empty));
+        StoreDeclarations.Add(new ConstVariable(identifier.Name, null, Table.Empty));
 
         return identifier;
     }
+
+    public void TrackLocalConnection(EventTarget target, Symbol function, Identifier connectionVariable) =>
+        _localConnections[(target, function)] = connectionVariable;
+
+    public bool TryGetLocalConnection(EventTarget target, Symbol function, [MaybeNullWhen(false)] out Identifier connectionVariable) =>
+        _localConnections.TryGetValue((target, function), out connectionVariable);
 
     public void MarkConnected(EventTarget target, Symbol function) => _connectedFunctions.Add((target, function));
     public bool IsConnected(EventTarget target, Symbol function) => _connectedFunctions.Contains((target, function));

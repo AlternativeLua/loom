@@ -2559,36 +2559,19 @@ public class LuauGeneratorTest
             """;
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
-        Assert.Equal(6, luauTree.Statements.Count);
+        Assert.Equal(4, luauTree.Statements.Count);
 
-        var store = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_abc_connections", store.Name);
-        Assert.IsType<Table>(store.Initializer);
-
-        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[3]);
-        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
-        Assert.Equal("=", connectAssign.Operator);
-
-        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
-        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(connectionSlot.Index).Name);
-
-        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[4]);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
         Assert.Equal("my_conn", connVariable.Name);
-        var connInit = Assert.IsType<ElementAccess>(connVariable.Initializer);
-        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connInit.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(connInit.Index).Name);
 
-        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[5]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[3]);
         var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
         Assert.True(disconnectCall.IsMethod);
         Assert.Empty(disconnectCall.Arguments);
 
         var access = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(access.Names));
-        var disconnectSlot = Assert.IsType<ElementAccess>(access.Target);
-        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+        Assert.Equal("my_conn", Assert.IsType<Identifier>(access.Target).Name);
     }
 
     [Fact]
@@ -2602,31 +2585,21 @@ public class LuauGeneratorTest
             """;
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
-        Assert.Equal(5, luauTree.Statements.Count);
+        Assert.Equal(4, luauTree.Statements.Count);
 
-        var store = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_abc_connections", store.Name);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("handler_conn", connVariable.Name);
 
-        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[3]);
-        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
-        Assert.Equal("=", connectAssign.Operator);
-
-        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
-        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(connectionSlot.Index).Name);
-
-        var connectCall = Assert.IsType<Call>(connectAssign.Right);
+        var connectCall = Assert.IsType<Call>(connVariable.Initializer);
         Assert.True(connectCall.IsMethod);
         var connectAccess = Assert.IsType<PropertyAccess>(connectCall.Callee);
         Assert.Equal("Connect", Assert.Single(connectAccess.Names));
 
-        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[3]);
         var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
         var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
-        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
-        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+        Assert.Equal("handler_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
     }
 
     [Fact]
@@ -2645,7 +2618,7 @@ public class LuauGeneratorTest
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
         Assert.Equal(6, luauTree.Statements.Count);
 
-        var store = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
         Assert.Equal("_abc_connections", store.Name);
 
         var fn = Assert.IsType<Function>(luauTree.Statements[3]);
@@ -2666,6 +2639,69 @@ public class LuauGeneratorTest
         var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
         Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
         Assert.Equal("h", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_DisconnectAfterIfBlock_UsesConnectionStore()
+    {
+        // The connect's local would be declared inside the if's 'then...end' block in Luau, so it's
+        // out of scope by the time the disconnect after the block runs - this must use the store.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            if true {
+                abc += h;
+            }
+            abc -= h;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(5, luauTree.Statements.Count);
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_abc_connections", store.Name);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var connectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_ConnectBeforeIf_DisconnectInsideIf_UsesLocal()
+    {
+        // The if's 'then...end' block is nested inside the connect's scope, so the connect's local
+        // is visible there as an upvalue - a plain local is safe and correct here.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            abc += h;
+            if true {
+                abc -= h;
+            }
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(4, luauTree.Statements.Count);
+
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("h_conn", connVariable.Name);
+        Assert.IsType<Call>(connVariable.Initializer);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        Assert.Equal("h_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
     }
 
     [Fact]
@@ -2747,32 +2783,19 @@ public class LuauGeneratorTest
             """;
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
-        Assert.Equal(7, luauTree.Statements.Count);
+        Assert.Equal(5, luauTree.Statements.Count);
 
-        var store = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_eo_abc_connections", store.Name);
-
-        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
-        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
-        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
-        Assert.Equal("_eo_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(connectionSlot.Index).Name);
-
-        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[5]);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
         Assert.Equal("my_conn", connVariable.Name);
-        var connInit = Assert.IsType<ElementAccess>(connVariable.Initializer);
-        Assert.Equal("_eo_abc_connections", Assert.IsType<Identifier>(connInit.Target).Name);
 
-        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[6]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
         var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
         Assert.True(disconnectCall.IsMethod);
         Assert.Empty(disconnectCall.Arguments);
 
         var access = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(access.Names));
-        var disconnectSlot = Assert.IsType<ElementAccess>(access.Target);
-        Assert.Equal("_eo_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+        Assert.Equal("my_conn", Assert.IsType<Identifier>(access.Target).Name);
     }
 
     [Fact]
@@ -2789,29 +2812,21 @@ public class LuauGeneratorTest
             """;
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
-        Assert.Equal(6, luauTree.Statements.Count);
+        Assert.Equal(5, luauTree.Statements.Count);
 
-        var store = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_eo_abc_connections", store.Name);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
+        Assert.Equal("handler_conn", connVariable.Name);
 
-        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
-        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
-        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
-        Assert.Equal("_eo_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(connectionSlot.Index).Name);
-
-        var connectCall = Assert.IsType<Call>(connectAssign.Right);
+        var connectCall = Assert.IsType<Call>(connVariable.Initializer);
         Assert.True(connectCall.IsMethod);
         var connectAccess = Assert.IsType<PropertyAccess>(connectCall.Callee);
         Assert.Equal("Connect", Assert.Single(connectAccess.Names));
 
-        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[5]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
         var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
         var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
-        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
-        Assert.Equal("_eo_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
-        Assert.Equal("handler", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+        Assert.Equal("handler_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
     }
 
     [Fact]
@@ -2831,29 +2846,16 @@ public class LuauGeneratorTest
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
 
-        Assert.Equal(9, luauTree.Statements.Count);
+        Assert.Equal(7, luauTree.Statements.Count);
+        var conn1Variable = Assert.IsType<ConstVariable>(luauTree.Statements[4]);
+        var conn2Variable = Assert.IsType<ConstVariable>(luauTree.Statements[5]);
+        Assert.NotEqual(conn1Variable.Name, conn2Variable.Name);
 
-        var store1 = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        var store2 = Assert.IsType<LocalVariable>(luauTree.Statements[1]);
-        Assert.Equal("_eo1_abc_connections", store1.Name);
-        Assert.Equal("_eo2_abc_connections", store2.Name);
-
-        var connect1Statement = Assert.IsType<ExpressionStatement>(luauTree.Statements[6]);
-        var connect1Assign = Assert.IsType<BinaryOperator>(connect1Statement.Expression);
-        var connectionSlot1 = Assert.IsType<ElementAccess>(connect1Assign.Left);
-        Assert.Equal("_eo1_abc_connections", Assert.IsType<Identifier>(connectionSlot1.Target).Name);
-
-        var connect2Statement = Assert.IsType<ExpressionStatement>(luauTree.Statements[7]);
-        var connect2Assign = Assert.IsType<BinaryOperator>(connect2Statement.Expression);
-        var connectionSlot2 = Assert.IsType<ElementAccess>(connect2Assign.Left);
-        Assert.Equal("_eo2_abc_connections", Assert.IsType<Identifier>(connectionSlot2.Target).Name);
-
-        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[8]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[6]);
         var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
         var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
-        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
-        Assert.Equal("_eo1_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
+        Assert.Equal(conn1Variable.Name, Assert.IsType<Identifier>(disconnectAccess.Target).Name);
     }
 
     [Fact]
@@ -2872,11 +2874,9 @@ public class LuauGeneratorTest
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements.OfType<IfStatement>().Single());
-        var connectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
-        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
-        Assert.IsType<ElementAccess>(connectAssign.Left);
+        var connVariable = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements.Single());
 
-        var connectCall = Assert.IsType<Call>(connectAssign.Right);
+        var connectCall = Assert.IsType<Call>(connVariable.Initializer);
         Assert.True(connectCall.IsMethod);
         var connectAccess = Assert.IsType<PropertyAccess>(connectCall.Callee);
         Assert.Equal("Connect", Assert.Single(connectAccess.Names));
@@ -2901,21 +2901,13 @@ public class LuauGeneratorTest
 
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
 
-        var store = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_eo_consumer_connections", store.Name);
-
-        var typeAlias = Assert.IsType<TypeAlias>(luauTree.Statements[1]);
+        var typeAlias = Assert.IsType<TypeAlias>(luauTree.Statements[0]);
         var tableType = Assert.IsType<TableType>(typeAlias.Type);
         var eventProperty = Assert.Single(tableType.Properties);
         Assert.Equal("OnConsume", eventProperty.Name);
 
-        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
-        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
-        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
-        Assert.Equal("_eo_consumer_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
-        Assert.Equal("on_consumer", Assert.IsType<Identifier>(connectionSlot.Index).Name);
-
-        var connectCall = Assert.IsType<Call>(connectAssign.Right);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
+        var connectCall = Assert.IsType<Call>(connVariable.Initializer);
         var connectAccess = Assert.IsType<PropertyAccess>(connectCall.Callee);
         Assert.Equal("Connect", Assert.Single(connectAccess.Names));
 
@@ -2923,19 +2915,17 @@ public class LuauGeneratorTest
         Assert.Equal("OnConsume", Assert.Single(eventAccess.Names));
         Assert.Equal("eo", Assert.IsType<Identifier>(eventAccess.Target).Name);
 
-        var invocationStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[5]);
+        var invocationStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
         var invocationCall = Assert.IsType<Call>(invocationStatement.Expression);
         var invocationAccess = Assert.IsType<PropertyAccess>(invocationCall.Callee);
         Assert.IsType<PropertyAccess>(invocationAccess.Target);
         Assert.Equal("Fire", Assert.Single(invocationAccess.Names));
 
-        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[6]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[5]);
         var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
         var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
-        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
-        Assert.Equal("_eo_consumer_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
-        Assert.Equal("on_consumer", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+        Assert.Equal(connVariable.Name, Assert.IsType<Identifier>(disconnectAccess.Target).Name);
     }
 
     [Fact]
