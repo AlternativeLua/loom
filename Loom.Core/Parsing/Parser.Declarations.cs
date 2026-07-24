@@ -7,6 +7,28 @@ namespace Loom.Core.Parsing;
 
 public sealed partial class Parser
 {
+    private Statement ParseExport(Token exportKeyword)
+    {
+        if (Match(out var fnKeyword, SyntaxKind.FnKeyword))
+            return WrapExport(exportKeyword, ParseFunctionDeclaration(fnKeyword));
+     
+        if (Match(out var letKeyword, SyntaxKind.LetKeyword))
+            return WrapExport(exportKeyword, ParseFunctionDeclaration(letKeyword));
+        
+        _diagnostics.Error(
+                Current(),
+                InternalCodes.ExpectedExportableDeclaration,
+                $"Only 'fn' and 'let declarations can be exported, got {SafeTokenText(Current())}.'"
+            );
+        
+        return new NullStatement(exportKeyword);
+    }
+    
+    private Statement WrapExport(Token exportKeyword, Statement declaration) =>
+        declaration is NamedDeclaration named
+        ? new ExportDeclaration(exportKeyword, named)
+        : declaration;
+    
     private TraitDeclaration ParseTraitDeclaration(Token keyword)
     {
         var name = ExpectIdentifier("trait name");
@@ -320,7 +342,7 @@ public sealed partial class Parser
     {
         if (!Match(out var leftParen, SyntaxKind.LParen))
             return null;
-
+        
         if (Match(out var rightParen, SyntaxKind.RParen))
             return new Parameters(leftParen, rightParen, []);
 
