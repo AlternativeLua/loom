@@ -50,6 +50,17 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
 
     public override bool VisitExportDeclaration(ExportDeclaration export)
     {
+        if (_scopes.Count > 1)
+        {
+            _diagnostics.Error(
+                export,
+                InternalCodes.ExportOutsideModuleScope,
+                "Declarations can only be exported at the top level of a module.",
+                "move the 'export' declaration out of the enclosing block"
+            );
+            return false;
+        }
+
         if (export.Declaration is VariableDeclaration { Keyword.Kind: SyntaxKind.MutKeyword })
         {
             _diagnostics.Error(

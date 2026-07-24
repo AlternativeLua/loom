@@ -498,6 +498,25 @@ public class ResolverTest
 
         Utility.AssertDiagnostic(diagnostics, InternalCodes.IntrinsicImplementation, "Trait 'Foo' may not be implemented on intrinsic interface 'Range'.");
     }
+
+    [Fact]
+    public void ThrowsFor_ExportMutable()
+    {
+        var diagnostics = Utility.GetSemanticModel("export mut x = 1;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotExportMutable, "Mutable variables cannot be exported.", "use 'let' instead of 'mut'");
+    }
+
+    [Fact]
+    public void ThrowsFor_ExportOutsideModuleScope()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn f() { export let x = 1; }").Diagnostics;
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ExportOutsideModuleScope,
+            "Declarations can only be exported at the top level of a module.",
+            "move the 'export' declaration out of the enclosing block"
+        );
+    }
     #endregion ThrowsFor
 
     [Fact]
@@ -508,6 +527,18 @@ public class ResolverTest
     }
 
     #region Resolves
+    [Fact]
+    public void Resolves_ExportedDeclarations()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("export let constant = 69; export fn do_something() { }"));
+
+        Assert.Equal(2, model.Exports.Count);
+        Assert.Equal(["constant", "do_something"], model.Exports.Select(s => s.Name));
+
+        var variable = Assert.IsType<ExportDeclaration>(model.Tree.Statements[0]).Declaration;
+        Assert.Same(model.GetDeclarationSymbol(variable), model.Exports[0]);
+    }
+
     [Fact]
     public void Resolves_InterfaceAndTraitRelationship()
     {

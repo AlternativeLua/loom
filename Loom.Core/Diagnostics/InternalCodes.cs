@@ -78,6 +78,7 @@ public static class InternalCodes
     public const string ReservedLuauKeyword = "L354";
     public const string ExpectedExportableDeclaration = "L355";
     public const string CannotExportMutable = "L356";
+    public const string ExportOutsideModuleScope = "L357";
 
     public const string SimplifiableCode = "L400";
 }

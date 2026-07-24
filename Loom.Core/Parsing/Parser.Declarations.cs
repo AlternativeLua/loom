@@ -11,24 +11,24 @@ public sealed partial class Parser
     {
         if (Match(out var fnKeyword, SyntaxKind.FnKeyword))
             return WrapExport(exportKeyword, ParseFunctionDeclaration(fnKeyword));
-     
-        if (Match(out var letKeyword, SyntaxKind.LetKeyword))
-            return WrapExport(exportKeyword, ParseFunctionDeclaration(letKeyword));
-        
+
+        if (Match(out var letKeyword, SyntaxKind.LetKeyword, SyntaxKind.MutKeyword))
+            return WrapExport(exportKeyword, ParseVariableDeclaration(letKeyword));
+
         _diagnostics.Error(
-                Current(),
-                InternalCodes.ExpectedExportableDeclaration,
-                $"Only 'fn' and 'let declarations can be exported, got {SafeTokenText(Current())}.'"
-            );
-        
+            Current(),
+            InternalCodes.ExpectedExportableDeclaration,
+            $"Only 'fn' and 'let' declarations can be exported, got {SafeTokenText(Current())}."
+        );
+
         return new NullStatement(exportKeyword);
     }
-    
+
     private Statement WrapExport(Token exportKeyword, Statement declaration) =>
         declaration is NamedDeclaration named
-        ? new ExportDeclaration(exportKeyword, named)
-        : declaration;
-    
+            ? new ExportDeclaration(exportKeyword, named)
+            : declaration;
+
     private TraitDeclaration ParseTraitDeclaration(Token keyword)
     {
         var name = ExpectIdentifier("trait name");
@@ -342,7 +342,7 @@ public sealed partial class Parser
     {
         if (!Match(out var leftParen, SyntaxKind.LParen))
             return null;
-        
+
         if (Match(out var rightParen, SyntaxKind.RParen))
             return new Parameters(leftParen, rightParen, []);
 
