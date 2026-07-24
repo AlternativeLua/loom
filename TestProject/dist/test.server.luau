@@ -1,7 +1,16 @@
-const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
-const score_changed: Loom.Event<number> = Loom.Event.new()
-const function on_score(n: number): ()
-  print("score is now " .. tostring(n))
+const numbers = {1, 2, 3, 4}
+const function map<T, U>(array: { T }, converter: (T) -> U): { U }
+  const new_array: { U } = {}
+  for _, v in array do
+    table.insert(new_array, converter(v))
+  end
+  return new_array
 end
-const on_score_conn = score_changed:Connect(on_score)
-score_changed:Fire(100)
+const function id<T>(n: T)
+  return n
+end
+const function double(n: number)
+  return n * 2
+end
+print(map(numbers, id))
+print(map(numbers, double))

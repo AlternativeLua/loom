@@ -6,7 +6,11 @@ const function map<T, U>(array: { T }, converter: (T) -> U): { U }
   end
   return new_array
 end
+const function id<T>(n: T)
+  return n
+end
 const function double(n: number)
   return n * 2
 end
+print(map(numbers, id))
 print(map(numbers, double))

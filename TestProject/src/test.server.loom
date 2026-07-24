@@ -1,8 +1,13 @@
-event score_changed(new_score: number);
-
-fn on_score(n: number): void {
-    print("score is now " + string(n))
+let numbers = [1, 2, 3, 4];
+fn map<T, U>(array: T[], converter: fn(e: T): U): U[] {
+  let new_array: U[mut] = mut [];
+  for v : array
+    new_array.push(converter(v));
+    
+  return new_array;
 }
 
-score_changed += on_score;
-score_changed(100);
+fn id<T>(n: T) -> n;
+fn double(n: number) -> n * 2;
+print(map(numbers, id));
+print(map(numbers, double));
