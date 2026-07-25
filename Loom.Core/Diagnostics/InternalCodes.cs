@@ -79,6 +79,7 @@ public static class InternalCodes
     public const string ExpectedExportableDeclaration = "L355";
     public const string CannotExportMutable = "L356";
     public const string ExportOutsideModuleScope = "L357";
+    public const string EmptyImportClause = "L358";
 
     public const string SimplifiableCode = "L400";
 }

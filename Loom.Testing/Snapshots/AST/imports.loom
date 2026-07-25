@@ -1,0 +1,6 @@
+import { square } from "./math"
+import { square, pi } from "./math"
+import { square as sq, pi as PI } from "./math"
+import { square, pi, } from "./math"
+import type { Vector } from "../types/vector"
+import type { Vector as Vec3 } from "../types/vector"

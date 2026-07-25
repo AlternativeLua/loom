@@ -38,6 +38,54 @@ public sealed partial class Parser(LexerResult lexerResult)
         return nodes;
     }
 
+    private Statement ParseImport(Token importKeyword)
+    {
+        Match(out var typeKeyword, SyntaxKind.TypeKeyword);
+
+        var leftBrace = Expect(SyntaxKind.LBrace, "'{' after 'import'");
+        var specifiers = !IsEof() && Current() is { Kind: SyntaxKind.Identifier }
+            ? ParseDelimited(ParseImportSpecifier).OfType<ImportSpecifier>().ToList()
+            : [];
+        
+        var rightBrace = Expect(SyntaxKind.RBrace);
+        if (specifiers.Count == 0)
+            _diagnostics.Error(importKeyword, InternalCodes.EmptyImportClause, "Import declaration must name at least one member.");
+
+        var fromKeyword = ExpectContextualKeyword("from");
+        var pathToken = Expect(SyntaxKind.StringLiteral, "module path");
+
+        return new ImportDeclaration(
+            importKeyword,
+            typeKeyword,
+            leftBrace,
+            specifiers,
+            rightBrace,
+            fromKeyword,
+            new Literal(pathToken, LiteralUtility.ResolveValue(pathToken))
+        );
+    }
+    
+    private ImportSpecifier? ParseImportSpecifier() =>
+        !Match(out var name, SyntaxKind.Identifier)
+            ? null
+            : Match(out var asKeyword, SyntaxKind.AsKeyword)
+                ? new ImportSpecifier(name, asKeyword, ExpectIdentifier("import alias"))
+                : new ImportSpecifier(name, null, null);
+
+    private Token ExpectContextualKeyword(string text)
+    {
+        if (!IsEof() && Current() is { Kind: SyntaxKind.Identifier } token && token.Text == text)
+            return Advance();
+        
+        _diagnostics.Error(
+            Current(),
+            IsEof() ? InternalCodes.UnexpectedEof : InternalCodes.UnexpectedToken,
+            $"Expected '{text}', got {SafeTokenText(IsEof() ? null : Current())}."
+        );
+        
+        return MissingToken(SyntaxKind.Identifier);
+    }
+
     private bool ValidateFunctionSignature(string kind, LocationSpan span, [NotNullWhen(true)] ColonTypeClause? returnType, Parameters? parameters) =>
         ValidateSignatureReturnType(kind, span, returnType) && ValidateSignatureParameters(kind, parameters);
 
@@ -135,36 +183,16 @@ public sealed partial class Parser(LexerResult lexerResult)
     private bool Match(SyntaxKind kind) => Match(out _, kind);
     private void Match(SyntaxKind kindA, SyntaxKind kindB) => Match(out _, kindA, kindB);
 
-    private bool Match([MaybeNullWhen(false)] out Token token, SyntaxKind kind)
-    {
-        if (IsEof())
-        {
-            token = null;
-            return false;
-        }
-
-        token = Current();
-        var match = kind == token.Kind;
-        if (match)
-            Advance();
-
-        return match;
-    }
+    private bool Match([MaybeNullWhen(false)] out Token token, SyntaxKind kind) => Match(out token, matched => matched == kind);
 
     private bool Match([MaybeNullWhen(false)] out Token token, Predicate<SyntaxKind> predicate)
     {
-        if (IsEof())
-        {
-            token = null;
+        token = null;
+        if (IsEof() || !predicate(Current().Kind))
             return false;
-        }
 
-        token = Current();
-        var match = predicate(token.Kind);
-        if (match)
-            Advance();
-
-        return match;
+        token = Advance();
+        return true;
     }
 
     private Token ExpectIdentifier() => ExpectIdentifier("identifier");

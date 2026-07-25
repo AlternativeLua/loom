@@ -72,6 +72,7 @@ public enum SyntaxKind : ushort
     TypeKeyword,
     InterfaceKeyword,
     ExportKeyword,
+    ImportKeyword,
     FnKeyword,
     ReturnKeyword,
     ContinueKeyword,

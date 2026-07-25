@@ -1,0 +1,144 @@
+﻿ImportDeclaration(
+  ImportKeyword: Token(ImportKeyword, "import")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ImportSpecifier(
+      Name: Token(Identifier, "square")
+      AsKeyword: null
+      Alias: null
+      LocalName: Token(Identifier, "square")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  IsTypeOnly: False
+  ModulePath: "./math"
+)
+ImportDeclaration(
+  ImportKeyword: Token(ImportKeyword, "import")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ImportSpecifier(
+      Name: Token(Identifier, "square")
+      AsKeyword: null
+      Alias: null
+      LocalName: Token(Identifier, "square")
+    )
+    ImportSpecifier(
+      Name: Token(Identifier, "pi")
+      AsKeyword: null
+      Alias: null
+      LocalName: Token(Identifier, "pi")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  IsTypeOnly: False
+  ModulePath: "./math"
+)
+ImportDeclaration(
+  ImportKeyword: Token(ImportKeyword, "import")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ImportSpecifier(
+      Name: Token(Identifier, "square")
+      AsKeyword: Token(AsKeyword, "as")
+      Alias: Token(Identifier, "sq")
+      LocalName: Token(Identifier, "sq")
+    )
+    ImportSpecifier(
+      Name: Token(Identifier, "pi")
+      AsKeyword: Token(AsKeyword, "as")
+      Alias: Token(Identifier, "PI")
+      LocalName: Token(Identifier, "PI")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  IsTypeOnly: False
+  ModulePath: "./math"
+)
+ImportDeclaration(
+  ImportKeyword: Token(ImportKeyword, "import")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ImportSpecifier(
+      Name: Token(Identifier, "square")
+      AsKeyword: null
+      Alias: null
+      LocalName: Token(Identifier, "square")
+    )
+    ImportSpecifier(
+      Name: Token(Identifier, "pi")
+      AsKeyword: null
+      Alias: null
+      LocalName: Token(Identifier, "pi")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  IsTypeOnly: False
+  ModulePath: "./math"
+)
+ImportDeclaration(
+  ImportKeyword: Token(ImportKeyword, "import")
+  TypeKeyword: Token(TypeKeyword, "type")
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ImportSpecifier(
+      Name: Token(Identifier, "Vector")
+      AsKeyword: null
+      Alias: null
+      LocalName: Token(Identifier, "Vector")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""../types/vector"")
+    Value: "../types/vector"
+  )
+  IsTypeOnly: True
+  ModulePath: "../types/vector"
+)
+ImportDeclaration(
+  ImportKeyword: Token(ImportKeyword, "import")
+  TypeKeyword: Token(TypeKeyword, "type")
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ImportSpecifier(
+      Name: Token(Identifier, "Vector")
+      AsKeyword: Token(AsKeyword, "as")
+      Alias: Token(Identifier, "Vec3")
+      LocalName: Token(Identifier, "Vec3")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""../types/vector"")
+    Value: "../types/vector"
+  )
+  IsTypeOnly: True
+  ModulePath: "../types/vector"
+)

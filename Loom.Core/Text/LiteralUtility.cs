@@ -8,7 +8,8 @@ public static class LiteralUtility
         token.Kind switch
         {
             SyntaxKind.NumberLiteral => ResolveNumber(token),
-            SyntaxKind.StringLiteral => token.Text[1..^1],
+            // synthesized tokens from failed parses carry no quotes to strip
+            SyntaxKind.StringLiteral => token.Text.Length < 2 ? null : token.Text[1..^1],
             SyntaxKind.TrueLiteral => true,
             SyntaxKind.FalseLiteral => false,
             _ => null

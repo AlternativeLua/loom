@@ -58,6 +58,9 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitDeclare(Declare declare) => Visit(declare.Signature);
     public virtual T VisitExportDeclaration(ExportDeclaration export) => Visit(export.Declaration);
 
+    public virtual T VisitImportDeclaration(ImportDeclaration import) => CombineResults([VisitList(import.Specifiers), Visit(import.ModuleSpecifier)]);
+    public virtual T VisitImportSpecifier(ImportSpecifier specifier) => DefaultValue(specifier);
+
     public virtual T VisitDeclareVariableSignature(DeclareVariableSignature declareVariableSignature) => VisitWithDefault(declareVariableSignature.ColonTypeClause);
 
     public virtual T VisitDeclareFunctionSignature(DeclareFunctionSignature declareFunctionSignature) =>

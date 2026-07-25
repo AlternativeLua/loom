@@ -61,6 +61,25 @@ public class VisitorTraversalTest
         );
 
     [Fact]
+    public void Import_VisitsSpecifiersAndModulePath() =>
+        AssertVisitOrder(
+            "import { square, pi as PI } from \"./math\"",
+            "ImportDeclaration",
+            "ImportSpecifier",
+            "ImportSpecifier",
+            "Literal"
+        );
+
+    [Fact]
+    public void ImportType_VisitsSpecifiersAndModulePath() =>
+        AssertVisitOrder(
+            "import type { Vector } from \"./vector\"",
+            "ImportDeclaration",
+            "ImportSpecifier",
+            "Literal"
+        );
+
+    [Fact]
     public void Interface_VisitsConstraintsAndMembers() =>
         AssertVisitOrder(
             "interface A: B, C { [bool]: number, a: number, [some_attribute(69), balls] b: number }",
