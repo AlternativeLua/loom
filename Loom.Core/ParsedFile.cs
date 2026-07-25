@@ -16,4 +16,9 @@ public sealed record ParsedFile(SourceFile File, LexerResult LexerResult, Parser
 
     /// <summary>Top-level imports, in source order. Imports nested in a block are rejected by the resolver.</summary>
     public IReadOnlyList<ImportDeclaration> Imports => field ??= Tree.Statements.OfType<ImportDeclaration>().ToArray();
+    
+    public IReadOnlyList<NamespaceImport> NamespaceImports => field ??= Tree.Statements.OfType<NamespaceImport>().ToArray();
+    
+    public IReadOnlyList<ExportList> ReExports =>
+        field ??= Tree.Statements.OfType<ExportList>().Where(export => export.IsReExport).ToArray();
 }

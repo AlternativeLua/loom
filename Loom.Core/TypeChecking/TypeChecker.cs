@@ -306,6 +306,9 @@ public sealed partial class TypeChecker
     /// </remarks>
     public override Type VisitImportDeclaration(ImportDeclaration import) => BindType(import, Types.PrimitiveType.Void);
 
+    /// <remarks>The resolver already bound the namespace's object type; re-binding here would discard it.</remarks>
+    public override Type VisitNamespaceImport(NamespaceImport import) => _semanticModel.GetType(import);
+
     public override Type VisitDeclare(Declare declare)
     {
         var type = declare.Signature switch

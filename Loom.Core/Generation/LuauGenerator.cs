@@ -37,8 +37,9 @@ public sealed partial class LuauGenerator
 
     public LuauGeneratorResult Generate()
     {
+        var moduleImports = GenerateModuleImports();
         var luauTree = VisitTree(_semanticModel.Tree);
-        luauTree.Statements.InsertRange(0, GenerateModuleImports());
+        luauTree.Statements.InsertRange(0, moduleImports);
 
         if (_semanticModel.MustImportRuntimeLibrary)
         {

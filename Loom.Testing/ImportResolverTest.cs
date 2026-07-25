@@ -30,7 +30,7 @@ public class ImportResolverTest
 
                 // the symbol is the exporting module's own instance, not a copy
                 var math = result.Files.Single(file => file.SourceFile.Name == "math.loom");
-                Assert.Contains(math.SemanticModel.Exports, export => ReferenceEquals(export, binding.Symbol));
+                Assert.Contains(math.SemanticModel.Exports, export => ReferenceEquals(export.Symbol, binding.Symbol));
             }
         );
 
@@ -91,6 +91,38 @@ public class ImportResolverTest
             {
                 Utility.AssertNoErrors(result);
                 Assert.Equal(5, bindings.Count);
+            }
+        );
+
+    [Fact]
+    public void Tracks_WhichImportsAreUsed() =>
+        WithImportingModule(
+            "import { pi, square } from \"./math\"\nprint(square(1));",
+            (result, bindings) =>
+            {
+                Assert.Equal([("pi", false), ("square", true)], bindings.Select(binding => (binding.LocalName, binding.IsUsed)));
+                Utility.AssertDiagnostic(
+                    result.Diagnostics,
+                    InternalCodes.UnusedImport,
+                    "'pi' is imported but never used.",
+                    "remove it from the import clause"
+                );
+
+                Assert.DoesNotContain(
+                    result.Diagnostics.Set,
+                    diagnostic => diagnostic.Code == InternalCodes.UnusedImport && diagnostic.Message.Contains("square")
+                );
+            }
+        );
+
+    [Fact]
+    public void Counts_UseInATypeAnnotation_AsUse() =>
+        WithImportingModule(
+            "import type { Point } from \"./math\"\nfn area(p: Point): number -> p.x * p.y;\nprint(area);",
+            (result, bindings) =>
+            {
+                Assert.All(bindings, binding => Assert.True(binding.IsUsed));
+                Assert.DoesNotContain(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.UnusedImport);
             }
         );
 

@@ -163,8 +163,11 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitInterfaceInvocation(InterfaceInvocation interfaceInvocation)
     {
         var symbol = _semanticModel.GetSymbol(interfaceInvocation.Name, SymbolKind.Interface);
+
+        // the resolver already reported why this is not an interface; an invocation sits in expression
+        // position, so a statement placeholder here would fail to cast and surface as a compiler crash
         if (symbol is not InterfaceSymbol interfaceSymbol)
-            return new NoOpStatement();
+            return new NilLiteral();
 
         var table = GenerateInterfaceInvocationBody(interfaceInvocation.Body, interfaceSymbol);
         if (interfaceSymbol.Implements.Count == 0)

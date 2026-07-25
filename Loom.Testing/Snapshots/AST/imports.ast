@@ -142,3 +142,15 @@ ImportDeclaration(
   IsTypeOnly: True
   ModulePath: "../types/vector"
 )
+NamespaceImport(
+  ImportKeyword: Token(ImportKeyword, "import")
+  Star: Token(Star, "*")
+  AsKeyword: Token(AsKeyword, "as")
+  Name: Token(Identifier, "math")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  ModulePath: "./math"
+)

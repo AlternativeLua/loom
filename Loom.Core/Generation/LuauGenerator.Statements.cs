@@ -34,16 +34,19 @@ public sealed partial class LuauGenerator
 
         statements.AddRange(GenerateStatements(tree.Statements));
 
-        var valueExports = _semanticModel.Exports.FindAll(s => s.EmitsRuntimeBinding);
+        MarkListExportedTypes(statements);
+        statements.AddRange(GenerateExportedTypeAliases());
 
+        var valueExports = _semanticModel.Exports.FindAll(export => export.EmitsRuntimeBinding);
         if (valueExports.Count > 0)
         {
-            var initializers = valueExports
-                .ConvertAll(TableInitializer (s) => new PropertyTableInitializer(s.Name, new Identifier(s.Name)));
+            var initializers = valueExports.ConvertAll(TableInitializer (export) =>
+                new PropertyTableInitializer(export.Name, GenerateExportedValue(export))
+            );
 
             statements.Add(new Luau.AST.Return(new Table(initializers)));
         }
-        
+
         return new LuauTree(statements);
     }
 
@@ -58,10 +61,10 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitReturn(Return @return) => new Luau.AST.Return(MaybeVisit<LuauExpression>(@return.Expression));
     public override LuauNode VisitDeclare(Declare declare) => declare.Signature is InterfaceDeclaration ? Visit(declare.Signature) : new NoOpStatement();
     public override LuauNode VisitExpressionStatement(ExpressionStatement expressionStatement) => WrapExpressionAsStatement(Visit(expressionStatement.Expression));
-
-    // imports are erased here; the requires they need are emitted separately, and the base
-    // implementation would return the module path expression where a statement is required
+    
     public override LuauNode VisitImportDeclaration(ImportDeclaration import) => new NoOpStatement();
+    public override LuauNode VisitNamespaceImport(NamespaceImport import) => new NoOpStatement();
+    public override LuauNode VisitExportList(ExportList export) => new NoOpStatement();
 
     public override LuauNode VisitExportDeclaration(ExportDeclaration export)
     {

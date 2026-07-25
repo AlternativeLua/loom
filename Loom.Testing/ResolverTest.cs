@@ -536,7 +536,7 @@ public class ResolverTest
         Assert.Equal(["constant", "do_something"], model.Exports.Select(s => s.Name));
 
         var variable = Assert.IsType<ExportDeclaration>(model.Tree.Statements[0]).Declaration;
-        Assert.Same(model.GetDeclarationSymbol(variable), model.Exports[0]);
+        Assert.Same(model.GetDeclarationSymbol(variable), model.Exports[0].Symbol);
     }
 
     [Fact]
@@ -569,19 +569,19 @@ public class ResolverTest
                 SymbolKind.Variable, SymbolKind.EnumType,
                 SymbolKind.Trait
             ],
-            model.Exports.Select(s => s.Kind)
+            model.Exports.Select(s => s.Symbol.Kind)
         );
 
         // ...which is what FindExports hands an importing module
-        Assert.Equal([SymbolKind.Variable, SymbolKind.Interface], model.FindExports("Point").Select(s => s.Kind));
-        Assert.Equal([SymbolKind.Type], model.FindExports("Alias").Select(s => s.Kind));
+        Assert.Equal([SymbolKind.Variable, SymbolKind.Interface], model.FindExports("Point").Select(s => s.Symbol.Kind));
+        Assert.Equal([SymbolKind.Type], model.FindExports("Alias").Select(s => s.Symbol.Kind));
         Assert.Empty(model.FindExports("Nope"));
 
         // none of these emit a runtime local, so none reach the module's return table
         Assert.DoesNotContain(model.Exports, s => s.EmitsRuntimeBinding);
 
         var trait = Assert.IsType<ExportDeclaration>(model.Tree.Statements[4]).Declaration;
-        Assert.Same(model.GetDeclarationSymbol(trait), model.Exports[7]);
+        Assert.Same(model.GetDeclarationSymbol(trait), model.Exports[7].Symbol);
     }
 
     [Fact]

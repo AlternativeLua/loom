@@ -90,6 +90,10 @@ public static class InternalCodes
     public const string NoExportedMember = "L366";
     public const string DuplicateImport = "L367";
     public const string TypeOnlyImportOfValue = "L368";
+    public const string UnusedImport = "L369";
+    public const string EmptyExportList = "L370";
+    public const string DuplicateExport = "L371";
+    public const string TypeOnlyExportOfValue = "L372";
 
     public const string SimplifiableCode = "L400";
 }

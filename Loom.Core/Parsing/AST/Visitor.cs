@@ -60,6 +60,13 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
 
     public virtual T VisitImportDeclaration(ImportDeclaration import) => CombineResults([VisitList(import.Specifiers), Visit(import.ModuleSpecifier)]);
     public virtual T VisitImportSpecifier(ImportSpecifier specifier) => DefaultValue(specifier);
+    
+    public virtual T VisitNamespaceImport(NamespaceImport import) => DefaultValue(import);
+
+    public virtual T VisitExportList(ExportList export) =>
+        CombineResults([VisitList(export.Specifiers), VisitWithDefault(export.ModuleSpecifier)]);
+
+    public virtual T VisitExportSpecifier(ExportSpecifier specifier) => DefaultValue(specifier);
 
     public virtual T VisitDeclareVariableSignature(DeclareVariableSignature declareVariableSignature) => VisitWithDefault(declareVariableSignature.ColonTypeClause);
 

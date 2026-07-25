@@ -80,6 +80,20 @@ public class VisitorTraversalTest
         );
 
     [Fact]
+    public void ExportList_VisitsSpecifiersAndModulePath() =>
+        AssertVisitOrder(
+            "export { a, b as c } from \"./math\"",
+            "ExportList",
+            "ExportSpecifier",
+            "ExportSpecifier",
+            "Literal"
+        );
+
+    [Fact]
+    public void NamespaceImport_DoesNotVisitItsModulePath() =>
+        AssertVisitOrder("import * as math from \"./math\"", "NamespaceImport");
+
+    [Fact]
     public void Interface_VisitsConstraintsAndMembers() =>
         AssertVisitOrder(
             "interface A: B, C { [bool]: number, a: number, [some_attribute(69), balls] b: number }",

@@ -21,4 +21,8 @@ public sealed record ImportBinding(ImportDeclaration Import, ImportSpecifier Spe
     public bool IsTypeOnly => Import.IsTypeOnly;
     
     public bool RequiresModuleAtRuntime => !IsTypeOnly && Symbol.EmitsRuntimeBinding;
+    
+    public bool IsUsed { get; private set; }
+
+    internal void MarkUsed() => IsUsed = true;
 }

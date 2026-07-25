@@ -1,5 +1,6 @@
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
+using Loom.Core.Text;
 using Loom.Luau;
 using Loom.Luau.AST;
 using Identifier = Loom.Luau.AST.Identifier;
@@ -13,6 +14,8 @@ namespace Loom.Core.Generation;
 
 public sealed partial class LuauGenerator
 {
+    private readonly Dictionary<SourceFile, string> _moduleLocals = [];
+
     private HashSet<string> TakenModuleLocalNames =>
         field ??=
         [
@@ -24,43 +27,96 @@ public sealed partial class LuauGenerator
     private List<LuauStatement> GenerateModuleImports()
     {
         var statements = new List<LuauStatement>();
-        foreach (var bindings in _semanticModel.ImportBindings.GroupBy(binding => binding.Module))
+        foreach (var (module, specifier, localName) in GetRequiredModules())
         {
-            var valueBindings = bindings.Where(binding => binding.RequiresModuleAtRuntime).ToList();
-            var typeBindings = bindings.Where(binding => binding.Symbol.IsTypeSymbol).ToList();
-            if (valueBindings.Count == 0 && typeBindings.Count == 0)
-                continue;
-
-            // the output tree mirrors the source tree, so the specifier as written also resolves there
-            var specifier = bindings.First().Import.ModulePath!;
-            var moduleName = ReserveModuleLocalName(specifier);
+            var moduleName = localName ?? ReserveModuleLocalName(specifier);
+            _moduleLocals[module] = moduleName;
             statements.Add(new ConstVariable(moduleName, null, LuauFactory.RequireCall(specifier)));
-            statements.AddRange(valueBindings.ConvertAll(binding => GenerateValueImport(binding, moduleName)));
-            statements.AddRange(typeBindings.ConvertAll(binding => GenerateTypeImport(binding, moduleName)));
+
+            var bindings = _semanticModel.ImportBindings.FindAll(binding => binding.Module == module);
+            statements.AddRange(
+                bindings.FindAll(binding => binding.RequiresModuleAtRuntime).ConvertAll(binding => GenerateValueImport(binding, moduleName))
+            );
+
+            statements.AddRange(
+                bindings.FindAll(binding => binding.Symbol.IsTypeSymbol).ConvertAll(binding => GenerateTypeImport(binding, moduleName))
+            );
         }
 
         return statements;
+    }
+    
+    private List<(SourceFile Module, string Specifier, string? LocalName)> GetRequiredModules()
+    {
+        var modules = new List<(SourceFile, string, string?)>();
+        var seen = new HashSet<SourceFile>();
+
+        foreach (var binding in _semanticModel.NamespaceImports.Where(binding => seen.Add(binding.Module)))
+            modules.Add((binding.Module, binding.ModulePath, binding.LocalName));
+
+        foreach (var binding in _semanticModel.ImportBindings.Where(binding => seen.Add(binding.Module)))
+            modules.Add((binding.Module, binding.Import.ModulePath!, null));
+
+        foreach (var export in _semanticModel.Exports.Where(export => export.Module != null && seen.Add(export.Module)))
+            modules.Add((export.Module!, export.ModulePath!, null));
+
+        return modules;
     }
 
     private static LuauStatement GenerateValueImport(ImportBinding binding, string moduleName) =>
         new ConstVariable(binding.LocalName, null, new PropertyAccess(new Identifier(moduleName), [binding.ExportedName]));
     
-    private static LuauStatement GenerateTypeImport(ImportBinding binding, string moduleName)
+    private static LuauStatement GenerateTypeImport(ImportBinding binding, string moduleName) =>
+        GenerateTypeAlias(binding.LocalName, binding.ExportedName, binding.Symbol, moduleName, isExported: false);
+    
+    private LuauExpression GenerateExportedValue(ExportBinding export) =>
+        export.Module == null
+            ? new Identifier(export.SourceName)
+            : new PropertyAccess(new Identifier(_moduleLocals[export.Module]), [export.SourceName]);
+    
+    private void MarkListExportedTypes(List<LuauStatement> statements)
     {
-        var parameterNames = binding.Symbol.Declaration is GenericNamedDeclaration { TypeParameters: { } typeParameters }
+        foreach (var export in _semanticModel.Exports)
+        {
+            if (export.IsReExport || !export.Symbol.IsTypeSymbol || export.Name != export.SourceName)
+                continue;
+
+            if (statements.OfType<TypeAlias>().FirstOrDefault(alias => alias.Name == export.Name) is { } typeAlias)
+                typeAlias.IsExported = true;
+        }
+    }
+    
+    private List<LuauStatement> GenerateExportedTypeAliases() =>
+        _semanticModel.Exports
+            .FindAll(export => export.Symbol.IsTypeSymbol && (export.IsReExport || export.Name != export.SourceName))
+            .ConvertAll(export =>
+                GenerateTypeAlias(
+                    export.Name,
+                    export.SourceName,
+                    export.Symbol,
+                    export.Module == null ? null : _moduleLocals[export.Module],
+                    isExported: true
+                )
+            );
+
+    private static LuauStatement GenerateTypeAlias(string name, string sourceName, Symbol symbol, string? moduleName, bool isExported)
+    {
+        var parameterNames = symbol.Declaration is GenericNamedDeclaration { TypeParameters: { } typeParameters }
             ? typeParameters.ParameterList.ConvertAll(parameter => parameter.Name.Text)
             : [];
 
+        var source = new TypeName(sourceName, parameterNames.ConvertAll(LuauType (parameter) => new TypeName(parameter)));
         return new TypeAlias(
-            binding.LocalName,
-            new TypeParameters(parameterNames.ConvertAll(name => new TypeParameter(name))),
-            new QualifiedTypeName(
-                [moduleName],
-                new TypeName(binding.ExportedName, parameterNames.ConvertAll(LuauType (name) => new TypeName(name)))
-            )
-        );
+            name,
+            new TypeParameters(parameterNames.ConvertAll(parameter => new TypeParameter(parameter))),
+            moduleName == null ? source : new QualifiedTypeName([moduleName], source)
+        )
+        {
+            IsExported = isExported
+        };
     }
-    
+
+
     private string ReserveModuleLocalName(string specifier)
     {
         var segment = specifier.Split('/', StringSplitOptions.RemoveEmptyEntries).LastOrDefault(segment => segment != "..");

@@ -30,6 +30,7 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         DeclareIntrinsicSymbols();
         DeclareGlobalSymbols();
         VisitTree(parserResult.Tree);
+        ReportUnusedImports();
         PopScope();
 
         return _semanticModel;
@@ -78,9 +79,164 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         }
         
         foreach (var symbol in _semanticModel.GetDeclarationSymbols(export.Declaration))
-            _semanticModel.AddExport(symbol);
+            AddExport(export.Declaration, ExportBinding.OfDeclaration(symbol));
 
         return true;
+    }
+
+    public override bool VisitExportList(ExportList export)
+    {
+        if (_scopes.Count > 1)
+        {
+            _diagnostics.Error(
+                export,
+                InternalCodes.ExportOutsideModuleScope,
+                "Declarations can only be exported at the top level of a module.",
+                "move the 'export' declaration out of the enclosing block"
+            );
+
+            return false;
+        }
+
+        if (!export.IsReExport)
+        {
+            foreach (var specifier in export.Specifiers)
+                ResolveLocalExport(export, specifier);
+
+            return true;
+        }
+
+        var module = compilationUnit.ModuleGraph?.GetResolvedModule(export);
+        if (module == null)
+            return true; // an unresolvable specifier was already reported while building the module graph
+
+        if (!compilationUnit.AnalyzedModules.TryGetValue(module, out var moduleModel))
+            return true; // only reachable through a dependency cycle, which the module graph reported
+
+        foreach (var specifier in export.Specifiers)
+            ResolveReExport(export, specifier, module, moduleModel);
+
+        return true;
+    }
+
+    public override bool VisitNamespaceImport(NamespaceImport import)
+    {
+        if (_scopes.Count > 1)
+        {
+            _diagnostics.Error(
+                import,
+                InternalCodes.ImportOutsideModuleScope,
+                "Modules can only be imported at the top level of a module.",
+                "move the 'import' declaration out of the enclosing block"
+            );
+
+            return false;
+        }
+
+        var module = compilationUnit.ModuleGraph?.GetResolvedModule(import);
+        if (module == null)
+            return true; // an unresolvable specifier was already reported while building the module graph
+
+        if (!compilationUnit.AnalyzedModules.TryGetValue(module, out var moduleModel))
+            return true; // only reachable through a dependency cycle, which the module graph reported
+
+        var name = import.Name.Text;
+        if (HasDuplicateSymbol(import, name, true, $"Variable '{name}' is already declared in this scope."))
+            return true;
+
+        // the symbol stands for the required table, so unlike a named import it is declared on this node
+        var symbol = new Symbol(import, SymbolKind.Variable, name);
+        DeclareSymbol(symbol);
+        _semanticModel.AddNamespaceImport(new NamespaceImportBinding(import, symbol, module));
+        _semanticModel.TypeSolver.SetType(import, GetNamespaceType(moduleModel));
+
+        return true;
+    }
+
+    /// <summary>
+    /// The type of a namespace import: an object whose properties are the module's runtime exports, so
+    /// member access on it type-checks against what the module actually returns.
+    /// </summary>
+    private static TypeChecking.Types.Type GetNamespaceType(SemanticModel moduleModel) =>
+        new TypeChecking.Types.ObjectType(
+            null,
+            moduleModel.Exports
+                .FindAll(export => export.EmitsRuntimeBinding)
+                .ConvertAll(export =>
+                    new TypeChecking.Types.ObjectProperty(false, export.Name, moduleModel.GetType(export.Symbol.Declaration))
+                )
+        );
+
+    /// <summary>Exports a name the module already declares, without introducing a new binding.</summary>
+    private void ResolveLocalExport(ExportList export, ExportSpecifier specifier)
+    {
+        var name = specifier.Name.Text;
+        var typeSymbol = LookupTypeSymbol(name);
+        var valueSymbol = export.IsTypeOnly ? null : LookupValueSymbol(name);
+        if (typeSymbol == null && valueSymbol == null)
+        {
+            _diagnostics.Error(
+                specifier,
+                export.IsTypeOnly ? InternalCodes.TypeOnlyExportOfValue : InternalCodes.CannotFindSymbol,
+                export.IsTypeOnly && LookupValueSymbol(name) != null
+                    ? $"'{name}' is a value, not a type."
+                    : $"Cannot find symbol '{name}'.",
+                export.IsTypeOnly && LookupValueSymbol(name) != null ? "remove 'type' from the export" : null
+            );
+
+            return;
+        }
+
+        foreach (var symbol in new[] { valueSymbol, typeSymbol }.OfType<Symbol>())
+        {
+            AddReference(specifier, symbol);
+            AddExport(specifier, new ExportBinding(specifier.ExportedName.Text, name, symbol, export));
+        }
+    }
+
+    /// <summary>Forwards another module's export without binding it in this module's scope.</summary>
+    private void ResolveReExport(ExportList export, ExportSpecifier specifier, SourceFile module, SemanticModel moduleModel)
+    {
+        var name = specifier.Name.Text;
+        var exports = moduleModel.FindExports(name);
+        if (exports.Count == 0)
+        {
+            _diagnostics.Error(specifier, InternalCodes.NoExportedMember, $"Module '{module.Name}' does not export '{name}'.");
+            return;
+        }
+
+        if (export.IsTypeOnly)
+        {
+            var typeExports = exports.FindAll(binding => binding.Symbol.IsTypeSymbol);
+            if (typeExports.Count == 0)
+            {
+                _diagnostics.Error(
+                    specifier,
+                    InternalCodes.TypeOnlyExportOfValue,
+                    $"'{name}' is a value, not a type.",
+                    "remove 'type' from the export"
+                );
+
+                return;
+            }
+
+            exports = typeExports;
+        }
+
+        foreach (var binding in exports)
+            AddExport(specifier, new ExportBinding(specifier.ExportedName.Text, name, binding.Symbol, export, module));
+    }
+
+    private void AddExport(Node node, ExportBinding binding)
+    {
+        var existing = _semanticModel.FindExports(binding.Name);
+        if (existing.Exists(other => other.Symbol.IsTypeSymbol == binding.Symbol.IsTypeSymbol))
+        {
+            _diagnostics.Error(node, InternalCodes.DuplicateExport, $"'{binding.Name}' is already exported.");
+            return;
+        }
+
+        _semanticModel.AddExport(binding);
     }
 
     public override bool VisitImportDeclaration(ImportDeclaration import)
@@ -142,7 +298,7 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
 
         if (import.IsTypeOnly)
         {
-            var typeExports = exports.FindAll(symbol => symbol.IsTypeSymbol);
+            var typeExports = exports.FindAll(export => export.Symbol.IsTypeSymbol);
             if (typeExports.Count == 0)
             {
                 _diagnostics.Error(
@@ -159,7 +315,7 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         }
 
         foreach (var export in exports)
-            DeclareImportedSymbol(import, specifier, export, module, moduleModel);
+            DeclareImportedSymbol(import, specifier, export.Symbol, module, moduleModel);
     }
 
     /// <summary>
@@ -902,6 +1058,7 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
             _allReferences[node.Id] = [];
 
         _allReferences[node.Id].Add(symbol);
+        _semanticModel.MarkImportUsed(symbol);
         if (!node.File.IsIntrinsic)
             _semanticModel.NonIntrinsicReferenceNodes.Add(node.Id);
     }
@@ -951,6 +1108,37 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
     {
         _diagnostics.Error(constraint, InternalCodes.NonInterfaceConstraint, "Interfaces may only be constrained by other interfaces.");
         return false;
+    }
+
+    /// <remarks>
+    /// One specifier can produce a binding per namespace, so an interface referenced only as a type still
+    /// counts as used. Runs once the whole tree is resolved, since a name may be used above its import.
+    /// </remarks>
+    private void ReportUnusedImports()
+    {
+        foreach (var bindings in _semanticModel.ImportBindings.GroupBy(binding => binding.Specifier))
+        {
+            if (bindings.Any(binding => binding.IsUsed))
+                continue;
+
+            var binding = bindings.First();
+            _diagnostics.Warn(
+                binding.Specifier,
+                InternalCodes.UnusedImport,
+                $"'{binding.LocalName}' is imported but never used.",
+                "remove it from the import clause"
+            );
+        }
+
+        foreach (var binding in _semanticModel.NamespaceImports.Where(binding => !binding.IsUsed))
+        {
+            _diagnostics.Warn(
+                binding.Import,
+                InternalCodes.UnusedImport,
+                $"'{binding.LocalName}' is imported but never used.",
+                "remove the import"
+            );
+        }
     }
 
     private void DeclareGlobalSymbols()

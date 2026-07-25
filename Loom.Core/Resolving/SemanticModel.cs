@@ -11,9 +11,9 @@ namespace Loom.Core.Resolving;
 public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolTable Declarations, SymbolTable References)
     : DiagnosedResult(Diagnostics)
 {
-    public List<Symbol> Exports { get; } = [];
+    public List<ExportBinding> Exports { get; } = [];
 
-    private SymbolLookup ExportsByName { get; } = [];
+    private Dictionary<string, List<ExportBinding>> ExportsByName { get; } = [];
     
     public List<ImportBinding> ImportBindings { get; } = [];
 
@@ -41,24 +41,28 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag());
     private SymbolLookup DeclarationsByName => field ??= Declarations.Values.SelectMany(s => s).GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.ToList());
 
-    internal void AddExport(Symbol symbol)
+    internal void AddExport(ExportBinding binding)
     {
-        Exports.Add(symbol);
-        if (!ExportsByName.TryGetValue(symbol.Name, out var symbols))
-            ExportsByName[symbol.Name] = symbols = [];
+        Exports.Add(binding);
+        if (!ExportsByName.TryGetValue(binding.Name, out var bindings))
+            ExportsByName[binding.Name] = bindings = [];
 
-        symbols.Add(symbol);
+        bindings.Add(binding);
     }
-
-    /// <summary>
-    /// Every symbol exported under <paramref name="name"/> — at most one per namespace. Empty when the
-    /// module does not export the name at all.
-    /// </summary>
-    public List<Symbol> FindExports(string name) => ExportsByName.GetValueOrDefault(name, []);
+    
+    public List<ExportBinding> FindExports(string name) => ExportsByName.GetValueOrDefault(name, []);
+    
+    public List<NamespaceImportBinding> NamespaceImports { get; } = [];
 
     internal void AddImportBinding(ImportBinding binding)
     {
         ImportBindings.Add(binding);
+        ImportedSymbols.Add(binding.Symbol);
+    }
+
+    internal void AddNamespaceImport(NamespaceImportBinding binding)
+    {
+        NamespaceImports.Add(binding);
         ImportedSymbols.Add(binding.Symbol);
     }
 
@@ -68,6 +72,18 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     /// flow analysis in particular — has to treat it as coming from outside.
     /// </summary>
     public bool IsImported(Symbol symbol) => ImportedSymbols.Contains(symbol);
+    
+    internal void MarkImportUsed(Symbol symbol)
+    {
+        if (!ImportedSymbols.Contains(symbol))
+            return;
+
+        foreach (var binding in ImportBindings.Where(binding => binding.Symbol == symbol))
+            binding.MarkUsed();
+
+        foreach (var binding in NamespaceImports.Where(binding => binding.Symbol == symbol))
+            binding.MarkUsed();
+    }
 
     public bool IsCompileTimeConstant(Expression expression) =>
         expression is Literal or NameOf

@@ -27,9 +27,8 @@ public sealed class ModuleGraph
 
     /// <summary>Every parsed file, dependencies before their importers.</summary>
     public List<ParsedFile> Order { get; }
-
-    /// <summary>The module an import resolves to, or null when resolution failed and was reported.</summary>
-    public SourceFile? GetResolvedModule(ImportDeclaration import) => _resolvedModules.GetValueOrDefault(import.Id);
+    
+    public SourceFile? GetResolvedModule(Node moduleReference) => _resolvedModules.GetValueOrDefault(moduleReference.Id);
 
     /// <summary>Module diagnostics belonging to <paramref name="file"/>, reported at its import sites.</summary>
     public DiagnosticBag? GetDiagnostics(SourceFile file) => _diagnostics.GetValueOrDefault(file);
@@ -48,14 +47,14 @@ public sealed class ModuleGraph
         foreach (var parsedFile in parsedFiles)
         {
             var edges = new List<ModuleEdge>();
-            foreach (var import in parsedFile.Imports)
+            foreach (var (node, specifier, path) in ModuleReferencesOf(parsedFile))
             {
-                var target = ResolveImport(resolver, parsedFile, import, parsedFilesByFile, diagnostics);
+                var target = ResolveModuleReference(resolver, parsedFile, node, specifier, path, parsedFilesByFile, diagnostics);
                 if (target == null)
                     continue;
 
-                resolvedModules[import.Id] = target.File;
-                edges.Add(new ModuleEdge(import, target));
+                resolvedModules[node.Id] = target.File;
+                edges.Add(new ModuleEdge(node, target));
             }
 
             dependencies[parsedFile.File] = edges;
@@ -65,10 +64,25 @@ public sealed class ModuleGraph
         return new ModuleGraph(order, resolvedModules, diagnostics);
     }
 
-    private static ParsedFile? ResolveImport(
+    /// <summary>Every statement in the file that names another module: imports and re-exports alike.</summary>
+    private static IEnumerable<(Node Node, Literal Specifier, string? Path)> ModuleReferencesOf(ParsedFile parsedFile)
+    {
+        foreach (var import in parsedFile.Imports)
+            yield return (import, import.ModuleSpecifier, import.ModulePath);
+
+        foreach (var import in parsedFile.NamespaceImports)
+            yield return (import, import.ModuleSpecifier, import.ModulePath);
+
+        foreach (var export in parsedFile.ReExports)
+            yield return (export, export.ModuleSpecifier!, export.ModulePath);
+    }
+
+    private static ParsedFile? ResolveModuleReference(
         ModuleResolver resolver,
         ParsedFile parsedFile,
-        ImportDeclaration import,
+        Node moduleReference,
+        Literal moduleSpecifier,
+        string? specifier,
         Dictionary<SourceFile, ParsedFile> parsedFilesByFile,
         Dictionary<SourceFile, DiagnosticBag> diagnostics)
     {
@@ -77,7 +91,7 @@ public sealed class ModuleGraph
             Report(
                 diagnostics,
                 parsedFile.File,
-                import,
+                moduleReference,
                 InternalCodes.ImportInDeclarationFile,
                 "Declaration files cannot import modules.",
                 "declare the symbol ambiently instead"
@@ -86,7 +100,6 @@ public sealed class ModuleGraph
             return null;
         }
 
-        var specifier = import.ModulePath;
         if (specifier == null)
             return null; // the parser already reported the malformed specifier
 
@@ -100,7 +113,7 @@ public sealed class ModuleGraph
                 Report(
                     diagnostics,
                     parsedFile.File,
-                    import.ModuleSpecifier,
+                    moduleSpecifier,
                     InternalCodes.UnsupportedModuleSpecifier,
                     $"Module '{specifier}' is not a relative path.",
                     "package imports are not supported yet; start the path with './' or '../'"
@@ -112,7 +125,7 @@ public sealed class ModuleGraph
                 Report(
                     diagnostics,
                     parsedFile.File,
-                    import.ModuleSpecifier,
+                    moduleSpecifier,
                     InternalCodes.SelfImport,
                     "A module cannot import itself."
                 );
@@ -123,7 +136,7 @@ public sealed class ModuleGraph
                 Report(
                     diagnostics,
                     parsedFile.File,
-                    import.ModuleSpecifier,
+                    moduleSpecifier,
                     InternalCodes.ModuleOutsideSourceDirectory,
                     $"Module '{specifier}' is outside the source directory."
                 );
@@ -134,7 +147,7 @@ public sealed class ModuleGraph
                 Report(
                     diagnostics,
                     parsedFile.File,
-                    import.ModuleSpecifier,
+                    moduleSpecifier,
                     InternalCodes.ModuleNotFound,
                     $"Could not find module '{specifier}'.",
                     specifier.EndsWith(FileManager.LoomExtension, StringComparison.Ordinal)
@@ -181,7 +194,7 @@ public sealed class ModuleGraph
                     Report(
                         diagnostics,
                         parsedFile.File,
-                        edge.Import,
+                        edge.ModuleReference,
                         InternalCodes.CircularModuleDependency,
                         $"Circular module dependency: {DescribeCycle(path, edge.Target.File, config)}.",
                         "Luau requires cannot be cyclic; move the shared code into a third module"
@@ -228,5 +241,5 @@ public sealed class ModuleGraph
         Ordered
     }
 
-    private sealed record ModuleEdge(ImportDeclaration Import, ParsedFile Target);
+    private sealed record ModuleEdge(Node ModuleReference, ParsedFile Target);
 }
