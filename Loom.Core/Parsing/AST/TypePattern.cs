@@ -1,5 +1,3 @@
-using Loom.Core.Text;
-
 namespace Loom.Core.Parsing.AST;
 
 public class TypePattern(TypeExpression type, ObjectPattern? objectPattern)

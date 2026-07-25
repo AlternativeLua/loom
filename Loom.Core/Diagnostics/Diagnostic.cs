@@ -12,8 +12,7 @@ public sealed record Diagnostic(LocationSpan Span, DiagnosticSeverity Severity, 
     private int StartCharacter => Span.Start.Character;
     private int EndCharacter => Span.End.Character;
     private int LineDigits => EndLine.ToString().Length;
-    private string[]? _sourceLines;
-    private string[] SourceLines => _sourceLines ??= Span.File.SourceText.Replace(Environment.NewLine, "\n").Split('\n');
+    private string[] SourceLines => field ??= Span.File.SourceText.Replace(Environment.NewLine, "\n").Split('\n');
     private string GutterIndent => new(' ', LineDigits);
     private string Gutter => $"{Colors.Dim}{GutterIndent} │{Colors.Reset}";
 

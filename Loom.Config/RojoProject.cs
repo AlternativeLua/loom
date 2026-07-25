@@ -9,12 +9,11 @@ public sealed class RojoProject
     public static RojoProject? Read(string projectFilePath)
     {
         if (!File.Exists(projectFilePath))
-            return  null;
+            return null;
 
         using var document = JsonDocument.Parse(File.ReadAllText(projectFilePath));
-        if (!document.RootElement.TryGetProperty("tree", out var treeElement))
-            return null;
-        
-        return new RojoProject { Tree = RojoNode.Parse(treeElement) };
+        return !document.RootElement.TryGetProperty("tree", out var treeElement) 
+            ? null : 
+            new RojoProject { Tree = RojoNode.Parse(treeElement) };
     }
 }
