@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Loom: domain-specific language for Roblox, transpiles to Luau. C# / .NET 9, xUnit tests. WIP — breaking changes allowed. Repo: https://github.com/R-unic/loom
+Loom: domain-specific language for Roblox, transpiles to Luau. C# / .NET 9, xUnit tests. WIP — breaking changes allowed. Repo: https://github.com/rbx-loom/loom
 
 ## Commands
 
@@ -9,7 +9,7 @@ dotnet restore
 dotnet build
 dotnet test                     # full test suite (Loom.Testing, xUnit)
 dotnet test --filter "FullyQualifiedName~ParserTest"   # single test class
-dotnet run --project Loom.CLI -- <dir>                 # compile a Loom project (dir with loom-config.toml, default ".")
+dotnet run --project Loom.CLI -- <dir>                 # compile a Loom project (dir with loom-config.toml, default "."), TestProject exists for testing changes
 dotnet run --project Loom.Tools -- ast <file.loom>     # dump AST for a file
 dotnet run --project Loom.Tools -- generate-ast-snapshots  # regenerate AST snapshot files
 ```
@@ -50,7 +50,7 @@ CI (`.github/workflows/ci.yml`): `dotnet test -c Release` with coverage → Cove
 - Nullable + ImplicitUsings enabled everywhere; primary constructors used (e.g. `Compiler(CompilationUnit unit, SourceFile file)`).
 - Big classes split as partial files by concern (`Parser.Expressions.cs`, `TypeChecker.Generics.cs`) — follow that pattern when a stage grows.
 - One AST node / one type kind per file.
-- Commit style: conventional-commit prefixes `feat:`/`fix:`/`test:`/`docs:` (see git log).
+- Commit style: conventional-commit prefixes `feat:`/`fix:`/`test:`/`docs:`/`ref:` (see git log).
 - Source files: Loom source uses `.loom` extension; output `.luau`. Indices are 1-based (Luau semantics). Immutability by default (`let` → `const`/local, `mut` for mutable).
 - ReSharper/Rider settings in `Loom.sln.DotSettings`; formatting handled by linter, don't hand-fight it.
 

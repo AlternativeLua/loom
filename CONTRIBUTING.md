@@ -7,7 +7,7 @@ First of all, thank you for considering contributing to Loom! However small the 
 Clone the repo, restore dependencies, and run the tests:
 
 ```bash
-git clone https://github.com/R-unic/loom.git
+git clone https://github.com/rbx-loom/loom.git
 cd loom
 dotnet restore
 dotnet build
