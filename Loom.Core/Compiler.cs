@@ -36,12 +36,16 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
         );
 
     /// <summary>
-    /// Phase two: everything after the parser. Diagnostics from <see cref="Parse"/> are carried over,
-    /// so the returned file reports lexer and parser diagnostics alongside the later stages'.
+    /// Phase two: everything after the parser. Diagnostics from <see cref="Parse"/> are carried over, as
+    /// are <paramref name="moduleDiagnostics"/> from building the unit's module graph, so the returned
+    /// file reports every diagnostic raised against it regardless of which phase found it.
     /// </summary>
-    public CompiledFile Analyze(ParsedFile parsedFile) =>
+    public CompiledFile Analyze(ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics = null) =>
         RunPhase(() =>
             {
+                if (moduleDiagnostics != null)
+                    _pipelineDiagnostics.Add(moduleDiagnostics);
+
                 var resolver = new Resolver(parsedFile.ParserResult, unit);
                 var semanticModel = TrackDiagnostics(resolver.Resolve());
                 var flowAnalyzer = new FlowAnalyzer(semanticModel);

@@ -80,6 +80,12 @@ public static class InternalCodes
     public const string CannotExportMutable = "L356";
     public const string ExportOutsideModuleScope = "L357";
     public const string EmptyImportClause = "L358";
+    public const string ModuleNotFound = "L359";
+    public const string SelfImport = "L360";
+    public const string ModuleOutsideSourceDirectory = "L361";
+    public const string UnsupportedModuleSpecifier = "L362";
+    public const string CircularModuleDependency = "L363";
+    public const string ImportInDeclarationFile = "L364";
 
     public const string SimplifiableCode = "L400";
 }

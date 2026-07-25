@@ -1,5 +1,6 @@
 using Loom.Config;
 using Loom.Core.Diagnostics;
+using Loom.Core.Modules;
 using Loom.Core.Resolving;
 using Loom.Core.Text;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -12,6 +13,12 @@ public sealed class CompilationUnit(LoomConfig config)
     public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
     public Dictionary<Symbol, Type> Globals { get; } = [];
     public RuntimeImport RuntimeImport { get; } = ResolveRuntimeImport(config);
+
+    /// <summary>
+    /// Import dependency graph of the unit, built between the two compilation phases. The resolver reads
+    /// it to find the module an import refers to, so it is null until <see cref="Compile()"/> runs.
+    /// </summary>
+    public ModuleGraph? ModuleGraph { get; private set; }
 
     private static RuntimeImport ResolveRuntimeImport(LoomConfig config)
     {
@@ -32,19 +39,27 @@ public sealed class CompilationUnit(LoomConfig config)
         // phase one: every file is lexed and parsed before any of them is analyzed, so module
         // dependencies can be read off the parsed trees and analyzed in the order they require
         var parsedFiles = ParseAll();
+        var compilers = new Dictionary<SourceFile, Compiler>();
+        foreach (var (compiler, parsedFile) in parsedFiles)
+            compilers.TryAdd(parsedFile.File, compiler);
+
+        ModuleGraph = ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config);
 
         // phase two: declaration files first — their top-level symbols become globals that every
-        // other file resolves against
-        var compiledDeclarationFiles = parsedFiles.FindAll(parsed => parsed.ParsedFile.File.IsDeclaration).ConvertAll(Analyze);
+        // other file resolves against. Both groups keep the graph's dependency order.
+        var compiledDeclarationFiles = ModuleGraph.Order.FindAll(parsedFile => parsedFile.File.IsDeclaration).ConvertAll(analyze);
         PopulateGlobals(compiledDeclarationFiles);
 
-        var compiledConcreteFiles = parsedFiles.FindAll(parsed => !parsed.ParsedFile.File.IsDeclaration).ConvertAll(Analyze);
+        var compiledConcreteFiles = ModuleGraph.Order.FindAll(parsedFile => !parsedFile.File.IsDeclaration).ConvertAll(analyze);
         var compiledFiles = compiledDeclarationFiles.Concat(compiledConcreteFiles).ToList();
         var diagnostics = DiagnosticBag.Concat(compiledFiles.ConvertAll(file => file.Diagnostics));
         if (!diagnostics.ContainsErrors() && !Config.NoEmit)
             compiledFiles.ForEach(FileManager.WriteCompiledFile);
 
         return new CompilationResult(compiledFiles, diagnostics);
+
+        CompiledFile analyze(ParsedFile parsedFile) =>
+            compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
     }
 
     public CompiledFile Compile(SourceFile file) => new Compiler(this, file).Compile();

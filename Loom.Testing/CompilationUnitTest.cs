@@ -91,7 +91,7 @@ public class CompilationUnitTest
     [Fact]
     public void Compiles_EveryFile_WhenAnotherFileHasDiagnostics()
     {
-        CompileTempProject(
+        Utility.WithTempProject(
             [("bad.loom", "import { } from \"./math\""), ("good.loom", "let x = 1;")],
             (_, result) =>
             {
@@ -102,43 +102,6 @@ public class CompilationUnitTest
                 Assert.Contains("const x = 1", good.RenderedLuau);
             }
         );
-    }
-
-    /// <summary>
-    /// Compiles a throwaway project containing <paramref name="files"/> under its source directory.
-    /// </summary>
-    private static void CompileTempProject(
-        IEnumerable<(string Name, string Source)> files,
-        Action<CompilationUnit, CompilationResult> assert)
-    {
-        var dir = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
-        var srcDir = Path.Combine(dir, "src");
-        Directory.CreateDirectory(srcDir);
-        try
-        {
-            File.WriteAllText(
-                Path.Combine(dir, "loom-config.toml"),
-                "project_type = \"game\"\n[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n"
-            );
-
-            foreach (var (name, source) in files)
-            {
-                var path = Path.Combine(srcDir, name);
-                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                File.WriteAllText(path, source);
-            }
-
-            var config = ConfigReader.LocateFromDirectory(dir);
-            Assert.NotNull(config);
-            config.NoEmit = true;
-
-            var compilationUnit = new CompilationUnit(config);
-            assert(compilationUnit, compilationUnit.Compile());
-        }
-        finally
-        {
-            Directory.Delete(dir, true);
-        }
     }
 
     private static LoomConfig GetConfig()
