@@ -3777,6 +3777,103 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(diagnostics);
     }
 
+    #region Overloaded Interface Members
+    [Fact]
+    public void Checks_InterfaceDeclaration_DuplicateFunctionProperty_MergesIntoIntersection()
+    {
+        const string source = """
+            declare interface ShapeStatic {
+                create: fn(): number;
+                create: fn(x: number, y: number): number;
+            }
+            """;
+
+        var type = Utility.GetLastStatementType(source);
+        var interfaceType = Assert.IsType<InterfaceType>(type);
+        var createProperty = interfaceType.GetProperty("create")!;
+        var intersection = Assert.IsType<IntersectionType>(createProperty.ValueType);
+        Assert.Equal(2, intersection.Types.Count);
+        Assert.All(intersection.Types, t => Assert.IsType<FunctionType>(t));
+    }
+
+    [Fact]
+    public void Checks_OverloadedInvocation_PicksCandidateByArity()
+    {
+        const string source = """
+            declare interface Shape { x: number; y: number; }
+            declare interface ShapeStatic {
+                create: fn(): Shape;
+                create: fn(x: number, y: number): Shape;
+            }
+            declare let Shape: ShapeStatic;
+
+            Shape.create(1, 2)
+            """;
+
+        var type = Utility.GetLastStatementType(source);
+        Assert.IsType<InterfaceType>(type);
+        Assert.Equal("Shape", ((InterfaceType)type).Name);
+    }
+
+    [Fact]
+    public void Checks_OverloadedInvocation_NoArgs_PicksZeroArityCandidate()
+    {
+        const string source = """
+            declare interface Shape { x: number; y: number; }
+            declare interface ShapeStatic {
+                create: fn(): Shape;
+                create: fn(x: number, y: number): Shape;
+            }
+            declare let Shape: ShapeStatic;
+
+            Shape.create()
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_OverloadedInvocation_NoCandidateMatches()
+    {
+        const string source = """
+            declare interface Shape { x: number; y: number; }
+            declare interface ShapeStatic {
+                create: fn(): Shape;
+                create: fn(x: number, y: number): Shape;
+            }
+            declare let Shape: ShapeStatic;
+
+            Shape.create("nope")
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.NoOverloadMatch);
+        Assert.NotNull(diagnostic);
+    }
+
+    [Theory]
+    [InlineData("CFrame.create()")]
+    [InlineData("CFrame.create(Vector3.create())")]
+    [InlineData("CFrame.create(Vector3.create(), Vector3.create())")]
+    [InlineData("CFrame.create(1, 2, 3)")]
+    [InlineData("CFrame.create(1, 2, 3, 0, 0, 0, 1)")]
+    [InlineData("CFrame.create(1, 2, 3, 1, 0, 0, 0, 1, 0, 0, 0, 1)")]
+    public void Checks_CFrameCreate_ResolvesEachOverloadShape(string source)
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_CFrameCreate_NoOverloadMatches()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("CFrame.create(\"not a number\")");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.NoOverloadMatch);
+        Assert.NotNull(diagnostic);
+    }
+    #endregion Overloaded Interface Members
+
     [Fact]
     public void Checks_AsExpression_Chained_Unknown()
     {
