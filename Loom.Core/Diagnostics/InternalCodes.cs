@@ -86,6 +86,10 @@ public static class InternalCodes
     public const string UnsupportedModuleSpecifier = "L362";
     public const string CircularModuleDependency = "L363";
     public const string ImportInDeclarationFile = "L364";
+    public const string ImportOutsideModuleScope = "L365";
+    public const string NoExportedMember = "L366";
+    public const string DuplicateImport = "L367";
+    public const string TypeOnlyImportOfValue = "L368";
 
     public const string SimplifiableCode = "L400";
 }

@@ -76,11 +76,125 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         {
             return false;
         }
-
-        if (_semanticModel.GetDeclarationSymbol(export.Declaration) is { } symbol)
-            _semanticModel.Exports.Add(symbol);
+        
+        foreach (var symbol in _semanticModel.GetDeclarationSymbols(export.Declaration))
+            _semanticModel.AddExport(symbol);
 
         return true;
+    }
+
+    public override bool VisitImportDeclaration(ImportDeclaration import)
+    {
+        if (_scopes.Count > 1)
+        {
+            _diagnostics.Error(
+                import,
+                InternalCodes.ImportOutsideModuleScope,
+                "Modules can only be imported at the top level of a module.",
+                "move the 'import' declaration out of the enclosing block"
+            );
+
+            return false;
+        }
+
+        var module = compilationUnit.ModuleGraph?.GetResolvedModule(import);
+        if (module == null)
+            return true; // an unresolvable specifier was already reported while building the module graph
+
+        if (!compilationUnit.AnalyzedModules.TryGetValue(module, out var moduleModel))
+            return true; // only reachable through a dependency cycle, which the module graph reported
+
+        var localNames = new HashSet<string>();
+        foreach (var specifier in import.Specifiers)
+            ResolveImportSpecifier(import, specifier, module, moduleModel, localNames);
+
+        return true;
+    }
+
+    private void ResolveImportSpecifier(
+        ImportDeclaration import,
+        ImportSpecifier specifier,
+        SourceFile module,
+        SemanticModel moduleModel,
+        HashSet<string> localNames)
+    {
+        var name = specifier.Name.Text;
+        var localName = specifier.LocalName.Text;
+        var exports = moduleModel.FindExports(name);
+        if (exports.Count == 0)
+        {
+            var exported = moduleModel.Exports.Select(symbol => symbol.Name).Distinct().ToList();
+            _diagnostics.Error(
+                specifier,
+                InternalCodes.NoExportedMember,
+                $"Module '{module.Name}' does not export '{name}'.",
+                exported.Count > 0 ? $"it exports {string.Join(", ", exported.Select(n => $"'{n}'"))}" : "it exports nothing"
+            );
+
+            return;
+        }
+
+        if (!localNames.Add(localName))
+        {
+            _diagnostics.Error(specifier, InternalCodes.DuplicateImport, $"'{localName}' is imported more than once.");
+            return;
+        }
+
+        if (import.IsTypeOnly)
+        {
+            var typeExports = exports.FindAll(symbol => symbol.IsTypeSymbol);
+            if (typeExports.Count == 0)
+            {
+                _diagnostics.Error(
+                    specifier,
+                    InternalCodes.TypeOnlyImportOfValue,
+                    $"'{name}' is a value, not a type.",
+                    "remove 'type' from the import"
+                );
+
+                return;
+            }
+
+            exports = typeExports;
+        }
+
+        foreach (var export in exports)
+            DeclareImportedSymbol(import, specifier, export, module, moduleModel);
+    }
+
+    /// <summary>
+    /// Binds the exporting module's own symbol instance into this scope under the local name. The instance
+    /// is reused rather than copied — the same thing <see cref="DeclareGlobalSymbols"/> does for globals —
+    /// so that an imported interface still resolves to an <see cref="InterfaceSymbol"/>.
+    /// </summary>
+    private void DeclareImportedSymbol(
+        ImportDeclaration import,
+        ImportSpecifier specifier,
+        Symbol export,
+        SourceFile module,
+        SemanticModel moduleModel)
+    {
+        var localName = specifier.LocalName.Text;
+        var duplicateKind = export.IsTypeSymbol ? "Type" : "Variable";
+        if (HasDuplicateSymbol(specifier, localName, !export.IsTypeSymbol, $"{duplicateKind} '{localName}' is already declared in this scope."))
+            return;
+
+        if (LuauFactory.Keywords.Contains(localName))
+        {
+            _diagnostics.Error(
+                specifier,
+                InternalCodes.ReservedLuauKeyword,
+                $"'{localName}' is a reserved Luau keyword and cannot be used as a declaration name."
+            );
+
+            return;
+        }
+
+        AddToLookup(localName, export);
+        AddDeclaration(export);
+        _semanticModel.AddImportBinding(new ImportBinding(import, specifier, export, module));
+        
+        _semanticModel.TypeSolver.SetType(export.Declaration, moduleModel.GetType(export.Declaration));
     }
 
     public override bool VisitImplement(Implement implement)
@@ -761,14 +875,16 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         return $"Declared '{symbol.Name}' ({symbol.Kind}){suffix}";
     }
 
-    private void AddToLookup(Symbol symbol)
+    private void AddToLookup(Symbol symbol) => AddToLookup(symbol.Name, symbol);
+    
+    private void AddToLookup(string name, Symbol symbol)
     {
         var scope = CurrentScope();
         var lookup = GetLookup(symbol.Kind, scope);
-        if (!lookup.ContainsKey(symbol.Name))
-            lookup[symbol.Name] = [];
+        if (!lookup.ContainsKey(name))
+            lookup[name] = [];
 
-        lookup[symbol.Name].Add(symbol);
+        lookup[name].Add(symbol);
     }
 
     private void AddDeclaration(Symbol symbol)

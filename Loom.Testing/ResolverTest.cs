@@ -554,18 +554,34 @@ public class ResolverTest
             )
         );
 
-        Assert.Equal(5, model.Exports.Count);
-        Assert.Equal(["Alias", "Point", "Handle", "Direction", "Drawable"], model.Exports.Select(s => s.Name));
-
-        // interfaces and enums declare a value symbol before their type symbol, so exports cannot be
-        // narrowed to runtime values by symbol kind alone — the generator filters on the declaration node
+        // interfaces and enums declare a value symbol as well as a type symbol, and both are exported so
+        // that an importer can use the name in either namespace
         Assert.Equal(
-            [SymbolKind.Type, SymbolKind.Variable, SymbolKind.Variable, SymbolKind.Variable, SymbolKind.Trait],
+            ["Alias", "Point", "Point", "Handle", "Handle", "Direction", "Direction", "Drawable"],
+            model.Exports.Select(s => s.Name)
+        );
+
+        Assert.Equal(
+            [
+                SymbolKind.Type,
+                SymbolKind.Variable, SymbolKind.Interface,
+                SymbolKind.Variable, SymbolKind.Interface,
+                SymbolKind.Variable, SymbolKind.EnumType,
+                SymbolKind.Trait
+            ],
             model.Exports.Select(s => s.Kind)
         );
 
+        // ...which is what FindExports hands an importing module
+        Assert.Equal([SymbolKind.Variable, SymbolKind.Interface], model.FindExports("Point").Select(s => s.Kind));
+        Assert.Equal([SymbolKind.Type], model.FindExports("Alias").Select(s => s.Kind));
+        Assert.Empty(model.FindExports("Nope"));
+
+        // none of these emit a runtime local, so none reach the module's return table
+        Assert.DoesNotContain(model.Exports, s => s.EmitsRuntimeBinding);
+
         var trait = Assert.IsType<ExportDeclaration>(model.Tree.Statements[4]).Declaration;
-        Assert.Same(model.GetDeclarationSymbol(trait), model.Exports[4]);
+        Assert.Same(model.GetDeclarationSymbol(trait), model.Exports[7]);
     }
 
     [Fact]

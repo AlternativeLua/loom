@@ -299,6 +299,13 @@ public sealed partial class TypeChecker
         return BindType(variableDeclaration, TypeSimplifier.Simplify(finalType));
     }
 
+    /// <remarks>
+    /// Imported declarations are typed by the module that exports them, and the base implementation would
+    /// return the type of the module path string — which would become the file's type when a module ends
+    /// with an import.
+    /// </remarks>
+    public override Type VisitImportDeclaration(ImportDeclaration import) => BindType(import, Types.PrimitiveType.Void);
+
     public override Type VisitDeclare(Declare declare)
     {
         var type = declare.Signature switch

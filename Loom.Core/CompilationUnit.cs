@@ -12,6 +12,13 @@ public sealed class CompilationUnit(LoomConfig config)
     public LoomConfig Config { get; } = config;
     public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
     public Dictionary<Symbol, Type> Globals { get; } = [];
+
+    /// <summary>
+    /// Semantic models of files already analyzed in this unit, keyed by source file. Because analysis
+    /// follows the module graph's order, every module a file imports is present here by the time that
+    /// file is resolved, which is how the resolver reads a dependency's exports.
+    /// </summary>
+    public Dictionary<SourceFile, SemanticModel> AnalyzedModules { get; } = [];
     public RuntimeImport RuntimeImport { get; } = ResolveRuntimeImport(config);
 
     /// <summary>
@@ -35,6 +42,7 @@ public sealed class CompilationUnit(LoomConfig config)
     public CompilationResult Compile()
     {
         Globals.Clear();
+        AnalyzedModules.Clear();
 
         // phase one: every file is lexed and parsed before any of them is analyzed, so module
         // dependencies can be read off the parsed trees and analyzed in the order they require
@@ -58,8 +66,13 @@ public sealed class CompilationUnit(LoomConfig config)
 
         return new CompilationResult(compiledFiles, diagnostics);
 
-        CompiledFile analyze(ParsedFile parsedFile) =>
-            compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
+        CompiledFile analyze(ParsedFile parsedFile)
+        {
+            var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
+            AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+
+            return compiledFile;
+        }
     }
 
     public CompiledFile Compile(SourceFile file) => new Compiler(this, file).Compile();

@@ -12,6 +12,12 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     : DiagnosedResult(Diagnostics)
 {
     public List<Symbol> Exports { get; } = [];
+
+    private SymbolLookup ExportsByName { get; } = [];
+    
+    public List<ImportBinding> ImportBindings { get; } = [];
+
+    private HashSet<Symbol> ImportedSymbols { get; } = [];
     public bool DisableRuntimeLibraryImport { get; set; }
     public bool EmitDebugDiagnostics { get; set; }
     public bool MustImportRuntimeLibrary =>
@@ -34,6 +40,34 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     internal int RuntimeReferences = 0;
     internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag());
     private SymbolLookup DeclarationsByName => field ??= Declarations.Values.SelectMany(s => s).GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.ToList());
+
+    internal void AddExport(Symbol symbol)
+    {
+        Exports.Add(symbol);
+        if (!ExportsByName.TryGetValue(symbol.Name, out var symbols))
+            ExportsByName[symbol.Name] = symbols = [];
+
+        symbols.Add(symbol);
+    }
+
+    /// <summary>
+    /// Every symbol exported under <paramref name="name"/> — at most one per namespace. Empty when the
+    /// module does not export the name at all.
+    /// </summary>
+    public List<Symbol> FindExports(string name) => ExportsByName.GetValueOrDefault(name, []);
+
+    internal void AddImportBinding(ImportBinding binding)
+    {
+        ImportBindings.Add(binding);
+        ImportedSymbols.Add(binding.Symbol);
+    }
+
+    /// <summary>
+    /// Whether the symbol was declared by another module and brought in by an import. Its declaration
+    /// belongs to a tree this model never walked, so anything reasoning about the declaration's position —
+    /// flow analysis in particular — has to treat it as coming from outside.
+    /// </summary>
+    public bool IsImported(Symbol symbol) => ImportedSymbols.Contains(symbol);
 
     public bool IsCompileTimeConstant(Expression expression) =>
         expression is Literal or NameOf

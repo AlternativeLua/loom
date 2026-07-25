@@ -34,8 +34,7 @@ public sealed partial class LuauGenerator
 
         statements.AddRange(GenerateStatements(tree.Statements));
 
-        var valueExports = _semanticModel.Exports
-            .FindAll(s => s.Declaration is VariableDeclaration or FunctionDeclaration);
+        var valueExports = _semanticModel.Exports.FindAll(s => s.EmitsRuntimeBinding);
 
         if (valueExports.Count > 0)
         {

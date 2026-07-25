@@ -239,6 +239,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         var symbol = semanticModel.GetSymbol(identifier);
         if (symbol is null
             || symbol.IsIntrinsic
+            || semanticModel.IsImported(symbol)
             || symbol.Declaration.FirstAncestorOfType<Declare>() is not null
             || symbol is { IsValueSymbol: false }
             || state.DefinitelyInitialized.Contains(symbol))
