@@ -1,5 +1,6 @@
 using Loom.Config;
 using Loom.Core;
+using Loom.Core.Diagnostics;
 using Loom.Luau.AST;
 using BinaryOperator = Loom.Core.Parsing.AST.BinaryOperator;
 using ExpressionStatement = Loom.Core.Parsing.AST.ExpressionStatement;
@@ -80,6 +81,59 @@ public class CompilationUnitTest
             Utility.AssertNoErrors(result);
             Assert.Equal(2, result.Files.Count);
             Assert.Contains(compilationUnit.Globals.Keys, symbol => symbol.Name == "global_number");
+        }
+        finally
+        {
+            Directory.Delete(dir, true);
+        }
+    }
+
+    [Fact]
+    public void Compiles_EveryFile_WhenAnotherFileHasDiagnostics()
+    {
+        CompileTempProject(
+            [("bad.loom", "import { } from \"./math\""), ("good.loom", "let x = 1;")],
+            (_, result) =>
+            {
+                Assert.Equal(2, result.Files.Count);
+                Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.EmptyImportClause, "Import declaration must name at least one member.");
+
+                var good = Assert.Single(result.Files, file => file.SourceFile.Name == "good.loom");
+                Assert.Contains("const x = 1", good.RenderedLuau);
+            }
+        );
+    }
+
+    /// <summary>
+    /// Compiles a throwaway project containing <paramref name="files"/> under its source directory.
+    /// </summary>
+    private static void CompileTempProject(
+        IEnumerable<(string Name, string Source)> files,
+        Action<CompilationUnit, CompilationResult> assert)
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        var srcDir = Path.Combine(dir, "src");
+        Directory.CreateDirectory(srcDir);
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(dir, "loom-config.toml"),
+                "project_type = \"game\"\n[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n"
+            );
+
+            foreach (var (name, source) in files)
+            {
+                var path = Path.Combine(srcDir, name);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, source);
+            }
+
+            var config = ConfigReader.LocateFromDirectory(dir);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            var compilationUnit = new CompilationUnit(config);
+            assert(compilationUnit, compilationUnit.Compile());
         }
         finally
         {

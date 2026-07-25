@@ -60,6 +60,10 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitDeclare(Declare declare) => declare.Signature is InterfaceDeclaration ? Visit(declare.Signature) : new NoOpStatement();
     public override LuauNode VisitExpressionStatement(ExpressionStatement expressionStatement) => WrapExpressionAsStatement(Visit(expressionStatement.Expression));
 
+    // imports are erased here; the requires they need are emitted separately, and the base
+    // implementation would return the module path expression where a statement is required
+    public override LuauNode VisitImportDeclaration(ImportDeclaration import) => new NoOpStatement();
+
     public override LuauNode VisitExportDeclaration(ExportDeclaration export)
     {
         var generated = Visit(export.Declaration);
