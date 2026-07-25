@@ -21,6 +21,9 @@ public sealed class CompilationUnit(LoomConfig config)
     public Dictionary<SourceFile, SemanticModel> AnalyzedModules { get; } = [];
     public RuntimeImport RuntimeImport { get; } = ResolveRuntimeImport(config);
 
+    /// <summary>Names modules for the requires the generator emits, through the unit's Rojo project.</summary>
+    public ModuleRequirePathResolver ModuleRequirePaths { get; } = new(config);
+
     /// <summary>
     /// Import dependency graph of the unit, built between the two compilation phases. The resolver reads
     /// it to find the module an import refers to, so it is null until <see cref="Compile()"/> runs.

@@ -94,6 +94,7 @@ public static class InternalCodes
     public const string EmptyExportList = "L370";
     public const string DuplicateExport = "L371";
     public const string TypeOnlyExportOfValue = "L372";
+    public const string ModuleNotFoundInRojo = "L373";
 
     public const string SimplifiableCode = "L400";
 }

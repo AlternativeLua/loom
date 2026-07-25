@@ -95,6 +95,88 @@ public sealed class RojoResolverTest : IDisposable
     }
 
     [Fact]
+    public void Resolves_Path_Under_A_Directory_Mapping()
+    {
+        var resolver = ProjectWithOutputMapping("path_dir", out var dir);
+        Assert.Equal(
+            ["ReplicatedStorage", "Shared", "math"],
+            resolver.ResolvePath(Path.Combine(dir, "dist", "math.luau"))
+        );
+    }
+
+    [Fact]
+    public void Resolves_Path_Of_A_Nested_File()
+    {
+        var resolver = ProjectWithOutputMapping("path_nested", out var dir);
+        Assert.Equal(
+            ["ReplicatedStorage", "Shared", "util", "helpers"],
+            resolver.ResolvePath(Path.Combine(dir, "dist", "util", "helpers.luau"))
+        );
+    }
+
+    [Fact]
+    public void Folds_An_Init_File_Into_Its_Folder()
+    {
+        var resolver = ProjectWithOutputMapping("path_init", out var dir);
+        Assert.Equal(
+            ["ReplicatedStorage", "Shared", "util"],
+            resolver.ResolvePath(Path.Combine(dir, "dist", "util", "init.luau"))
+        );
+    }
+
+    [Fact]
+    public void Resolves_Path_When_The_Mapping_Points_At_The_File_Itself()
+    {
+        var dir = ProjectDir("path_file");
+        Write(dir, Path.Combine("dist", "math.luau"), "return {}");
+        Write(dir, RojoResolver.ProjectFileName, """
+            {
+              "tree": {
+                "$className": "DataModel",
+                "ReplicatedStorage": {
+                  "Math": { "$path": "dist/math.luau" }
+                }
+              }
+            }
+            """);
+
+        var resolver = RojoResolver.FromProjectDirectory(dir);
+        Assert.NotNull(resolver);
+
+        // the node holding the $path already names the instance
+        Assert.Equal(["ReplicatedStorage", "Math"], resolver.ResolvePath(Path.Combine(dir, "dist", "math.luau")));
+    }
+
+    [Fact]
+    public void Prefers_The_Deepest_Mapping_Covering_A_Path()
+    {
+        var dir = ProjectDir("path_nested_mapping");
+        Write(dir, Path.Combine("dist", "vendor", "math.luau"), "return {}");
+        Write(dir, RojoResolver.ProjectFileName, """
+            {
+              "tree": {
+                "$className": "DataModel",
+                "ReplicatedStorage": {
+                  "$path": "dist",
+                  "Vendor": { "$path": "dist/vendor" }
+                }
+              }
+            }
+            """);
+
+        var resolver = RojoResolver.FromProjectDirectory(dir);
+        Assert.NotNull(resolver);
+        Assert.Equal(["ReplicatedStorage", "Vendor", "math"], resolver.ResolvePath(Path.Combine(dir, "dist", "vendor", "math.luau")));
+    }
+
+    [Fact]
+    public void Returns_Null_For_A_Path_No_Mapping_Covers()
+    {
+        var resolver = ProjectWithOutputMapping("path_unmapped", out var dir);
+        Assert.Null(resolver.ResolvePath(Path.Combine(dir, "elsewhere", "math.luau")));
+    }
+
+    [Fact]
     public void FromProjectDirectory_Returns_Null_Without_Project_File()
     {
         var dir = ProjectDir("no_project");
@@ -104,6 +186,29 @@ public sealed class RojoResolverTest : IDisposable
     [Fact]
     public void FromProjectDirectory_Returns_Null_For_Missing_Directory() =>
         Assert.Null(RojoResolver.FromProjectDirectory(Path.Combine(_root, "does_not_exist")));
+
+    private RojoResolver ProjectWithOutputMapping(string name, out string directory)
+    {
+        directory = ProjectDir(name);
+        Write(directory, Path.Combine("dist", "math.luau"), "return {}");
+        Write(directory, Path.Combine("dist", "util", "init.luau"), "return {}");
+        Write(directory, Path.Combine("dist", "util", "helpers.luau"), "return {}");
+        Write(directory, RojoResolver.ProjectFileName, """
+            {
+              "tree": {
+                "$className": "DataModel",
+                "ReplicatedStorage": {
+                  "Shared": { "$path": "dist" }
+                }
+              }
+            }
+            """);
+
+        var resolver = RojoResolver.FromProjectDirectory(directory);
+        Assert.NotNull(resolver);
+
+        return resolver;
+    }
 
     private string ProjectDir(string name)
     {

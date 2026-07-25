@@ -1,8 +1,4 @@
-event score_changed(new_score: number);
-
-fn on_score(n: number): void {
-    print("score is now " + string(n))
-}
-
-score_changed += on_score;
-score_changed(100);
+import { square, pi as PI } from "./math"
+import type { Scalar } from "./math"
+let total: Scalar = square(PI);
+print(total);

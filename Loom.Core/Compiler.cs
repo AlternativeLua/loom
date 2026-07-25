@@ -52,13 +52,13 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                 TrackDiagnostics(flowAnalyzer.Analyze());
                 var typeChecker = new TypeChecker(semanticModel, flowAnalyzer);
                 var typeCheckerResult = TrackDiagnostics(typeChecker.Check());
-                var generator = new LuauGenerator(semanticModel, unit.RuntimeImport);
+                var generator = new LuauGenerator(semanticModel, unit.RuntimeImport, unit.ModuleRequirePaths);
                 var generatorResult = TrackDiagnostics(generator.Generate());
                 var renderedLuau = generatorResult.LuauTree.Render();
 
                 return new CompiledFile(file)
                 {
-                    Path = GetOutputPath(),
+                    Path = FileManager.GetOutputPath(file, unit.Config),
                     Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics),
                     RenderedLuau = renderedLuau,
                     LuauTree = generatorResult.LuauTree,
@@ -69,14 +69,6 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                 };
             }
         )!;
-
-    private string GetOutputPath() =>
-        file.AbsolutePath
-            .Replace(
-                Path.GetFileName(unit.Config.Files.SourceDirectory) + Path.DirectorySeparatorChar,
-                Path.GetFileName(unit.Config.Files.OutputDirectory) + Path.DirectorySeparatorChar
-            )
-            .Replace(FileManager.LoomExtension, ".luau");
 
     private T? RunPhase<T>(Func<T> phase)
         where T : class

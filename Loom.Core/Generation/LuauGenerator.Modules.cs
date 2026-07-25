@@ -1,3 +1,5 @@
+using Loom.Core.Diagnostics;
+using Loom.Core.Modules;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Core.Text;
@@ -31,7 +33,7 @@ public sealed partial class LuauGenerator
         {
             var moduleName = localName ?? ReserveModuleLocalName(specifier);
             _moduleLocals[module] = moduleName;
-            statements.Add(new ConstVariable(moduleName, null, LuauFactory.RequireCall(specifier)));
+            statements.Add(new ConstVariable(moduleName, null, LuauFactory.RequireCall(GetRequirePath(module, specifier))));
 
             var bindings = _semanticModel.ImportBindings.FindAll(binding => binding.Module == module);
             statements.AddRange(
@@ -61,6 +63,22 @@ public sealed partial class LuauGenerator
             modules.Add((export.Module!, export.ModulePath!, null));
 
         return modules;
+    }
+    
+    private string GetRequirePath(SourceFile module, string specifier)
+    {
+        var requirePath = _moduleRequirePaths?.Resolve(module, specifier)
+            ?? ModuleRequirePath.Fallback(ModuleRequirePathStatus.RojoMissing, specifier);
+
+        if (requirePath.Status == ModuleRequirePathStatus.NotFoundInRojo)
+            _diagnostics.Warn(
+                _semanticModel.Tree,
+                InternalCodes.ModuleNotFoundInRojo,
+                $"Could not locate module '{specifier}' through the Rojo project; falling back to a relative require.",
+                "add a $path mapping to your default.project.json that includes the output directory"
+            );
+
+        return requirePath.Path;
     }
 
     private static LuauStatement GenerateValueImport(ImportBinding binding, string moduleName) =>
