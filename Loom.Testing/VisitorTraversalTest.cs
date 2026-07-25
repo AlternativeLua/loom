@@ -9,7 +9,7 @@ public class VisitorTraversalTest
     {
         public List<string> Log { get; } = [];
 
-        public void Record(Tree tree) => Visit(tree);
+        public bool Record(Tree tree) => Visit(tree);
         protected override bool Visit(Node node) => LogAndVisit(node.GetType().Name, () => node.Accept(this));
 
         private bool LogAndVisit(string name, Func<bool> visitChildren)
@@ -29,6 +29,17 @@ public class VisitorTraversalTest
 
     [Fact]
     public void ExpressionStatement_VisitsExpression() => AssertVisitOrder("42", "ExpressionStatement", "Literal");
+
+    [Theory]
+    [InlineData("enum E { A }")]
+    [InlineData("enum Empty { }")]
+    [InlineData("interface I { }")]
+    [InlineData("let x = 1")]
+    public void ReturnsVisitorDefault_ForAbsentChildren(string source)
+    {
+        var recorder = new RecordingVisitor();
+        Assert.True(recorder.Record(Utility.GetAST(source)));
+    }
     
     [Fact]
     public void InterfaceInvocation_VisitsTypeArgumentsAndBody() =>

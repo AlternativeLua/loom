@@ -540,6 +540,35 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Resolves_ExportedTypeDeclarations()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                export type Alias = number;
+                export interface Point { x: number y: number }
+                export sealed interface Handle;
+                export enum Direction { Up, Down }
+                export trait Drawable { fn draw: void; }
+                """
+            )
+        );
+
+        Assert.Equal(5, model.Exports.Count);
+        Assert.Equal(["Alias", "Point", "Handle", "Direction", "Drawable"], model.Exports.Select(s => s.Name));
+
+        // interfaces and enums declare a value symbol before their type symbol, so exports cannot be
+        // narrowed to runtime values by symbol kind alone — the generator filters on the declaration node
+        Assert.Equal(
+            [SymbolKind.Type, SymbolKind.Variable, SymbolKind.Variable, SymbolKind.Variable, SymbolKind.Trait],
+            model.Exports.Select(s => s.Kind)
+        );
+
+        var trait = Assert.IsType<ExportDeclaration>(model.Tree.Statements[4]).Declaration;
+        Assert.Same(model.GetDeclarationSymbol(trait), model.Exports[4]);
+    }
+
+    [Fact]
     public void Resolves_InterfaceAndTraitRelationship()
     {
         var model = Utility.AssertNoErrors(

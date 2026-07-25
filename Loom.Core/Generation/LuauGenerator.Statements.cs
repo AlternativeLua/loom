@@ -34,11 +34,14 @@ public sealed partial class LuauGenerator
 
         statements.AddRange(GenerateStatements(tree.Statements));
 
-        if (_semanticModel.Exports.Count > 0)
+        var valueExports = _semanticModel.Exports
+            .FindAll(s => s.Declaration is VariableDeclaration or FunctionDeclaration);
+
+        if (valueExports.Count > 0)
         {
-            var initializers = _semanticModel.Exports
-                .Select(s => new PropertyTableInitializer(s.Name, new Identifier(s.Name)))
-                .ToList<TableInitializer>();
+            var initializers = valueExports
+                .ConvertAll(TableInitializer (s) => new PropertyTableInitializer(s.Name, new Identifier(s.Name)));
+
             statements.Add(new Luau.AST.Return(new Table(initializers)));
         }
         
@@ -56,8 +59,15 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitReturn(Return @return) => new Luau.AST.Return(MaybeVisit<LuauExpression>(@return.Expression));
     public override LuauNode VisitDeclare(Declare declare) => declare.Signature is InterfaceDeclaration ? Visit(declare.Signature) : new NoOpStatement();
     public override LuauNode VisitExpressionStatement(ExpressionStatement expressionStatement) => WrapExpressionAsStatement(Visit(expressionStatement.Expression));
-    public override LuauNode VisitExportDeclaration(ExportDeclaration export) =>
-        Visit(export.Declaration);
+
+    public override LuauNode VisitExportDeclaration(ExportDeclaration export)
+    {
+        var generated = Visit(export.Declaration);
+        if (generated is Luau.AST.TypeAlias typeAlias)
+            typeAlias.IsExported = true;
+        
+        return generated;
+    }
 
     public override LuauNode VisitVariableDeclaration(VariableDeclaration variableDeclaration)
     {

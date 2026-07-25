@@ -7,18 +7,27 @@ namespace Loom.Core.Parsing;
 
 public sealed partial class Parser
 {
+    private static readonly SyntaxKind[] _exportableKeywords =
+    [
+        SyntaxKind.FnKeyword,
+        SyntaxKind.LetKeyword,
+        SyntaxKind.MutKeyword,
+        SyntaxKind.TypeKeyword,
+        SyntaxKind.InterfaceKeyword,
+        SyntaxKind.SealedKeyword,
+        SyntaxKind.EnumKeyword,
+        SyntaxKind.TraitKeyword
+    ];
+    
     private Statement ParseExport(Token exportKeyword)
     {
-        if (Match(out var fnKeyword, SyntaxKind.FnKeyword))
-            return WrapExport(exportKeyword, ParseFunctionDeclaration(fnKeyword));
-
-        if (Match(out var letKeyword, SyntaxKind.LetKeyword, SyntaxKind.MutKeyword))
-            return WrapExport(exportKeyword, ParseVariableDeclaration(letKeyword));
+        if(Match(out var keyword, kind => _exportableKeywords.Contains(kind)))
+            return WrapExport(exportKeyword, StatementParsers[keyword.Kind](keyword));
 
         _diagnostics.Error(
             Current(),
             InternalCodes.ExpectedExportableDeclaration,
-            $"Only 'fn' and 'let' declarations can be exported, got {SafeTokenText(Current())}."
+            $"Only 'fn', 'let', 'type', 'interface', 'enum' and 'trait' declarations can be exported, got {SafeTokenText(Current())}."
         );
 
         return new NullStatement(exportKeyword);
