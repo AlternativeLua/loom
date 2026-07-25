@@ -1,6 +1,5 @@
 using Loom.Config;
 using Tomlyn;
-using Tomlyn.Serialization;
 
 namespace Loom.Testing;
 
@@ -17,16 +16,10 @@ public class ConfigReaderTest
     }
 
     [Fact]
-    public void LocateFromDirectory_NullPath_ReturnsNull()
-    {
-        Assert.Null(ConfigReader.LocateFromDirectory(null!));
-    }
+    public void LocateFromDirectory_NullPath_ReturnsNull() => Assert.Null(ConfigReader.LocateFromDirectory(null!));
 
     [Fact]
-    public void LocateFromDirectory_EmptyPath_ReturnsNull()
-    {
-        Assert.Null(ConfigReader.LocateFromDirectory(""));
-    }
+    public void LocateFromDirectory_EmptyPath_ReturnsNull() => Assert.Null(ConfigReader.LocateFromDirectory(""));
 
     [Fact]
     public void LocateFromDirectory_NonexistentDirectory_ReturnsNull()

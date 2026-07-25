@@ -393,7 +393,7 @@ public class ParserTest
     {
         var result = Utility.Parse("let x = foo(");
         var expectDiagnostic = result.Diagnostics.Find(d =>
-            d.Code == InternalCodes.UnexpectedEof && d.Message == "Expected ')', got EOF."
+            d is { Code: InternalCodes.UnexpectedEof, Message: "Expected ')', got EOF." }
         );
         Assert.NotNull(expectDiagnostic);
 

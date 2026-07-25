@@ -34,10 +34,10 @@ public class TextSpanTest
         var a = new TextSpan(1, 2);
         var b = new TextSpan(1, 2);
         var c = new TextSpan(1, 3);
-
         Assert.True(a.Equals(b));
         Assert.False(a.Equals(c));
-        Assert.False(a.Equals((object)"not a span"));
+        // ReSharper disable once SuspiciousTypeConversion.Global
+        Assert.False(a.Equals("not a span"));
         Assert.True(a.Equals((object)b));
     }
 
@@ -47,7 +47,6 @@ public class TextSpanTest
         var a = new TextSpan(1, 2);
         var b = new TextSpan(1, 2);
         var c = new TextSpan(3, 4);
-
         Assert.True(a == b);
         Assert.False(a == c);
         Assert.True(a != c);

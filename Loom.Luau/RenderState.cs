@@ -42,7 +42,7 @@ public sealed class RenderState
 
     public static string Escape(string input) =>
         input
-            .Replace("\\", "\\\\")
+            .Replace("\\", @"\\")
             .Replace("\n", "\\n")
             .Replace("\r", "\\r")
             .Replace("\t", "\\t")

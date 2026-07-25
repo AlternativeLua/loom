@@ -8,13 +8,13 @@ internal abstract class BaseGenerator(string filePath, ReflectionMetadataReader 
 
     protected readonly ReflectionMetadataReader Metadata = metadata;
     protected readonly string FilePath = filePath;
-    protected readonly string TypeGeneratorDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."));
+    private readonly string _typeGeneratorDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../.."));
 
     private int _indentLevel;
     
     protected void WriteContentsOfFile(string fileName)
     {
-        var filePath = $"{TypeGeneratorDirectory}/{fileName}";
+        var filePath = $"{_typeGeneratorDirectory}/{fileName}";
         Stream.AppendLine(File.ReadAllText(filePath));
         Write();
         Log.Info($"wrote contents of '{filePath}'");

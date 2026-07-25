@@ -1,13 +1,5 @@
-let numbers = [1, 2, 3, 4];
-fn map<T, U>(array: T[], converter: fn(e: T): U): U[] {
-  let new_array: U[mut] = mut [];
-  for v : array
-    new_array.push(converter(v));
-    
-  return new_array;
-}
+event abc;
 
-fn id<T>(n: T) -> n;
-fn double(n: number) -> n * 2;
-print(map(numbers, id));
-print(map(numbers, double));
+fn h {}
+
+abc += h;

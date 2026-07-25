@@ -87,7 +87,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
     }
 
     private FlowState AnalyzeUnhandledExpression(Expression expression, FlowState state) =>
-        expression.Children.OfType<Expression>().Aggregate(state, (current, child) => AnalyzeExpression(child, current));
+        expression.Children.Aggregate(state, (current, child) => AnalyzeExpression(child, current));
 
     private FlowState AnalyzeMatchExpression(MatchExpression matchExpression, FlowState state)
     {
@@ -108,7 +108,6 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
     private FlowState AnalyzeMatchArm(MatchArm matchArm, FlowState state)
     {
         var armState = MarkPatternBindingsInitialized(matchArm.Pattern, state);
-
         if (matchArm.Guard != null)
             armState = AnalyzeExpression(matchArm.Guard, armState);
 
@@ -126,7 +125,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
                 semanticModel.GetDeclarationSymbol(pattern) is { } binding ? [binding] : [],
             TypedPattern typedPattern =>
                 CollectTypedPatternBindingSymbols(typedPattern),
-            TypePattern typePattern when typePattern.ObjectPattern != null =>
+            TypePattern { ObjectPattern: not null } typePattern =>
                 CollectPatternBindingSymbols(typePattern.ObjectPattern),
             ObjectPattern objectPattern =>
                 objectPattern.Fields.SelectMany(field => CollectPatternBindingSymbols(field.Pattern)),
@@ -149,11 +148,11 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         if (semanticModel.GetDeclarationSymbol(typedPattern) is { } typedBinding)
             yield return typedBinding;
 
-        if (typedPattern.ObjectPattern != null)
-        {
-            foreach (var symbol in CollectPatternBindingSymbols(typedPattern.ObjectPattern))
-                yield return symbol;
-        }
+        if (typedPattern.ObjectPattern == null)
+            yield break;
+
+        foreach (var symbol in CollectPatternBindingSymbols(typedPattern.ObjectPattern))
+            yield return symbol;
     }
 
     private FlowState AnalyzeBlock(Block block, FlowState state) => BindState(block, AnalyzeStatements(block.Statements, state));
