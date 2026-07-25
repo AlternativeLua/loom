@@ -1,6 +1,6 @@
 # Loom
 
-[![CI Status](https://github.com/R-unic/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/R-unic/loom/workflows)
+[![CI Status](https://github.com/rbx-loom/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/rbx-loom/loom/workflows)
 [![Coverage Status](https://coveralls.io/repos/github/R-unic/loom/badge.svg?branch=master)](https://coveralls.io/github/R-unic/loom)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](https://opensource.org/licenses/apache-2.0)
 
