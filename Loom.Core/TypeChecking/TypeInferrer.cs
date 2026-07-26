@@ -18,10 +18,9 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
         var objectType = underlying.ObjectType;
         var pairs = new List<(Type parameterType, Type argumentType)>();
         foreach (var initializer in node.Body.Initializers)
-        {
             switch (initializer)
             {
-                case InterfaceInvocationPropertyInitializer propInit:
+                case PropertyInitializer propInit:
                 {
                     var prop = objectType.GetProperty(propInit.Name.Text);
                     if (prop == null) continue;
@@ -29,7 +28,7 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
                     pairs.Add((prop.ValueType, argType));
                     break;
                 }
-                case InterfaceInvocationShorthandPropertyInitializer shorthandPropInit:
+                case ShorthandPropertyInitializer shorthandPropInit:
                 {
                     var prop = objectType.GetProperty(shorthandPropInit.Identifier.Name.Text);
                     if (prop == null) continue;
@@ -37,8 +36,8 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
                     pairs.Add((prop.ValueType, argType));
                     break;
                 }
-                case InterfaceInvocationIndexInitializer when objectType.Indexer == null: continue;
-                case InterfaceInvocationIndexInitializer idxInit:
+                case IndexInitializer when objectType.Indexer == null: continue;
+                case IndexInitializer idxInit:
                 {
                     var keyArg = getType(idxInit.IndexExpression);
                     var valueArg = getType(idxInit.Expression);
@@ -47,7 +46,6 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
                     break;
                 }
             }
-        }
 
         var inferred = new TypeParameterSubstitution();
         var visited = new HashSet<(Type, Type)>();
@@ -56,11 +54,9 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
 
         var substitution = new TypeParameterSubstitution();
         foreach (var typeParameter in generic.Parameters)
-        {
             substitution[typeParameter] = inferred.TryGetValue(typeParameter, out var inferredType)
                 ? inferredType
                 : typeParameter.DefaultType ?? PrimitiveType.Unknown;
-        }
 
         return substitution;
     }
@@ -80,11 +76,9 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
 
         var substitution = new TypeParameterSubstitution();
         foreach (var typeParameter in functionType.TypeParameters)
-        {
             substitution[typeParameter] = inferred.TryGetValue(typeParameter, out var inferredType)
                 ? inferredType
                 : typeParameter.DefaultType ?? PrimitiveType.Unknown;
-        }
 
         return substitution;
     }
@@ -123,6 +117,13 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
                 inferredTypes,
                 visitedPairs
             ),
+            (ObjectType parameterObject, UnionType argumentUnion) => TryInferFromObjectUnion(parameterObject, argumentUnion, inferredTypes, visitedPairs),
+            (InterfaceType parameterInterface, UnionType argumentUnion) => TryInferFromObjectUnion(
+                parameterInterface.ObjectType,
+                argumentUnion,
+                inferredTypes,
+                visitedPairs
+            ),
             (FunctionType parameterFunction, FunctionType argumentFunction) => MatchFunctionTypes(
                 parameterFunction,
                 argumentFunction,
@@ -150,6 +151,66 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
 
         var typeParams = union.Types.OfType<TypeParameter>().ToList();
         return typeParams.Count == 1 && BindTypeParameter(typeParams[0], argumentType, inferredTypes);
+    }
+
+    /// <summary>
+    ///     Handles unifying a generic object/interface shape (e.g. an array element type `Entry&lt;K, V&gt;`)
+    ///     against a union of structurally compatible object/interface arguments (e.g. the inferred element
+    ///     type of `[new Entry {...}, new Entry {...}]`), which none of the other cases above cover since
+    ///     they either require both sides to be unions of equal length or the parameter side to be the union.
+    ///     Distributes property-by-property: a readonly property is covariant, so its type parameter is
+    ///     unified against the union of that property's value type across every member; a mutable property is
+    ///     invariant, so every member must already agree on its exact value type before unification proceeds.
+    /// </summary>
+    private static bool TryInferFromObjectUnion(
+        ObjectType parameterObject,
+        UnionType argumentUnion,
+        TypeParameterSubstitution inferredTypes,
+        HashSet<(Type, Type)> visitedPairs)
+    {
+        var memberObjects = new List<ObjectType>();
+        foreach (var member in argumentUnion.Types)
+            switch (member)
+            {
+                case ObjectType objectType:
+                    memberObjects.Add(objectType);
+                    break;
+                case InterfaceType interfaceType:
+                    memberObjects.Add(interfaceType.ObjectType);
+                    break;
+                default:
+                    return false;
+            }
+
+        foreach (var property in parameterObject.Properties)
+        {
+            var memberValueTypes = new List<Type>();
+            foreach (var member in memberObjects)
+            {
+                var memberProperty = member.GetProperty(property.Name);
+                if (memberProperty == null)
+                    return false;
+
+                memberValueTypes.Add(memberProperty.ValueType);
+            }
+
+            if (property.IsMutable)
+            {
+                if (memberValueTypes.Distinct().Count() > 1)
+                    return false;
+
+                if (!TryInferTypes(property.ValueType, memberValueTypes[0], inferredTypes, visitedPairs))
+                    return false;
+
+                continue;
+            }
+
+            var combinedValueType = TypeSimplifier.Simplify(new UnionType(memberValueTypes));
+            if (!TryInferTypes(property.ValueType, combinedValueType, inferredTypes, visitedPairs))
+                return false;
+        }
+
+        return true;
     }
 
     private static bool TryInferFromIntersection(IntersectionType union, Type argumentType, TypeParameterSubstitution inferredTypes)
@@ -198,10 +259,8 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
         }
 
         if (parameterObject.Indexer != null && argumentObject.Indexer != null)
-        {
             return TryInferTypes(parameterObject.Indexer.KeyType, argumentObject.Indexer.KeyType, inferredTypes, visitedPairs)
                 && TryInferTypes(parameterObject.Indexer.ValueType, argumentObject.Indexer.ValueType, inferredTypes, visitedPairs);
-        }
 
         return parameterObject.Indexer == null;
     }
@@ -215,9 +274,32 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
         if (parameterFunction.ParameterTypes.Count != argumentFunction.ParameterTypes.Count)
             return false;
 
-        return !parameterFunction.ParameterTypes.Where((t, index) => !TryInferTypes(t, argumentFunction.ParameterTypes[index], inferredTypes, visitedPairs)).Any()
-            && TryInferTypes(parameterFunction.ReturnType, argumentFunction.ReturnType, inferredTypes, visitedPairs);
+        if (argumentFunction.TypeParameters.Count <= 0 || argumentFunction.TypeParameters.Count == parameterFunction.TypeParameters.Count)
+            return !parameterFunction.ParameterTypes
+                    .Where((t, index) => !TryInferTypes(t, argumentFunction.ParameterTypes[index], inferredTypes, visitedPairs))
+                    .Any()
+                && TryInferTypes(parameterFunction.ReturnType, argumentFunction.ReturnType, inferredTypes, visitedPairs);
+
+        var resolvedParameterTypes = parameterFunction.ParameterTypes.ConvertAll(t => Substitute(t, inferredTypes));
+        var argumentSubstitution = InferFunctionTypeArguments(argumentFunction, resolvedParameterTypes);
+        var substitutedFunction = new FunctionType(
+            [],
+            argumentFunction.ParameterTypes.ConvertAll(t => Substitute(t, argumentSubstitution)),
+            Substitute(argumentFunction.ReturnType, argumentSubstitution),
+            argumentFunction.HasRestParameter
+        );
+
+        return !parameterFunction.ParameterTypes.Where((t, index) => !TryInferTypes(t, substitutedFunction.ParameterTypes[index], inferredTypes, visitedPairs)).Any()
+            && TryInferTypes(parameterFunction.ReturnType, substitutedFunction.ReturnType, inferredTypes, visitedPairs);
     }
+
+    private static Type Substitute(Type type, TypeParameterSubstitution substitution) =>
+        type switch
+        {
+            TypeParameter typeParameter => substitution.GetValueOrDefault(typeParameter, type),
+            OptionalType optionalType => new OptionalType(Substitute(optionalType.NonNullableType, substitution)),
+            _ => TypeSolver.Transform(type, t => Substitute(t, substitution), simplify: false)
+        };
 
     private static bool MatchUnionTypes(
         UnionType parameterUnion,
@@ -254,30 +336,24 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
             case > 0 when argumentGenericInfo.Arguments.Count > 0:
             {
                 for (var index = 0; index < Math.Min(parameterGenericInfo.Arguments.Count, argumentGenericInfo.Arguments.Count); index++)
-                {
                     if (!TryInferTypes(parameterGenericInfo.Arguments[index], argumentGenericInfo.Arguments[index], inferredTypes, visitedPairs))
                         return false;
-                }
 
                 break;
             }
             case > 0 when argumentGenericInfo.Arguments.Count == 0:
             {
                 for (var index = 0; index < Math.Min(parameterGenericInfo.Arguments.Count, argumentGenericInfo.Generic.Parameters.Count); index++)
-                {
                     if (!TryInferTypes(argumentGenericInfo.Generic.Parameters[index], parameterGenericInfo.Arguments[index], inferredTypes, visitedPairs))
                         return false;
-                }
 
                 break;
             }
             case 0 when argumentGenericInfo.Arguments.Count > 0:
             {
                 for (var index = 0; index < Math.Min(parameterGenericInfo.Generic.Parameters.Count, argumentGenericInfo.Arguments.Count); index++)
-                {
                     if (!TryInferTypes(parameterGenericInfo.Generic.Parameters[index], argumentGenericInfo.Arguments[index], inferredTypes, visitedPairs))
                         return false;
-                }
 
                 break;
             }

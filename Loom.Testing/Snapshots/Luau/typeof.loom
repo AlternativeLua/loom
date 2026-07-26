@@ -1,0 +1,14 @@
+type A = typeof(69);
+
+mut x = 69;
+type B = typeof(x);
+
+interface Foo {
+    foo: number,
+    bar: string
+}
+
+let foo = new Foo { foo: 69, bar: "hi" };
+type C = typeof(foo);
+
+let y: typeof(x) = x;

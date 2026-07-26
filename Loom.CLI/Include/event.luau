@@ -10,6 +10,9 @@ export type Event<T... = ...any> = {
 	Connect: (self: Event<T...>, fn: (T...) -> ()) -> Connection,
 	Once: (self: Event<T...>, fn: (T...) -> ()) -> Connection,
 	Wait: (self: Event<T...>) -> T...,
+}
+
+export type UserEvent<T... = ...any> = Event<T...> & {
 	Fire: (self: Event<T...>, T...) -> (),
 	DisconnectAll: (self: Event<T...>) -> (),
 	Destroy: (self: Event<T...>) -> (),
@@ -68,7 +71,9 @@ function Connection.new<T...>(Event: EventInternal<T...>, node: Node<T...>): Con
 end
 
 function Connection.Disconnect<T...>(self: ConnectionInternal<T...>)
-	if not self.Connected then return end
+	if not self.Connected then
+		return
+	end
 	self.Connected = false
 
 	const node = self._node
@@ -121,12 +126,12 @@ end
 function Event.Once<T...>(self: EventInternal<T...>, fn: (T...) -> ()): Connection
 	local conn: Connection
 	const node: Node<T...> = {
-	_fn = (nil :: any),
-	_next = self._head,
-	_prev = nil,
-	_signal = self,
-	_connected = true,
-	_once = true,
+		_fn = (nil :: any),
+		_next = self._head,
+		_prev = nil,
+		_signal = self,
+		_connected = true,
+		_once = true,
 	}
 
 	node._fn = function(...)

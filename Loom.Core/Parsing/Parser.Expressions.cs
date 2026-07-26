@@ -64,7 +64,7 @@ public sealed partial class Parser
     private InterfaceInvocation ParseInterfaceInvocation(Token keyword)
     {
         var name = new Identifier(ExpectIdentifier());
-        var typeArguments = ParseTypeArguments(forInvocation: true);
+        var typeArguments = ParseTypeArguments(true);
         var leftBrace = Expect(SyntaxKind.LBrace);
         var initializers = new List<InterfaceInvocationInitializer>();
         if (!Match(out var rightBrace, SyntaxKind.RBrace))
@@ -86,7 +86,6 @@ public sealed partial class Parser
     {
         var expression = ParsePrimary();
         while (!IsEof())
-        {
             if (AtInvocationStart())
                 expression = ParseInvocation(expression);
             else if (Match(out var leftBracket, SyntaxKind.LBracket))
@@ -95,7 +94,6 @@ public sealed partial class Parser
                 expression = ParseNamedAccess(dot, expression);
             else
                 break;
-        }
 
         return expression;
     }
@@ -115,7 +113,7 @@ public sealed partial class Parser
         var names = new List<DotName> { new(dot, name) };
         while (Match(out var nextDot, SyntaxKind.Dot))
             names.Add(new DotName(nextDot, ExpectIdentifier()));
-        
+
         return expression is Identifier identifier
             ? new QualifiedName(identifier, names)
             : new PropertyAccess(expression, names);
@@ -123,7 +121,7 @@ public sealed partial class Parser
 
     private Invocation ParseInvocation(Expression callee)
     {
-        var typeArguments = ParseTypeArguments(forInvocation: true);
+        var typeArguments = ParseTypeArguments(true);
         var leftParen = Expect(SyntaxKind.LParen);
         var arguments = ParseArguments(leftParen);
         return new Invocation(callee, typeArguments, arguments);
@@ -131,6 +129,9 @@ public sealed partial class Parser
 
     private Expression ParsePrimary()
     {
+        if (Match(out var matchKeyword, SyntaxKind.MatchKeyword))
+            return ParseMatchExpression(matchKeyword);
+
         if (Match(out var newKeyword, SyntaxKind.NewKeyword))
             return ParseInterfaceInvocation(newKeyword);
 
@@ -147,6 +148,9 @@ public sealed partial class Parser
 
         if (ParseArrayLiteral() is { } arrayLiteral)
             return arrayLiteral;
+
+        if (Match(out var interpolatedStart, SyntaxKind.InterpolatedStringStart))
+            return ParseInterpolatedStringLiteral(interpolatedStart);
 
         if (Match(out var nameOfKeyword, SyntaxKind.NameOfKeyword))
             return ParseNameOf(nameOfKeyword);
@@ -176,10 +180,10 @@ public sealed partial class Parser
         if (Match(out var name, SyntaxKind.Identifier))
         {
             if (!Match(out var colon, SyntaxKind.Colon))
-                return new InterfaceInvocationShorthandPropertyInitializer(new Identifier(name));
+                return new ShorthandPropertyInitializer(new Identifier(name));
 
             var expression = ParseExpression();
-            return new InterfaceInvocationPropertyInitializer(name, colon, expression);
+            return new PropertyInitializer(name, colon, expression);
         }
 
         var leftBracket = Expect(SyntaxKind.LBracket, "property name or index initializer");
@@ -187,7 +191,7 @@ public sealed partial class Parser
         var rightBracket = Expect(SyntaxKind.RBracket);
         var indexColon = Expect(SyntaxKind.Colon);
         var indexValueExpression = ParseExpression();
-        return new InterfaceInvocationIndexInitializer(leftBracket, rightBracket, indexColon, indexExpression, indexValueExpression);
+        return new IndexInitializer(leftBracket, rightBracket, indexColon, indexExpression, indexValueExpression);
     }
 
     private Arguments ParseArguments(Token leftParen)
@@ -250,4 +254,23 @@ public sealed partial class Parser
         var rightBracket = Expect(SyntaxKind.RBracket);
         return new ArrayLiteral(mutKeyword, leftBracket, rightBracket, expressions);
     }
+
+    private InterpolatedStringLiteral ParseInterpolatedStringLiteral(Token startToken)
+    {
+        var parts = new List<InterpolationPart>();
+        while (true)
+        {
+            if (Match(out var textToken, SyntaxKind.InterpolatedStringText))
+                parts.Add(new InterpolationTextPart(textToken));
+
+            if (Match(out var endToken, SyntaxKind.InterpolatedStringEnd))
+                return new InterpolatedStringLiteral(startToken, parts, endToken);
+
+            var leftBrace = Expect(SyntaxKind.LBrace);
+            var expression = ParseExpression();
+            var rightBrace = Expect(SyntaxKind.RBrace);
+            parts.Add(new InterpolationHolePart(leftBrace, expression, rightBrace));
+        }
+    }
+
 }

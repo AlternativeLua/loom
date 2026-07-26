@@ -1,15 +1,15 @@
 using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
 
 namespace Loom.Core.Parsing.AST;
 
 public class PropertyDeclaration(Token? mutKeyword, Token name, ColonTypeClause colonTypeClause, Attributes? attributes)
-    : InterfaceMember([mutKeyword, name, ..colonTypeClause.Tokens, ..attributes?.Tokens ?? []], [colonTypeClause, attributes]),
+    : NamedDeclaration([mutKeyword, ..colonTypeClause.Tokens, ..attributes?.Tokens ?? []], name, colonTypeClause, attributes),
       IWithAttributes
 {
     public Token? MutKeyword { get; } = mutKeyword;
-    public Token Name { get; } = name;
     public ColonTypeClause ColonTypeClause { get; } = colonTypeClause;
     public Attributes? Attributes { get; } = attributes;
 

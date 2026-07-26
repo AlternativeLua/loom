@@ -1,0 +1,10 @@
+event abc;
+
+fn handler(): void {
+    print("handled")
+}
+
+let my_conn = abc += handler;
+my_conn.disconnect();
+abc += handler;
+abc -= handler;

@@ -10,6 +10,35 @@ declare fn luau_method: void;
 ## Property attribute - allows overriding interface members
 declare fn override: void;
 
+declare interface ConsumerEvent<
+    T1 = none, 
+    T2 = none, 
+    T3 = none, 
+    T4 = none, 
+    T5 = none, 
+    T6 = none, 
+    T7 = none, 
+    T8 = none
+> {
+    [luau_name("Wait"), luau_method]
+    wait: fn: T1;
+}
+
+declare sealed interface Event<
+    T1 = none, 
+    T2 = none, 
+    T3 = none, 
+    T4 = none, 
+    T5 = none, 
+    T6 = none, 
+    T7 = none, 
+    T8 = none
+> : ConsumerEvent<T1, T2, T3, T4, T5, T6, T7, T8>
+{
+    [luau_name("Destroy"), luau_method]
+    destroy: fn: void;
+}
+
 declare interface Object {
 	[luau_name("ClassName")]
 	class_name: string;
@@ -39,19 +68,19 @@ declare interface Instance: Object {
 	[luau_name("Destroy"), luau_method]
 	destroy: fn: void;
 	[luau_name("FindFirstAncestor"), luau_method]
-	find_first_ancestor: fn<T: Instance = Instance>(name: string): T;
+	find_first_ancestor: fn<T: Instance = Instance>(name: string): T?;
 	[luau_name("FindFirstAncestorOfClass"), luau_method]
-	find_first_ancestor_of_class: fn<T: Instance>: Instance;
+	find_first_ancestor_of_class: fn<T: Instance>: T?;
 	[luau_name("FindFirstAncestorWhichIsA"), luau_method]
-	find_first_ancestor_which_is_a: fn<T: Instance>: Instance;
+	find_first_ancestor_which_is_a: fn<T: Instance>: T?;
 	[luau_name("FindFirstChild"), luau_method]
-	find_first_child: fn<T: Instance = Instance>(name: string, recursive: bool?): T;
+	find_first_child: fn<T: Instance = Instance>(name: string, recursive: bool?): T?;
 	[luau_name("FindFirstChildOfClass"), luau_method]
-	find_first_child_of_class: fn<T: Instance>: Instance;
+	find_first_child_of_class: fn<T: Instance>: T?;
 	[luau_name("FindFirstChildWhichIsA"), luau_method]
-	find_first_child_which_is_a: fn<T: Instance>(recursive: bool?): Instance;
+	find_first_child_which_is_a: fn<T: Instance>(recursive: bool?): T?;
 	[luau_name("FindFirstDescendant"), luau_method]
-	find_first_descendant: fn<T: Instance = Instance>(name: string): T;
+	find_first_descendant: fn<T: Instance = Instance>(name: string): T?;
 	[luau_name("GetActor"), luau_method]
 	get_actor: fn: Actor;
 	[luau_name("GetAttribute"), luau_method]
@@ -92,25 +121,23 @@ declare interface Instance: Object {
 	wait_for_child: fn<T: Instance>(childName: string, timeOut: number): T;
 }
 
-declare interface buffer;
-declare interface thread;
+declare sealed interface buffer;
+declare sealed interface thread;
 
-interface UnknownRecord {
+declare sealed interface UnknownRecord {
     [unknown]: unknown;
 }
 
-declare fn print(msg: unknown): void;
+declare sealed interface ScriptSignal;
 
-declare interface ScriptSignal;
-
-declare interface ScriptConnection {
+declare sealed interface ScriptConnection {
     [luau_name("Connected")] connected: bool;
     [luau_name("Disconnect"), luau_method] disconnect: fn: void;
 }
 
-declare interface SecurityCapabilities;
+declare sealed interface SecurityCapabilities;
 
-declare interface DateTime {
+declare sealed interface DateTime {
     [luau_name("UnixTimestamp")] unix_timestamp: number;
     [luau_name("UnixTimestampMillis")] unix_timestamp_millis: number;
     
@@ -121,7 +148,7 @@ declare interface DateTime {
     [luau_name("FormatLocalTime"), luau_method] format_local_time: fn(format: string, locale: string): string;
 }
 
-declare interface DateTimeStatic {
+declare sealed interface DateTimeStatic {
     now: fn: DateTime;
     [luau_name("fromIsoDate")] fromIsoDate: fn(isoDate: string): DateTime?;
     [luau_name("fromLocalTime")] from_local_time: fn(year: number?, month: number?, day: number?, hour: number?, minute: number?, second: number?, millisecond: number?): DateTime;
@@ -132,13 +159,13 @@ declare interface DateTimeStatic {
 
 declare let DateTime: DateTimeStatic;
 
-declare interface Content {
+declare sealed interface Content {
     [luau_name("SourceType")] source_type: Enum["ContentSourceType"];
     [luau_name("Uri")] uri: string?;
     [luau_name("Object")] object: Object?;
 }
 
-declare interface ContentStatic {
+declare sealed interface ContentStatic {
     [luau_name("none")] _none: Content;
     [luau_name("fromUri")] from_uri: fn(uri: string): Content;
     [luau_name("fromObject")] from_object: fn(object: Object): Content;
@@ -146,7 +173,7 @@ declare interface ContentStatic {
 
 declare let Content: ContentStatic;
 
-declare interface Vector2 {
+declare sealed interface Vector2 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Magnitude")] magnitude: number;
@@ -165,22 +192,24 @@ declare interface Vector2 {
     [luau_name("Min"), luau_method] min: fn(other: Vector2): Vector2;
 }
 
-declare interface Vector2Static {
+declare sealed interface Vector2Static {
     zero: Vector2;
     one: Vector2;
     [luau_name("yAxis")] y_axis: Vector2;
     [luau_name("xAxis")] x_axis: Vector2;
     [luau_name("zAxis")] z_axis: Vector2;
+    [luau_name("new")] create: fn: Vector2;
+    [luau_name("new")] create: fn(x: number, y: number): Vector2;
 }
 
 declare let Vector2: Vector2Static;
 
-declare interface Vector2int16 {
+declare sealed interface Vector2int16 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
 }
 
-declare interface Vector3 {
+declare sealed interface Vector3 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;
@@ -200,7 +229,7 @@ declare interface Vector3 {
     [luau_name("Min"), luau_method] min: fn(other: Vector3): Vector3;
 }
 
-declare interface Vector3Static {
+declare sealed interface Vector3Static {
     zero: Vector3;
     one: Vector3;
     [luau_name("xAxis")] x_axis: Vector3;
@@ -208,17 +237,19 @@ declare interface Vector3Static {
     [luau_name("zAxis")] z_axis: Vector3;
     [luau_name("FromNormalId")] from_normal_id: fn(normal: Enum["NormalId"]): Vector3;
     [luau_name("FromAxis")] from_axis: fn(axis: Enum["Axis"]): Vector3;
+    [luau_name("new")] create: fn: Vector3;
+    [luau_name("new")] create: fn(x: number, y: number, z: number): Vector3;
 }
 
 declare let Vector3: Vector3Static;
 
-declare interface Vector3int16 {
+declare sealed interface Vector3int16 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;
 }
 
-declare interface CFrame {
+declare sealed interface CFrame {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;
@@ -232,7 +263,7 @@ declare interface CFrame {
     [luau_name("ZVector")] z_vector: Vector3;
 }
 
-declare interface CFrameStatic {
+declare sealed interface CFrameStatic {
     identity: CFrame;
     [luau_name("Angles")] angles: fn(x: number, y: number, z: number): CFrame;
     [luau_name("lookAt")] look_at: fn(at: Vector3, lookAt: Vector3, up: Vector3?): CFrame;
@@ -243,35 +274,53 @@ declare interface CFrameStatic {
     [luau_name("fromOrientation")] from_orientation: fn(x: number, y: number, z: number): CFrame;
     [luau_name("fromAxisAngle")] from_axis_angle: fn(vector: Vector3, rotation: number): CFrame;
     [luau_name("fromMatrix")] from_matrix: fn(pos: Vector3, vX: Vector3, vY: Vector3, vZ: Vector3): CFrame;
+    [luau_name("new")] create: fn: CFrame;
+    [luau_name("new")] create: fn(pos: Vector3): CFrame;
+    [luau_name("new")] create: fn(pos: Vector3, lookAt: Vector3): CFrame;
+    [luau_name("new")] create: fn(x: number, y: number, z: number): CFrame;
+    [luau_name("new")] create: fn(x: number, y: number, z: number, qX: number, qY: number, qZ: number, qW: number): CFrame;
+    [luau_name("new")] create: fn(
+        x: number, y: number, z: number,
+        r00: number, r01: number, r02: number,
+        r10: number, r11: number, r12: number,
+        r20: number, r21: number, r22: number
+    ): CFrame;
 }
 
 declare let CFrame: CFrameStatic;
 
-declare interface Region3int16 {
+declare sealed interface Region3int16 {
     [luau_name("Min")] min: Vector3int16;
     [luau_name("Max")] max: Vector3int16;
 }
 
-declare interface Region3 {
+declare sealed interface Region3 {
     [luau_name("CFrame")] cframe: CFrame;
     [luau_name("Size")] size: Vector3;
 }
 
-declare interface Color3 {
+declare sealed interface Region3Static {
+    [luau_name("new")] create: fn(min: Vector3, max: Vector3): Region3;
+}
+
+declare let Region3: Region3Static;
+
+declare sealed interface Color3 {
     [luau_name("R")] r: number;
     [luau_name("G")] g: number;
     [luau_name("B")] b: number;
 }
 
-declare interface Color3Static {
+declare sealed interface Color3Static {
     [luau_name("fromRGB")] from_rgb: fn(r: number?, g: number?, b: number?): Color3;
     [luau_name("fromHSV")] from_hsv: fn(h: number?, s: number?, v: number?): Color3;
     [luau_name("fromHex")] from_hex: fn(hex: string): Color3;
+    [luau_name("new")] create: fn(r: number?, g: number?, b: number?): Color3;
 }
 
 declare let Color3: Color3Static;
 
-declare interface BrickColor {
+declare sealed interface BrickColor {
     [luau_name("Number")] number: number;
     [luau_name("Name")] name: string;
     [luau_name("Color")] color: Color3;
@@ -280,7 +329,7 @@ declare interface BrickColor {
     b: number;
 }
 
-declare interface BrickColorStatic {
+declare sealed interface BrickColorStatic {
     random: fn: BrickColor;
     palette: fn(paletteValue: number): BrickColor;
     White: fn: BrickColor;
@@ -291,17 +340,27 @@ declare interface BrickColorStatic {
     Yellow: fn: BrickColor;
     Green: fn: BrickColor;
     Blue: fn: BrickColor;
+    [luau_name("new")] create: fn(name: string): BrickColor;
+    [luau_name("new")] create: fn(number: number): BrickColor;
+    [luau_name("new")] create: fn(color: Color3): BrickColor;
+    [luau_name("new")] create: fn(r: number, g: number, b: number): BrickColor;
 }
 
 declare let BrickColor: BrickColorStatic;
 
-declare interface Ray {
+declare sealed interface Ray {
     [luau_name("Unit")] unit: Ray;
     [luau_name("Origin")] origin: Vector3;
     [luau_name("Direction")] direction: Vector3;
 }
 
-declare interface RaycastResult {
+declare sealed interface RayStatic {
+    [luau_name("new")] create: fn(origin: Vector3, direction: Vector3): Ray;
+}
+
+declare let Ray: RayStatic;
+
+declare sealed interface RaycastResult {
     [luau_name("Distance")] distance: number;
     [luau_name("Instance")] instance: Instance?;
     [luau_name("Material")] material: Enum["Material"];
@@ -309,7 +368,7 @@ declare interface RaycastResult {
     [luau_name("Normal")] normal: Vector3;
 }
 
-declare interface RaycastParams {
+declare sealed interface RaycastParams {
     [luau_name("FilterDescendantsInstances")] mut filter_descendants_instances: Instance[]?;
     [luau_name("FilterType")] mut filter_type: Enum["RaycastFilterType"];
     [luau_name("IgnoreWater")] mut ignore_water: bool?;
@@ -318,7 +377,13 @@ declare interface RaycastParams {
     [luau_name("BruteForceAllSlow")] mut brute_force_all_slow: bool?;
 }
 
-declare interface OverlapParams {
+declare sealed interface RaycastParamsStatic {
+    [luau_name("new")] create: fn: RaycastParams;
+}
+
+declare let RaycastParams: RaycastParamsStatic;
+
+declare sealed interface OverlapParams {
     [luau_name("FilterDescendantsInstances")] mut filter_descendants_instances: Instance[]?;
     [luau_name("FilterType")] mut filter_type: Enum["RaycastFilterType"];
     [luau_name("MaxParts")] mut max_parts: number;
@@ -327,29 +392,44 @@ declare interface OverlapParams {
     [luau_name("BruteForceAllSlow")] mut brute_force_all_slow: bool?;
 }
 
-declare interface UDim {
+declare sealed interface OverlapParamsStatic {
+    [luau_name("new")] create: fn: OverlapParams;
+}
+
+declare let OverlapParams: OverlapParamsStatic;
+
+declare sealed interface UDim {
     [luau_name("Scale")] scale: number;
     [luau_name("Offset")] offset: number;
 }
 
-declare interface UDim2 {
+declare sealed interface UDimStatic {
+    [luau_name("new")] create: fn(scale: number?, offset: number?): UDim;
+}
+
+declare let UDim: UDimStatic;
+
+declare sealed interface UDim2 {
     [luau_name("X")] x: UDim;
     [luau_name("Y")] y: UDim;
     [luau_name("Width")] width: UDim;
     [luau_name("Height")] height: UDim;
 }
 
-declare interface UDim2Static {
+declare sealed interface UDim2Static {
     [luau_name("fromScale")] from_scale: fn(xScale: number?, yScale: number?): UDim2;
     [luau_name("fromOffset")] from_offset: fn(xOffset: number?, yOffset: number?): UDim2;
+    [luau_name("new")] create: fn: UDim2;
+    [luau_name("new")] create: fn(xScale: number, xOffset: number, yScale: number, yOffset: number): UDim2;
+    [luau_name("new")] create: fn(xUDim: UDim, yUDim: UDim): UDim2;
 }
 
 declare let UDim2: UDim2Static;
 
-declare interface Random;
+declare sealed interface Random;
 
-declare interface time_t {
-    year: number
+declare sealed interface time_t {
+    year: number;
     month: number;
     day: number;
     wday: number;
@@ -360,161 +440,210 @@ declare interface time_t {
     isdst: number;
 }
 
-declare interface TimeTable {
-    Year: number
-    Month: number;
-    Day: number;
-    Hour: number;
-    Minute: number;
-    Second: number;
-    Millisecond: number;
+declare sealed interface TimeTable {
+    [luau_name("Year")] year: number;
+    [luau_name("Month")] month: number;
+    [luau_name("Day")] day: number;
+    [luau_name("Hour")] hour: number;
+    [luau_name("Minute")] minute: number;
+    [luau_name("Second")] second: number;
+    [luau_name("Millisecond")] millisecond: number;
 }
 
-declare interface NumberRange {
-    Min: number;
-    Max: number;
+declare sealed interface NumberRange {
+    [luau_name("Min")] min: number;
+    [luau_name("Max")] max: number;
 }
 
-declare interface NumberSequenceKeypoint {
-    Envelope: number;
-    Time: number;
-    Value: number;
+declare sealed interface NumberRangeStatic {
+    [luau_name("new")] create: fn(min: number, max: number?): NumberRange;
 }
 
-declare interface NumberSequence {
-    Keypoints: NumberSequenceKeypoint[];
+declare let NumberRange: NumberRangeStatic;
+
+declare sealed interface NumberSequenceKeypoint {
+    [luau_name("Envelope")] envelope: number;
+    [luau_name("Time")] time: number;
+    [luau_name("Value")] value: number;
 }
 
-declare interface ColorSequenceKeypoint {
-    Time: number;
-    Value: Color3;
+declare sealed interface NumberSequence {
+     [luau_name("Keypoints")] keypoints: NumberSequenceKeypoint[];
 }
 
-declare interface ColorSequence {
-    Keypoints: ColorSequenceKeypoint[];
+declare sealed interface NumberSequenceStatic {
+    [luau_name("new")] create: fn(value: number): NumberSequence;
+    [luau_name("new")] create: fn(min: number, max: number): NumberSequence;
+    [luau_name("new")] create: fn(keypoints: NumberSequenceKeypoint[]): NumberSequence;
 }
 
-declare interface Rect {
-    Width: number;
-    Height: number;
-    Min: Vector2;
-    Max: Vector2;
+declare let NumberSequence: NumberSequenceStatic;
+
+declare sealed interface ColorSequenceKeypoint {
+    [luau_name("Time")] time: number;
+    [luau_name("Value")] value: Color3;
 }
 
-declare interface Axes {
-    X: bool;
-    Y: bool;
-    Z: bool;
-    Top: bool;
-    Bottom: bool;
-    Left: bool;
-    Right: bool;
-    Back: bool;
-    Front: bool;
+declare sealed interface ColorSequence {
+    [luau_name("Keypoints")] keypoints: ColorSequenceKeypoint[];
 }
 
-declare interface Faces {
-    Top: bool;
-    Bottom: bool;
-    Left: bool;
-    Right: bool;
-    Back: bool;
-    Front: bool;
+declare sealed interface ColorSequenceStatic {
+    [luau_name("new")] create: fn(color: Color3): ColorSequence;
+    [luau_name("new")] create: fn(color0: Color3, color1: Color3): ColorSequence;
+    [luau_name("new")] create: fn(keypoints: ColorSequenceKeypoint[]): ColorSequence;
 }
 
-declare interface PhysicalProperties {
-    Density: number;
-    Friction: number;
-    Elasticity: number;
-    FrictionWeight: number;
-    ElasticityWeight: number;
+declare let ColorSequence: ColorSequenceStatic;
+
+declare sealed interface Rect {
+    [luau_name("Width")] width: number;
+    [luau_name("Height")] height: number;
+    [luau_name("Min")] min: Vector2;
+    [luau_name("Max")] max: Vector2;
 }
 
-declare interface Path2DControlPoint {
-    Position: UDim2;
-    LeftTangent: UDim2;
-    RightTangent: UDim2;
+declare sealed interface RectStatic {
+    [luau_name("new")] create: fn(min: Vector2, max: Vector2): Rect;
+    [luau_name("new")] create: fn(minX: number, minY: number, maxX: number, maxY: number): Rect;
 }
 
-declare interface RotationCurveKey {
-    Interpolation: Enum["KeyInterpolationMode"];
-    Time: number;
-    Value: CFrame;
-    LeftTangent: number;
-    RightTangent: number;
+declare let Rect: RectStatic;
+
+declare sealed interface Axes {
+    [luau_name("X")] x: bool;
+    [luau_name("Y")] y: bool;
+    [luau_name("Z")] z: bool;
+    [luau_name("Top")] top: bool;
+    [luau_name("Bottom")] bottom: bool;
+    [luau_name("Left")] left: bool;
+    [luau_name("Right")] right: bool;
+    [luau_name("Back")] back: bool;
+    [luau_name("Front")] front: bool;
 }
 
-declare interface FloatCurveKey {
-    Interpolation: Enum["KeyInterpolationMode"];
-    Time: number;
-    Value: number;
-    LeftTangent: number;
-    RightTangent: number;
+declare sealed interface Faces {
+    [luau_name("Top")] top: bool;
+    [luau_name("Bottom")] bottom: bool;
+    [luau_name("Left")] left: bool;
+    [luau_name("Right")] right: bool;
+    [luau_name("Back")] back: bool;
+    [luau_name("Front")] front: bool;
 }
 
-declare interface ValueCurveKey {
-    Interpolation: Enum["KeyInterpolationMode"];
-    Time: number;
-    Value: unknown;
-    LeftTangent: number;
-    RightTangent: number;
+declare sealed interface PhysicalProperties {
+    [luau_name("Density")] density: number;
+    [luau_name("Friction")] friction: number;
+    [luau_name("Elasticity")] elasticity: number;
+    [luau_name("FrictionWeight")] friction_weight: number;
+    [luau_name("ElasticityWeight")] elasticity_weight: number;
 }
 
-declare interface Font {
-    Family: string;
-    Weight: Enum["FontWeight"];
-    Style: Enum["FontStyle"];
-    Bold: bool;
+declare sealed interface PhysicalPropertiesStatic {
+    [luau_name("new")] create: fn(material: Enum["Material"]): PhysicalProperties;
+    [luau_name("new")] create: fn(density: number, friction: number, elasticity: number, frictionWeight: number?, elasticityWeight: number?): PhysicalProperties;
 }
 
-declare interface FontStatic {
-    fromEnum: fn(font: Enum["Font"]): Font;
-    fromName: fn(name: string, weight: Enum["FontWeight"]?, style: Enum["FontStyle"]?): Font;
-    fromId: fn(id: number, weight: Enum["FontWeight"]?, style: Enum["FontStyle"]?): Font;
+declare let PhysicalProperties: PhysicalPropertiesStatic;
+
+declare sealed interface Path2DControlPoint {
+    [luau_name("Position")] position: UDim2;
+    [luau_name("LeftTangent")] left_tangent: UDim2;
+    [luau_name("RightTangent")] right_tangent: UDim2;
+}
+
+declare sealed interface RotationCurveKey {
+    [luau_name("Interpolation")] interpolation: Enum["KeyInterpolationMode"];
+    [luau_name("Time")] time: number;
+    [luau_name("Value")] value: CFrame;
+    [luau_name("LeftTangent")] left_tangent: number;
+    [luau_name("RightTangent")] right_tangent: number;
+}
+
+declare sealed interface FloatCurveKey {
+    [luau_name("Interpolation")] interpolation: Enum["KeyInterpolationMode"];
+    [luau_name("Time")] time: number;
+    [luau_name("Value")] value: number;
+    [luau_name("LeftTangent")] left_tangent: number;
+    [luau_name("RightTangent")] right_tangent: number;
+}
+
+declare sealed interface ValueCurveKey {
+    [luau_name("Interpolation")] interpolation: Enum["KeyInterpolationMode"];
+    [luau_name("Time")] time: number;
+    [luau_name("Value")] value: unknown;
+    [luau_name("LeftTangent")] left_tangent: number;
+    [luau_name("RightTangent")] right_tangent: number;
+}
+
+declare sealed interface Font {
+    [luau_name("Family")] family: string;
+    [luau_name("Weight")] weight: Enum["FontWeight"];
+    [luau_name("Style")] style: Enum["FontStyle"];
+    [luau_name("Bold")] bold: bool;
+}
+
+declare sealed interface FontStatic {
+    [luau_name("fromEnum")] from_enum: fn(font: Enum["Font"]): Font;
+    [luau_name("fromName")] from_name: fn(name: string, weight: Enum["FontWeight"]?, style: Enum["FontStyle"]?): Font;
+    [luau_name("fromId")] from_id: fn(id: number, weight: Enum["FontWeight"]?, style: Enum["FontStyle"]?): Font;
 }
 
 declare let Font: FontStatic;
 
-declare interface Secret;
+declare sealed interface Secret;
 
-declare interface DockWidgetPluginGuiInfo {
-    InitialEnabled: bool;
-    InitialEnabledShouldOverrideRestore: bool;
-    FloatingXSize: number;
-    FloatingYSize: number;
-    MinWidth: number;
-    MinHeight: number;
+declare sealed interface DockWidgetPluginGuiInfo {
+    [luau_name("InitialEnabled")] initial_enabled: bool;
+    [luau_name("InitialEnabledShouldOverrideRestore")] initial_enabled_should_override_restore: bool;
+    [luau_name("FloatingXSize")] floating_x_size: number;
+    [luau_name("FloatingYSize")] floating_y_size: number;
+    [luau_name("MinWidth")] min_width: number;
+    [luau_name("MinHeight")] min_height: number;
 }
 
-declare interface CatalogSearchParams {
-    mut SearchKeyword: string?;
-    mut MinPrice: number?;
-    mut MaxPrice: number?;
-    mut SortType: Enum["CatalogSortType"]?;
-    mut SortAggregation: Enum["CatalogSortAggregation"]?;
-    mut CategoryFilter: Enum["CatalogCategoryFilter"]?;
-    mut SalesTypeFilter: Enum["SalesTypeFilter"]?;
-    mut BundleTypes: Enum["BundleType"][]?;
-    mut AssetTypes: Enum["AvatarAssetType"][]?;
-    mut IncludeOffSale: bool?;
-    mut CreatorName: string?;
-    mut Limit: number?;
+declare sealed interface CatalogSearchParams {
+    [luau_name("SearchKeyword")] mut search_keyword: string?;
+    [luau_name("MinPrice")] mut min_price: number?;
+    [luau_name("MaxPrice")] mut max_price: number?;
+    [luau_name("SortType")] mut sort_type: Enum["CatalogSortType"]?;
+    [luau_name("SortAggregation")] mut sort_aggregation: Enum["CatalogSortAggregation"]?;
+    [luau_name("CategoryFilter")] mut category_filter: Enum["CatalogCategoryFilter"]?;
+    [luau_name("SalesTypeFilter")] mut sales_type_filter: Enum["SalesTypeFilter"]?;
+    [luau_name("BundleTypes")] mut bundle_types: Enum["BundleType"][]?;
+    [luau_name("AssetTypes")] mut asset_types: Enum["AvatarAssetType"][]?;
+    [luau_name("IncludeOffSale")] mut include_off_sale: bool?;
+    [luau_name("CreatorName")] mut creator_name: string?;
+    [luau_name("Limit")] mut limit: number?;
 }
 
-declare interface TweenInfo {
-    EasingStyle: Enum["EasingStyle"];
-    EasingDirection: Enum["EasingDirection"];
-    Time: number;
-    DelayTime: number;
-    RepeatCount: number;
-    Reverses: bool;
+declare sealed interface TweenInfo {
+    [luau_name("EasingStyle")] easing_style: Enum["EasingStyle"];
+    [luau_name("EasingDirection")] easing_direction: Enum["EasingDirection"];
+    [luau_name("Time")] time: number;
+    [luau_name("DelayTime")] delay_time: number;
+    [luau_name("RepeatCount")] repeat_count: number;
+    [luau_name("Reverses")] reverses: bool;
 }
 
-declare interface SharedTable {
+declare sealed interface TweenInfoStatic {
+    [luau_name("new")] create: fn(
+        time: number?,
+        easingStyle: Enum["EasingStyle"]?,
+        easingDirection: Enum["EasingDirection"]?,
+        repeatCount: number?,
+        reverses: bool?,
+        delayTime: number?
+    ): TweenInfo;
+}
+
+declare let TweenInfo: TweenInfoStatic;
+
+declare sealed interface SharedTable {
     mut [string]: unknown;
 }
 
-declare interface EmoteDictionary {
+declare sealed interface EmoteDictionary {
     mut [string]: number[];
 }
 
@@ -529,51 +658,51 @@ enum EmoteSlot {
     Slot8
 }
 
-declare interface EquippedEmote {
-    Name: string;
-    Slot: EmoteSlot;
+declare sealed interface EquippedEmote {
+    [luau_name("Name")] name: string;
+    [luau_name("Slot")] slot: EmoteSlot;
 }
 
-declare interface UserInfo {
-    Id: number;
-    Username: string;
-    DisplayName: string;
+declare sealed interface UserInfo {
+    [luau_name("Id")] id: number;
+    [luau_name("Username")] username: string;
+    [luau_name("DisplayName")] display_name: string;
 }
 
-declare interface User {
-    Id: number;
-    DomainType: Enum["DomainType"];
-    DomainId: number;
+declare sealed interface User {
+    [luau_name("Id")] id: number;
+    [luau_name("DomainType")] domain_type: Enum["DomainType"];
+    [luau_name("DomainId")] domain_id: number;
 }
 
-declare interface GroupOwner {
-    Id: number;
-    Name: string;
+declare sealed interface GroupOwner {
+    [luau_name("Id")] id: number;
+    [luau_name("Name")] name: string;
 }
 
-declare interface GroupRole {
-    Name: string;
-    Rank: number;
+declare sealed interface GroupRole {
+    [luau_name("Name")] name: string;
+    [luau_name("Rank")] rank: number;
 }
 
-declare interface GroupInfo {
-    Id: number;
-    Name: string;
-    Owner: GroupOwner;
-    EmblemUrl: string;
-    Description: string;
-    Roles: GroupRole[];
+declare sealed interface GroupInfo {
+    [luau_name("Id")] id: number;
+    [luau_name("Name")] name: string;
+    [luau_name("Owner")] owner: GroupOwner;
+    [luau_name("EmblemUrl")] emblem_url: string;
+    [luau_name("Description")] description: string;
+    [luau_name("Roles")] roles: GroupRole[];
 }
 
-declare interface GetGroupsAsyncResult {
-    Id: number;
-    Name: string;
-    EmblemUrl: string;
-    Description: string;
-    Rank: number;
-    Role: string;
-    IsPrimary: bool;
-    IsInClan: bool;
+declare sealed interface GetGroupsAsyncResult {
+    [luau_name("Id")] id: number;
+    [luau_name("Name")] name: string;
+    [luau_name("EmblemUrl")] emblem_url: string;
+    [luau_name("Description")] description: string;
+    [luau_name("Rank")] rank: number;
+    [luau_name("Role")] role: string;
+    [luau_name("IsPrimary")] is_primary: bool;
+    [luau_name("IsInClan")] is_in_clan: bool;
 }
 
 declare interface CollectionHandle;
@@ -7603,6 +7732,14 @@ declare interface ChangeHistoryService: Instance {
 	try_begin_recording: fn(name: string, displayName: string?): string?;
 	[luau_name("Undo"), luau_method]
 	undo: fn: void;
+	[luau_name("OnRecordingFinished")]
+	event on_recording_finished(name: string, displayName: string?, identifier: string?, operation: Enum["FinishRecordingOperation"], finalOptions: UnknownRecord?);
+	[luau_name("OnRecordingStarted")]
+	event on_recording_started(name: string, displayName: string?);
+	[luau_name("OnRedo")]
+	event on_redo(waypoint: string);
+	[luau_name("OnUndo")]
+	event on_undo(waypoint: string);
 }
 
 declare interface ChangeHistoryStreamingService: Instance {
@@ -7889,6 +8026,10 @@ declare interface DebuggerManager: Instance {
 	step_out: fn: void;
 	[luau_name("StepOver"), luau_method]
 	step_over: fn: void;
+	[luau_name("DebuggerAdded")]
+	event debugger_added(debugger: Instance);
+	[luau_name("DebuggerRemoved")]
+	event debugger_removed(debugger: Instance);
 }
 
 declare interface DebuggerUIService: Instance {
@@ -8255,9 +8396,21 @@ declare interface PluginGui: LayerCollector {
 	[luau_name("Title")]
 	mut title: string;
 	[luau_name("BindToClose"), luau_method]
-	bind_to_close: fn(function: fn: void?): void;
+	bind_to_close: fn(callback: fn: void?): void;
 	[luau_name("GetRelativeMousePosition"), luau_method]
 	get_relative_mouse_position: fn: Vector2;
+	[luau_name("PluginDragDropped")]
+	event plugin_drag_dropped(dragData: UnknownRecord);
+	[luau_name("PluginDragEntered")]
+	event plugin_drag_entered(dragData: UnknownRecord);
+	[luau_name("PluginDragLeft")]
+	event plugin_drag_left(dragData: UnknownRecord);
+	[luau_name("PluginDragMoved")]
+	event plugin_drag_moved(dragData: UnknownRecord);
+	[luau_name("WindowFocusReleased")]
+	event window_focus_released;
+	[luau_name("WindowFocused")]
+	event window_focused;
 }
 
 declare interface DockWidgetPluginGui: PluginGui;
@@ -8368,6 +8521,8 @@ declare interface HeapProfilerService: Instance {
 	client_request_data_async: fn(player: Player): string;
 	[luau_name("ServerRequestDataAsync"), luau_method]
 	server_request_data_async: fn: string;
+	[luau_name("OnNewData")]
+	event on_new_data(player: Player, jsonString: buffer, id: number, compressedLength: number, uncompressedLength: number);
 }
 
 declare interface HeightmapImporterService: Instance {
@@ -8441,6 +8596,8 @@ declare interface InstanceFileSyncService: Instance {
 	get_status: fn(instance: Instance): Enum["InstanceFileSyncStatus"];
 	[luau_name("GetSyncedInstance"), luau_method]
 	get_synced_instance: fn(filePath: string): Instance;
+	[luau_name("StatusChanged")]
+	event status_changed(instance: Instance, status: Enum["InstanceFileSyncStatus"]);
 }
 
 declare interface InternalSyncItem: Instance {
@@ -8645,6 +8802,8 @@ declare interface ModerationService: Instance {
 
 declare interface Mouse: Instance;
 declare interface PluginMouse: Mouse {
+	[luau_name("DragEnter")]
+	event drag_enter(instances: Instance[]);
 }
 
 declare interface MultipleDocumentInterfaceInstance: Instance;
@@ -9020,6 +9179,10 @@ declare interface Plugin: Instance {
 	prompt_save_selection: fn(suggestedFileName: string): bool;
 	[luau_name("PromptSaveSelectionAsync"), luau_method]
 	prompt_save_selection_async: fn(suggestedFileName: string): bool;
+	[luau_name("Deactivation")]
+	event deactivation;
+	[luau_name("Unloading")]
+	event unloading;
 }
 
 declare interface PluginAction: Instance {
@@ -9032,6 +9195,8 @@ declare interface PluginAction: Instance {
 	status_tip: string;
 	[luau_name("Text")]
 	text: string;
+	[luau_name("Triggered")]
+	event triggered;
 }
 
 declare interface PluginCapabilities: Instance {
@@ -9044,6 +9209,8 @@ declare interface PluginConnectionService: Instance {
 	can_have_connection_type: fn(_type: Enum["PluginConnectionTargetType"]): bool;
 	[luau_name("GetPluginConnectionsOfType"), luau_method]
 	get_plugin_connections_of_type: fn(_type: Enum["PluginConnectionTargetType"]): unknown[];
+	[luau_name("Connected")]
+	event connected(conn: PluginConnection);
 }
 
 declare interface PluginDebugService: Instance {
@@ -9117,6 +9284,8 @@ declare interface PluginToolbarButton: Instance {
 	mut icon_content: Content;
 	[luau_name("SetActive"), luau_method]
 	set_active: fn(active: bool): void;
+	[luau_name("Click")]
+	event click;
 }
 
 declare interface PolicyService: Instance {
@@ -9265,6 +9434,8 @@ declare interface RenderingTest: Instance {
 	mut timeout: number;
 	[luau_name("RenderdocTriggerCapture"), luau_method]
 	renderdoc_trigger_capture: fn: void;
+	[luau_name("TestFramesCountdownAboutToStart")]
+	event test_frames_countdown_about_to_start;
 }
 
 declare interface ReplicatedFirst: Instance {
@@ -9366,6 +9537,18 @@ declare interface ScriptDebugger: Instance {
 	set_local: fn(name: string, value: unknown, stackFrame: number?): void;
 	[luau_name("SetUpvalue"), luau_method]
 	set_upvalue: fn(name: string, value: unknown, stackFrame: number?): void;
+	[luau_name("BreakpointAdded")]
+	event breakpoint_added(breakpoint: Breakpoint);
+	[luau_name("BreakpointRemoved")]
+	event breakpoint_removed(breakpoint: Breakpoint);
+	[luau_name("EncounteredBreak")]
+	event encountered_break(line: number, breakReason: Enum["BreakReason"]);
+	[luau_name("Resuming")]
+	event resuming;
+	[luau_name("WatchAdded")]
+	event watch_added(watch: Instance);
+	[luau_name("WatchRemoved")]
+	event watch_removed(watch: Instance);
 }
 
 declare interface ScriptDebuggerService: Instance {
@@ -9390,6 +9573,8 @@ declare interface ScriptDebuggerService: Instance {
 	remove_breakpoint: fn(scriptInstance: LuaSourceContainer, line: number): bool;
 	[luau_name("SetExceptionBreakMode"), luau_method]
 	set_exception_break_mode: fn(breakMode: Enum["DebugBreakModeType"]): void;
+	[luau_name("Resumed")]
+	event resumed(threadIds: unknown[]);
 }
 
 declare interface ScriptDocument: Instance {
@@ -9427,6 +9612,10 @@ declare interface ScriptDocument: Instance {
 	request_set_selection_async: fn(cursorLine: number, cursorCharacter: number, anchorLine: number?, anchorCharacter: number?): unknown;
 	[luau_name("ReviewableTextEditsAsync"), luau_method]
 	reviewable_text_edits_async: fn(changes: unknown[]): unknown;
+	[luau_name("SelectionChanged")]
+	event selection_changed(positionLine: number, positionCharacter: number, anchorLine: number, anchorCharacter: number);
+	[luau_name("ViewportChanged")]
+	event viewport_changed(startLine: number, endLine: number);
 }
 
 declare interface ScriptEditorService: Instance {
@@ -9449,6 +9638,12 @@ declare interface ScriptEditorService: Instance {
 	open_script_document_async: fn(script: LuaSourceContainer, options: UnknownRecord?): unknown;
 	[luau_name("UpdateSourceAsync"), luau_method]
 	update_source_async: fn(script: LuaSourceContainer, callback: fn: void): void;
+	[luau_name("TextDocumentDidChange")]
+	event text_document_did_change(document: ScriptDocument, changesArray: unknown);
+	[luau_name("TextDocumentDidClose")]
+	event text_document_did_close(oldDocument: ScriptDocument);
+	[luau_name("TextDocumentDidOpen")]
+	event text_document_did_open(newDocument: ScriptDocument);
 }
 
 declare interface ScriptProfilerService: Instance {
@@ -9467,6 +9662,8 @@ declare interface ScriptProfilerService: Instance {
 	server_start: fn(frequency: number?): void;
 	[luau_name("ServerStop"), luau_method]
 	server_stop: fn: void;
+	[luau_name("OnNewData")]
+	event on_new_data(player: Player, jsonString: string);
 }
 
 declare interface ScriptRegistrationService: Instance {
@@ -9485,6 +9682,8 @@ declare interface Selection: Instance {
 	remove: fn(instancesToRemove: Instance[]): void;
 	[luau_name("Set"), luau_method]
 	set: fn(selection: Instance[]): void;
+	[luau_name("SelectionChanged")]
+	event selection_changed;
 }
 
 declare interface SensorBase: Instance;
@@ -9725,6 +9924,8 @@ declare interface StudioDeviceSimulatorService: Instance {
 	stop_simulation_async: fn: void;
 	[luau_name("UpdateDeviceAsync"), luau_method]
 	update_device_async: fn(deviceId: string, config: UnknownRecord): void;
+	[luau_name("ConfigurationChanged")]
+	event configuration_changed;
 }
 
 declare interface StudioWidget: StudioObjectBase;
@@ -10011,6 +10212,10 @@ declare interface TestService: Instance {
 	start_video_capture_async: fn(artifactName: string, options: UnknownRecord?): unknown;
 	[luau_name("StopVideoCaptureAsync"), luau_method]
 	stop_video_capture_async: fn: unknown;
+	[luau_name("ServerCollectConditionalResult")]
+	event server_collect_conditional_result(condition: bool, text: string, script: LuaSourceContainer, line: number);
+	[luau_name("ServerCollectResult")]
+	event server_collect_result(text: string, script: LuaSourceContainer, line: number);
 }
 
 declare interface TextChannel: Instance {

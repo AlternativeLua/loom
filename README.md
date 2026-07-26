@@ -1,12 +1,20 @@
 # Loom
 
-[![CI Status](https://github.com/R-unic/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/R-unic/loom/workflows)
+[![CI Status](https://github.com/rbx-loom/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/rbx-loom/loom/workflows)
 [![Coverage Status](https://coveralls.io/repos/github/R-unic/loom/badge.svg?branch=master)](https://coveralls.io/github/R-unic/loom)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](https://opensource.org/licenses/apache-2.0)
 
-**A domain-specific language for Roblox that transpiles to Luau.**
+### A domain-specific language for Roblox that transpiles to Luau.
 
-> ⚠️ This project is a work-in-progress. Nothing is final. Breaking changes may occur at any time. Expect bugs.
+<br/>
+<img width="701" height="195" alt="image" src="https://github.com/user-attachments/assets/f6c34f43-b802-459f-9b27-a3d77c2b74e5" />
+<br/>
+<br/>
+
+> ⚠️ This project is a work-in-progress.
+> - Nothing is final.
+> - Breaking changes may occur at any time.
+> - Expect bugs.
 
 ## Features
 
@@ -20,19 +28,20 @@
 - **Flow-sensitive typing** - Loom supports discriminated unions and narrowing to the correct union member based on a common property
 - **Generic functions and types** – Full support for type parameters including constraints and defaults
 - **Result pattern for errors** – Error handling uses the result pattern from Rust, no more `pcall`s. See [example](#result-pattern).
+- **Events** – Built-in user events with shorthand syntax. See [example](#events).
 - **Traits** – Define reusable behavior that interfaces can implement, enabling shared APIs and generic constraints that reflect behavior
+- **Named imports/exports** - See [example](#exports)
 - **Indices starting at one** – Same as Luau for familiarity
 - **Zero-cost abstractions** – Transpiles to idiomatic Luau with minimal overhead
-- **Batteries included** - Comes with a set of built-in compile-time macros included with data types such as [Array.join()](#arrayjoin) or [Range.clamp()](#rangeclamp)
+- **Batteries included** - Comes with a set of built-in compile-time macros included with data types such as [Array.join()](#arrayjoin)
+  or [Range.clamp()](#rangeclamp)
 
 ## Upcoming Features
 
-- `typeof`
-- `x in collection`
+- Destructuring
+- Tuple types
+- Standard libraries (math, string, buffer, etc.)
 - `defer` statements
-- Event declarations
-- Full module system (imports/exports)
-- Roblox type generator + Luau typings
 
 ---
 
@@ -894,6 +903,90 @@ function Serialize_string_for_User.serialize(self: User)
 end
 const user = setmetatable({ name = "Runic", age = 21 }, Loom.merge_meta(Serialize_string_for_User)) :: User
 print(user:serialize())
+```
+
+## typeof
+
+Inspect types of dynamic expressions.
+
+```ts
+mut my_number = 69;
+type NumberType = typeof(my_number);
+let x: NumberType = 420;
+```
+
+```luau
+local my_number = 69
+type NumberType = typeof(my_number)
+const x: NumberType = 420
+```
+
+## Events
+
+Built-in syntaxes for creating, connecting, and disconnecting.
+
+```cs
+event my_event(data: string);
+
+fn handler(data: string): void -> print(data);
+
+my_event += handler;
+my_event("hello!");
+my_event -= handler;
+```
+
+```luau
+const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
+const my_event: Loom.Event<string> = Loom.Event.new()
+
+const function handler(data: string): ()
+    return print(data)
+end
+
+const handler_conn = my_event:Connect(handler);
+my_event:Fire("hello!");
+handler_conn:Disconnect();
+```
+
+---
+
+## Exports
+
+```rs
+export let pi = 3.14;
+
+export fn square(n: number): number -> n * n;
+
+fn double(n: number): number -> n * 2;
+```
+
+```luau
+const pi = 3.14
+const function square(n: number): number
+  return n * n
+end
+const function double(n: number): number
+  return n * 2
+end
+return { pi = pi, square = square }
+```
+
+`double` is still emitted, but only the exported members (`pi`, `square`) appear in the returned table, so only they are visible to other modules.
+
+## `in` operator
+
+Check if a key/index exists within a collection
+
+```rs
+interface Object { field: number? }
+let object = new Object { field: 69 };
+print("field" in object)
+```
+
+```luau
+type Object = { field: number? }
+const object = { field = 69 }
+print(object.field ~= nil)
 ```
 
 ---

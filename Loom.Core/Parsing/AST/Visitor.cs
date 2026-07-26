@@ -21,6 +21,31 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitIf(If @if) => CombineResults([Visit(@if.Condition), Visit(@if.ThenBranch), VisitWithDefault(@if.ElseBranch)]);
     public virtual T VisitElseBranch(ElseBranch elseBranch) => Visit(elseBranch.Branch);
 
+    public virtual T VisitMatchExpression(MatchExpression matchExpression) => CombineResults([Visit(matchExpression.Expression), VisitList(matchExpression.Arms)]);
+
+    public virtual T VisitMatchArm(MatchArm matchArm) => CombineResults([Visit(matchArm.Pattern), VisitWithDefault(matchArm.Guard), Visit(matchArm.Body)]);
+
+    public virtual T VisitWildcardPattern(WildcardPattern wildcardPattern) => DefaultValue(wildcardPattern);
+    public virtual T VisitIdentifierPattern(IdentifierPattern identifierPattern) => DefaultValue(identifierPattern);
+    public virtual T VisitLiteralPattern(LiteralPattern literalPattern) => DefaultValue(literalPattern);
+    public virtual T VisitOrPattern(OrPattern orPattern) => VisitList(orPattern.Patterns);
+
+    public virtual T VisitRangePattern(RangePattern rangePattern) => CombineResults([Visit(rangePattern.Minimum), Visit(rangePattern.Maximum)]);
+
+    public virtual T VisitLetPattern(LetPattern letPattern) => DefaultValue(letPattern);
+
+    public virtual T VisitTypedPattern(TypedPattern typedPattern) => CombineResults([Visit(typedPattern.Type), VisitWithDefault(typedPattern.ObjectPattern)]);
+
+    public virtual T VisitTypePattern(TypePattern typePattern) => CombineResults([Visit(typePattern.Type), VisitWithDefault(typePattern.ObjectPattern)]);
+
+    public virtual T VisitObjectPattern(ObjectPattern objectPattern) => VisitList(objectPattern.Fields);
+    public virtual T VisitObjectPatternField(ObjectPatternField objectPatternField) => Visit(objectPatternField.Pattern);
+
+    public virtual T VisitArrayPattern(ArrayPattern arrayPattern) => CombineResults([VisitList(arrayPattern.Elements), VisitWithDefault(arrayPattern.Rest)]);
+
+    public virtual T VisitRestPattern(RestPattern restPattern) => Visit(restPattern.Pattern);
+    public virtual T VisitNullPattern(NullPattern nullPattern) => DefaultValue(nullPattern);
+
     public virtual T VisitImplementBody(ImplementBody implementBody) => VisitList(implementBody.Implementations);
     public virtual T VisitImplement(Implement implement) => CombineResults([Visit(implement.TraitName), Visit(implement.InterfaceName), Visit(implement.Body)]);
     public virtual T VisitTraitBody(TraitBody traitBody) => VisitList(traitBody.Members);
@@ -56,6 +81,16 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
         );
 
     public virtual T VisitDeclare(Declare declare) => Visit(declare.Signature);
+    public virtual T VisitExportDeclaration(ExportDeclaration export) => Visit(export.Declaration);
+
+    public virtual T VisitImportDeclaration(ImportDeclaration import) => CombineResults([VisitList(import.Specifiers), Visit(import.ModuleSpecifier)]);
+    public virtual T VisitImportSpecifier(ImportSpecifier specifier) => DefaultValue(specifier);
+
+    public virtual T VisitNamespaceImport(NamespaceImport import) => DefaultValue(import);
+
+    public virtual T VisitExportList(ExportList export) => CombineResults([VisitList(export.Specifiers), VisitWithDefault(export.ModuleSpecifier)]);
+
+    public virtual T VisitExportSpecifier(ExportSpecifier specifier) => DefaultValue(specifier);
 
     public virtual T VisitDeclareVariableSignature(DeclareVariableSignature declareVariableSignature) => VisitWithDefault(declareVariableSignature.ColonTypeClause);
 
@@ -75,6 +110,12 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
 
     public virtual T VisitEnumDeclaration(EnumDeclaration enumDeclaration) => VisitList(enumDeclaration.Members);
     public virtual T VisitEnumMember(EnumMember enumMember) => VisitWithDefault(enumMember.EqualsValueClause);
+
+    public virtual T VisitEventDeclaration(EventDeclaration eventDeclaration) =>
+        CombineResults(
+            [VisitWithDefault(eventDeclaration.TypeParameters), VisitWithDefault(eventDeclaration.Parameters), VisitWithDefault(eventDeclaration.Attributes)]
+        );
+
     public virtual T VisitParameters(Parameters parameters) => VisitList(parameters.ParameterList);
 
     public virtual T VisitParameter(Parameter parameter) =>
@@ -90,18 +131,18 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
 
     public virtual T VisitInterfaceInvocationBody(InterfaceInvocationBody interfaceInvocationBody) => VisitList(interfaceInvocationBody.Initializers);
 
-    public virtual T VisitInterfaceInvocationIndexInitializer(InterfaceInvocationIndexInitializer indexInitializer) =>
+    public virtual T VisitInterfaceInvocationIndexInitializer(IndexInitializer indexInitializer) =>
         CombineResults([Visit(indexInitializer.IndexExpression), Visit(indexInitializer.Expression)]);
 
-    public virtual T VisitInterfaceInvocationPropertyInitializer(InterfaceInvocationPropertyInitializer propertyInitializer) =>
-        Visit(propertyInitializer.Expression);
+    public virtual T VisitInterfaceInvocationPropertyInitializer(PropertyInitializer propertyInitializer) => Visit(propertyInitializer.Expression);
 
-    public virtual T VisitInterfaceInvocationShorthandPropertyInitializer(InterfaceInvocationShorthandPropertyInitializer shorthandPropertyInitializer) =>
+    public virtual T VisitInterfaceInvocationShorthandPropertyInitializer(ShorthandPropertyInitializer shorthandPropertyInitializer) =>
         Visit(shorthandPropertyInitializer.Expression);
 
     public virtual T VisitRangeLiteral(RangeLiteral rangeLiteral) => CombineResults([Visit(rangeLiteral.Minimum), Visit(rangeLiteral.Maximum)]);
     public virtual T VisitArrayLiteral(ArrayLiteral arrayLiteral) => VisitList(arrayLiteral.Expressions);
     public virtual T VisitLiteral(Literal literal) => DefaultValue(literal);
+    public virtual T VisitInterpolatedStringLiteral(InterpolatedStringLiteral interpolatedStringLiteral) => VisitList(interpolatedStringLiteral.Expressions);
     public virtual T VisitIdentifier(Identifier identifier) => DefaultValue(identifier);
     public virtual T VisitParenthesized(Parenthesized parenthesized) => Visit(parenthesized.Expression);
     public virtual T VisitNameOf(NameOf nameOf) => CombineResults([VisitWithDefault(nameOf.TypeArguments), VisitWithDefault(nameOf.Name)]);
@@ -130,6 +171,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitParenthesizedType(ParenthesizedType parenthesized) => Visit(parenthesized.Type);
     public virtual T VisitIndexedType(IndexedType indexedType) => CombineResults([Visit(indexedType.TargetType), Visit(indexedType.IndexType)]);
     public virtual T VisitKeyOf(KeyOf keyOf) => Visit(keyOf.Type);
+    public virtual T VisitTypeOf(TypeOf typeOf) => Visit(typeOf.Expression);
 
     public virtual T VisitFunctionType(FunctionType functionType) =>
         CombineResults([VisitWithDefault(functionType.TypeParameters), VisitWithDefault(functionType.Parameters), Visit(functionType.ReturnType)]);
@@ -164,10 +206,8 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
         T result = default!;
 
         foreach (var item in results)
-        {
             if (item != null)
                 result = item;
-        }
 
         return result;
     }
@@ -177,16 +217,24 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
         node is null ? default : Visit<TResult>(node);
 
     protected T? MaybeVisit(Node? node) => node is null ? default : Visit(node);
-    private T VisitWithDefault(Node? node) => MaybeVisit(node) ?? DefaultValue(node);
+
+    /// <remarks>
+    ///     Cannot be written as <c>MaybeVisit(node) ?? DefaultValue(node)</c>: when <typeparamref name="T" />
+    ///     is a value type the null coalescence never runs, so a missing node would yield
+    ///     <c>default(T)</c> instead of the visitor's default value.
+    /// </remarks>
+    private T VisitWithDefault(Node? node) => node is null ? DefaultValue(node) : MaybeVisit(node) ?? DefaultValue(node);
 
     private T VisitList<TNode>(List<TNode> nodes)
         where TNode : Node
     {
-        T result = default!;
+        if (nodes.Count == 0)
+            return DefaultValue(null);
 
-        foreach (var node in nodes)
-            result = Visit(node);
+        var results = new T?[nodes.Count];
+        for (var i = 0; i < nodes.Count; i++)
+            results[i] = Visit(nodes[i]);
 
-        return result;
+        return CombineResults(results);
     }
 }

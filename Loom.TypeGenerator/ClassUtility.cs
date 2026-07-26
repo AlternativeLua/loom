@@ -1,11 +1,13 @@
+using System.Text.Json;
 using Loom.TypeGenerator.ApiTypes;
+using ValueType = Loom.TypeGenerator.ApiTypes.ValueType;
 
 namespace Loom.TypeGenerator;
 
-using System.Text.Json;
-
 internal static class ClassUtility
 {
+    private static readonly Dictionary<MemberBase, Security> _propertySecurityCache = [];
+
     // public static string? SafePropertyType(string? valueType) =>
     //     string.IsNullOrEmpty(valueType)
     //         ? null
@@ -20,7 +22,7 @@ internal static class ClassUtility
     {
         if (rbxClass.Superclass == Constants.RootClassName)
             return false;
-        
+
         var superclass = classRefs[AssertClassName(rbxClass.Superclass, classRefs)];
         return predicate(superclass) || HasMatchingSuperclass(superclass, classRefs, predicate);
     }
@@ -29,13 +31,13 @@ internal static class ClassUtility
         HasTag(rbxClass, "Service")
         && !HasTag(rbxClass, "Hidden")
         && !Constants.ClassBlacklist.Contains(rbxClass.Name);
-    
+
     public static bool IsCreatable(Class rbxClass) =>
         !Constants.CreatableBlacklist.Contains(rbxClass.Name)
         && !HasTag(rbxClass, "NotCreatable")
         && !HasTag(rbxClass, "Service");
 
-    public static string SafeValueType(ApiTypes.ValueType valueType)
+    public static string SafeValueType(ValueType valueType)
     {
         if (valueType.Category == "Enum")
             return $"Enum[\"{valueType.Name}\"]";
@@ -48,7 +50,7 @@ internal static class ClassUtility
         return $"{Constants.ValueTypeMap.GetValueOrDefault(nonOptionalType, nonOptionalType)}?";
     }
 
-    public static string? SafeReturnType(ApiTypes.ValueType[]? valueTypes)
+    public static string? SafeReturnType(ValueType[]? valueTypes)
     {
         var typeNames = valueTypes?
             .Select(SafeValueType)
@@ -72,30 +74,33 @@ internal static class ClassUtility
 
     public static Security GetSecurity(string className, MemberBase member)
     {
-        if (!Constants.SecurityOverrides.TryGetValue(className, out var classSecurity))
-            return member.MemberType switch
-            {
-                "Callback" => new Security { Read = "NotAccessibleSecurity", Write = member.Security?.ToString()! },
-                "Function" => new Security { Read = member.Security?.ToString()!, Write = "NotAccessibleSecurity" },
-                "Event" => new Security { Read = member.Security?.ToString()!, Write = "NotAccessibleSecurity" },
-                "Property" => JsonSerializer.Deserialize<Security>(member.Security?.ToString()!)!,
-                _ => throw new NotSupportedException($"Member type not supported: {member.MemberType}")
-            };
-
-        if (member.Name != null && classSecurity!.TryGetValue(member.Name, out var securityOverride)) return securityOverride;
+        if (Constants.SecurityOverrides.TryGetValue(className, out var classSecurity)
+            && member.Name != null
+            && classSecurity!.TryGetValue(member.Name, out var securityOverride))
+            return securityOverride;
 
         return member.MemberType switch
         {
             "Callback" => new Security { Read = "NotAccessibleSecurity", Write = member.Security?.ToString()! },
             "Function" => new Security { Read = member.Security?.ToString()!, Write = "NotAccessibleSecurity" },
             "Event" => new Security { Read = member.Security?.ToString()!, Write = "NotAccessibleSecurity" },
-            "Property" => JsonSerializer.Deserialize<Security>(member.Security?.ToString()!)!,
+            "Property" => GetPropertySecurity(member),
             _ => throw new NotSupportedException($"Member type not supported: {member.MemberType}")
         };
     }
 
-    public static bool HasTag(MemberBase container, string tag) => container.Tags != null && container.Tags.Select(t => t.ToString()).Contains(tag);
-    public static bool HasTag(Class container, string tag) => container.Tags != null && container.Tags.Select(t => t.ToString()).Contains(tag);
+    private static Security GetPropertySecurity(MemberBase member)
+    {
+        if (_propertySecurityCache.TryGetValue(member, out var cached))
+            return cached;
+
+        var security = JsonSerializer.Deserialize<Security>(member.Security?.ToString()!)!;
+        _propertySecurityCache[member] = security;
+        return security;
+    }
+
+    public static bool HasTag(MemberBase container, string tag) => container.Tags != null && container.Tags.Any(t => t.ToString() == tag);
+    public static bool HasTag(Class container, string tag) => container.Tags != null && container.Tags.Any(t => t.ToString() == tag);
     public static string FormatComment(string s) => "#:\n" + string.Join('\n', s.Trim().Split('\n')) + "\n:#";
 
     public static string SafeName(string? name) =>
@@ -104,8 +109,8 @@ internal static class ClassUtility
             : ContainsBadCharacter(name)
                 ? name.Replace("\"", "\\\"")
                 : name;
-    
-    /// <summary>Returns the given <see cref="className"/> if it's in <see cref="classRefs"/>, throws if not</summary>
+
+    /// <summary>Returns the given <see cref="className" /> if it's in <see cref="classRefs" />, throws if not</summary>
     public static string AssertClassName(string className, Dictionary<string, Class> classRefs)
     {
         if (classRefs.ContainsKey(className))

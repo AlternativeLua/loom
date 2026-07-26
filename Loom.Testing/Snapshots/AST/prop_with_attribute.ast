@@ -7,7 +7,6 @@
     Members: [
       PropertyDeclaration(
         MutKeyword: null
-        Name: Token(Identifier, "some_prop")
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
@@ -53,6 +52,7 @@
             )
           ]
         )
+        Name: Token(Identifier, "some_prop")
       )
     ]
   )

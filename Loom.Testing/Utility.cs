@@ -6,6 +6,8 @@ using Loom.Core.Generation;
 using Loom.Core.Lexing;
 using Loom.Core.Parsing;
 using Loom.Core.Parsing.AST;
+using Loom.Core.Pipeline;
+using Loom.Core.Resolving;
 using Loom.Core.Text;
 using Loom.Core.TypeChecking;
 using Loom.Luau.AST;
@@ -43,20 +45,20 @@ internal static class Utility
     public static ParserResult Parse(string source) => new Parser(Tokenize(source)).Parse();
     public static DiagnosticBag GetParserDiagnostics(string source) => Parse(source).Diagnostics;
 
-    public static Core.Resolving.SemanticModel GetSemanticModel(string source, bool isDeclaration = false, bool disableRuntimeLib = true)
+    public static SemanticModel GetSemanticModel(string source, bool isDeclaration = false, bool disableRuntimeLib = true, bool debug = false)
     {
         var parserResult = Parse(source);
         if (isDeclaration)
             parserResult.Tree.File.IsDeclaration = true;
 
-        var compilationUnit = new CompilationUnit(new LoomConfig());
+        var compilationUnit = new CompilationUnit(new LoomConfig { Debug = debug });
         var semanticModel = new Resolver(parserResult, compilationUnit).Resolve();
         semanticModel.DisableRuntimeLibraryImport = disableRuntimeLib;
 
         return semanticModel;
     }
 
-    public static (FlowAnalyzerResult AnalyzerResult, Core.Resolving.SemanticModel SemanticModel, FlowAnalyzer Analyzer) FlowAnalyze(
+    public static (FlowAnalyzerResult AnalyzerResult, SemanticModel SemanticModel, FlowAnalyzer Analyzer) FlowAnalyze(
         string source,
         bool disableRuntimeLib = true)
     {
@@ -102,6 +104,48 @@ internal static class Utility
             .Select(path => new TheoryDataRow<string, string>(path, path.Replace(FileManager.LoomExtension, targetExtension)));
 
     public static SourceFile TestFile(string source) => new("test", source);
+
+    /// <summary>
+    ///     Compiles a throwaway project whose source directory holds <paramref name="files" />, keyed by path
+    ///     relative to that directory so nested modules can be written as <c>"util/init.loom"</c>.
+    /// </summary>
+    public static void WithTempProject(
+        IEnumerable<(string Path, string Source)> files,
+        Action<CompilationUnit, CompilationResult> assert,
+        string? rojoProject = null)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        var sourceDirectory = Path.Combine(directory, "src");
+        Directory.CreateDirectory(sourceDirectory);
+        try
+        {
+            File.WriteAllText(
+                Path.Combine(directory, "loom-config.toml"),
+                "project_type = \"game\"\n[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n"
+            );
+
+            if (rojoProject != null)
+                File.WriteAllText(Path.Combine(directory, RojoResolver.ProjectFileName), rojoProject);
+
+            foreach (var (path, source) in files)
+            {
+                var filePath = Path.Combine(sourceDirectory, path);
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+                File.WriteAllText(filePath, source);
+            }
+
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            var compilationUnit = new CompilationUnit(config);
+            assert(compilationUnit, compilationUnit.Compile());
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
 
     private static LexerResult Tokenize(string source) => new Lexer(TestFile(source)).Tokenize();
 }

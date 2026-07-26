@@ -1,0 +1,24 @@
+let msg = match 404 {
+    0 -> "ok",
+    404 -> "missing",
+    _ -> "other",
+};
+
+let flag = match "lava" {
+    "lava" -> true,
+    "water" -> false,
+    _ -> false,
+};
+
+let maybe = match none {
+    none -> 1,
+    _ -> 0,
+};
+
+let nested = match true {
+    true -> match 1 {
+        1 -> "one",
+        _ -> "other",
+    },
+    _ -> "no",
+};

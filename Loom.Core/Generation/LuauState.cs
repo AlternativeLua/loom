@@ -5,7 +5,7 @@ namespace Loom.Core.Generation;
 internal sealed class LuauState
 {
     public LuauScope Scope = new();
-    
+
     public Identifier PushToVariable(string name, LuauExpression expression, LuauType? type = null, bool isConst = true)
     {
         if (expression is Identifier identifier)

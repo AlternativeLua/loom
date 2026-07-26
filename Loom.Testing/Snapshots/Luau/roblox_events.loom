@@ -1,0 +1,7 @@
+let world = get_service::<Workspace>();
+let part = world.find_first_child_of_class::<Part>();
+
+fn on_touch(hit: BasePart): void -> print(hit);
+
+if part != none
+    part.touched += on_touch;

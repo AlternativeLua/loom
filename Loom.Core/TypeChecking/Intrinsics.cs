@@ -1,13 +1,16 @@
 using Loom.Config;
+using Loom.Core.Pipeline;
 using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking.Types;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
+using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.TypeChecking;
 
 public static class Intrinsics
 {
-    private static HashSet<(Symbol, Types.Type)>? _cachedIntrinsics;
+    private static HashSet<(Symbol, Type)>? _cachedIntrinsics;
     private static bool _compilingIntrinsic;
 
     public static readonly InterfaceType Range = new(
@@ -24,7 +27,7 @@ public static class Intrinsics
         )
     );
 
-    public static HashSet<(Symbol, Types.Type)> Register(SemanticModel model, CompilationUnit injectInto)
+    public static HashSet<(Symbol, Type)> Register(SemanticModel model, CompilationUnit injectInto)
     {
         _cachedIntrinsics ??= CompileIntrinsics(injectInto);
 
@@ -34,7 +37,7 @@ public static class Intrinsics
         return _cachedIntrinsics;
     }
 
-    private static HashSet<(Symbol, Types.Type)> CompileIntrinsics(CompilationUnit injectInto)
+    private static HashSet<(Symbol, Type)> CompileIntrinsics(CompilationUnit injectInto)
     {
         if (_compilingIntrinsic) return [];
         _compilingIntrinsic = true;
@@ -48,18 +51,20 @@ public static class Intrinsics
         var compilationUnit = new CompilationUnit(loomConfig);
         var compiledFiles = compilationUnit.SourceFiles
             .Where(file =>
-            {
-                file.IsIntrinsic = true;
-                
-                if (injectInto.Config.ProjectType != ProjectType.Plugin && file.Name == "PluginSecurity.loom")
-                    return false;
-                
-                return injectInto.Config.ProjectType != ProjectType.Plugin || file.Name != "None.loom";
-            })
+                {
+                    file.IsIntrinsic = true;
+
+                    var projectType = injectInto.Config.ProjectType;
+                    if (projectType != ProjectType.Plugin && file.Name == "PluginSecurity.loom")
+                        return false;
+
+                    return projectType != ProjectType.Plugin || file.Name != "None.loom";
+                }
+            )
             .Select(compilationUnit.Compile)
             .ToArray();
 
-        var intrinsicSymbols = new HashSet<(Symbol, Types.Type)>();
+        var intrinsicSymbols = new HashSet<(Symbol, Type)>();
         foreach (var compiledFile in compiledFiles)
         {
             var symbols = compiledFile.Tree.Statements.SelectMany(statement => compiledFile.SemanticModel.GetDeclarationSymbols(statement));

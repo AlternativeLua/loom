@@ -6,7 +6,6 @@ public enum SyntaxKind : ushort
     Semicolon,
     Comment,
     BlockComment,
-
     Plus,
     PlusEquals,
     Minus,
@@ -60,17 +59,20 @@ public enum SyntaxKind : ushort
     DotDot,
     ColonColonLArrow,
     Arrow,
-
     NumberLiteral,
     StringLiteral,
     TrueLiteral,
     FalseLiteral,
     NoneLiteral,
-
+    InterpolatedStringStart,
+    InterpolatedStringText,
+    InterpolatedStringEnd,
     LetKeyword,
     MutKeyword,
     TypeKeyword,
     InterfaceKeyword,
+    ExportKeyword,
+    ImportKeyword,
     FnKeyword,
     ReturnKeyword,
     ContinueKeyword,
@@ -86,13 +88,15 @@ public enum SyntaxKind : ushort
     InKeyword,
     KeyOfKeyword,
     NameOfKeyword,
+    TypeOfKeyword,
     DeclareKeyword,
     AsKeyword,
     NewKeyword,
     SealedKeyword,
     TraitKeyword,
     ImplementKeyword,
-
+    MatchKeyword,
+    WhenKeyword,
     Identifier,
     Eof
 }

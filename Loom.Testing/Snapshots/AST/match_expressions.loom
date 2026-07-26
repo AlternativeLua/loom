@@ -1,0 +1,41 @@
+match x {
+    _ -> 0
+}
+match result {
+    { ok: true, value: v } -> v,
+    { ok: false, error: e } -> e,
+}
+match tag {
+    "lava" -> 1,
+    "something" -> 2,
+    other -> 3,
+}
+let x = match n {
+    0 -> "zero",
+    _ -> "other",
+}
+match value {
+    { value } -> value,
+}
+match n {
+    2 | 3 | 4 -> true,
+    _ -> false,
+}
+match n {
+    0..5 | 10..15 | 100 -> true,
+    _ -> false,
+}
+match value {
+    Foo { some_field: name when string } -> name,
+    Foo { some_field: let name } -> name,
+    n when n > 0 -> n,
+}
+match value {
+    s when string -> s,
+    f when Foo { some_field: let n, other: name when string } -> n,
+    f when Foo { some_field: let n } when n > 0 -> n,
+}
+match xs {
+    [a, b, c] -> a,
+    [head, ..rest] -> head,
+}

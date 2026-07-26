@@ -32,7 +32,7 @@ public class LuauRenderingTest
             statement.Render()
         );
     }
-    
+
     [Fact]
     public void Renders_Simple_IfStatement_Continue()
     {
@@ -155,6 +155,20 @@ public class LuauRenderingTest
 
     [Fact]
     public void Renders_TypeAlias() => Assert.Equal("type A = boolean", new TypeAlias("A", new TypeParameters(), PrimitiveType.Boolean).Render());
+
+    [Fact]
+    public void Renders_TypeAlias_Exported() =>
+        Assert.Equal(
+            "export type A = boolean",
+            new TypeAlias("A", new TypeParameters(), PrimitiveType.Boolean) { IsExported = true }.Render()
+        );
+
+    [Fact]
+    public void Renders_TypeAlias_ExportedGeneric()
+    {
+        var typeParameters = new TypeParameters([new TypeParameter("T")]);
+        Assert.Equal("export type Id<T> = T", new TypeAlias("Id", typeParameters, new TypeName("T")) { IsExported = true }.Render());
+    }
 
     [Fact]
     public void Renders_ForStatement()
@@ -390,7 +404,7 @@ public class LuauRenderingTest
 
         Assert.Equal("(a + b).foo.bar", access.Render());
     }
-    
+
     [Fact]
     public void Renders_PropertyAccess_SingleName_DefaultDot()
     {
@@ -447,6 +461,27 @@ public class LuauRenderingTest
         ) { Operator = ':' };
 
         Assert.Equal("abc.foo.bar:baz", access.Render());
+    }
+
+    [Fact]
+    public void Renders_PropertyAccess_KeywordName_AsBracketAccess()
+    {
+        var access = new PropertyAccess(new Identifier("obj"), ["end"]);
+        Assert.Equal("obj[\"end\"]", access.Render());
+    }
+
+    [Fact]
+    public void Renders_PropertyAccess_KeywordName_InMiddleOfChain()
+    {
+        var access = new PropertyAccess(new Identifier("obj"), ["a", "repeat", "c"]);
+        Assert.Equal("obj.a[\"repeat\"].c", access.Render());
+    }
+
+    [Fact]
+    public void Renders_PropertyAccess_NonKeywordName_Unaffected()
+    {
+        var access = new PropertyAccess(new Identifier("obj"), ["endpoint"]);
+        Assert.Equal("obj.endpoint", access.Render());
     }
 
     [Fact]
@@ -731,20 +766,41 @@ public class LuauRenderingTest
     public void Renders_StringLiteral() => Assert.Equal($"{RenderState.StringDelimiter}abc{RenderState.StringDelimiter}", new StringLiteral("abc").Render());
 
     [Fact]
-    public void Renders_StringLiteral_EscapesBackslash() =>
-        Assert.Equal("\"a\\\\b\"", new StringLiteral("a\\b").Render());
+    public void Renders_StringLiteral_EscapesBackslash() => Assert.Equal("\"a\\\\b\"", new StringLiteral("a\\b").Render());
 
     [Fact]
-    public void Renders_StringLiteral_EscapesDelimiter() =>
-        Assert.Equal("\"say \\\"hi\\\"\"", new StringLiteral("say \"hi\"").Render());
+    public void Renders_StringLiteral_EscapesDelimiter() => Assert.Equal("\"say \\\"hi\\\"\"", new StringLiteral("say \"hi\"").Render());
 
     [Fact]
     public void Renders_MultilineString_LeadingNewlineIsPreserved()
     {
-        // Long-bracket strings swallow a single newline right after the opening bracket,
-        // so an extra leading newline must be emitted to preserve a value starting with '\n'.
         var literal = new StringLiteral("\nabc");
         Assert.Equal("[[\n\nabc]]", literal.Render());
+    }
+
+    [Fact]
+    public void Renders_InterpolatedString()
+    {
+        var interpolated = new InterpolatedString(
+            [new InterpolatedStringTextSegment("Welcome, "), new InterpolatedStringExpressionSegment(new Identifier("name")), new InterpolatedStringTextSegment("!")]
+        );
+
+        Assert.Equal("`Welcome, {name}!`", interpolated.Render());
+    }
+
+    [Fact]
+    public void Renders_InterpolatedString_Empty() => Assert.Equal("``", new InterpolatedString([]).Render());
+
+    [Fact]
+    public void Renders_InterpolatedString_EscapesBacktick() =>
+        Assert.Equal("`say \\`hi\\``", new InterpolatedString([new InterpolatedStringTextSegment("say `hi`")]).Render());
+
+    [Fact]
+    public void Renders_InterpolatedString_ParenthesizesAmbiguousHoleExpression()
+    {
+        var interpolated = new InterpolatedString([new InterpolatedStringExpressionSegment(new BinaryOperator(new NumberLiteral(1), "+", new NumberLiteral(2)))]);
+
+        Assert.Equal("`{(1 + 2)}`", interpolated.Render());
     }
 
     [Theory]

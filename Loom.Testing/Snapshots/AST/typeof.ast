@@ -1,0 +1,81 @@
+﻿VariableDeclaration(
+  EqualsValueClause: null
+  ColonTypeClause(
+    ColonToken: Token(Colon, ":")
+    Type: TypeOf(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Expression: Identifier(
+        Name: Token(Identifier, "a")
+        Token(Identifier, "a")
+      )
+    )
+  )
+  Name: Token(Identifier, "x")
+)
+VariableDeclaration(
+  EqualsValueClause: null
+  ColonTypeClause(
+    ColonToken: Token(Colon, ":")
+    Type: TypeOf(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Expression: QualifiedName(
+        Identifier(
+          Name: Token(Identifier, "a")
+          Token(Identifier, "a")
+        )
+        Names: [
+          DotName(
+            Dot: Token(Dot, ".")
+            Name: Token(Identifier, "b")
+          )
+        ]
+        Token(Identifier, "a")
+      )
+    )
+  )
+  Name: Token(Identifier, "x")
+)
+VariableDeclaration(
+  EqualsValueClause: null
+  ColonTypeClause(
+    ColonToken: Token(Colon, ":")
+    Type: TypeOf(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Expression: BinaryOperator(
+        Operator: Token(Plus, "+")
+        Left: Identifier(
+          Name: Token(Identifier, "a")
+          Token(Identifier, "a")
+        )
+        Right: Literal(
+          Token(NumberLiteral, "1")
+          Value: 1
+        )
+      )
+    )
+  )
+  Name: Token(Identifier, "x")
+)
+VariableDeclaration(
+  EqualsValueClause: null
+  ColonTypeClause(
+    ColonToken: Token(Colon, ":")
+    Type: ArrayType(
+      ElementType: TypeOf(
+        LeftParen: Token(LParen, "(")
+        RightParen: Token(RParen, ")")
+        Expression: Identifier(
+          Name: Token(Identifier, "a")
+          Token(Identifier, "a")
+        )
+      )
+      LeftBracket: Token(LBracket, "[")
+      MutKeyword: null
+      RightBracket: Token(RBracket, "]")
+    )
+  )
+  Name: Token(Identifier, "x")
+)

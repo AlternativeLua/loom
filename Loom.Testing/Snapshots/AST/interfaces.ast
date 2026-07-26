@@ -18,7 +18,6 @@ InterfaceDeclaration(
     Members: [
       PropertyDeclaration(
         MutKeyword: null
-        Name: Token(Identifier, "x")
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
@@ -26,10 +25,10 @@ InterfaceDeclaration(
           )
         )
         Attributes: null
+        Name: Token(Identifier, "x")
       )
       PropertyDeclaration(
         MutKeyword: null
-        Name: Token(Identifier, "y")
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
@@ -37,6 +36,7 @@ InterfaceDeclaration(
           )
         )
         Attributes: null
+        Name: Token(Identifier, "y")
       )
     ]
   )
@@ -52,7 +52,6 @@ InterfaceDeclaration(
     Members: [
       PropertyDeclaration(
         MutKeyword: Token(MutKeyword, "mut")
-        Name: Token(Identifier, "count")
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
@@ -60,6 +59,7 @@ InterfaceDeclaration(
           )
         )
         Attributes: null
+        Name: Token(Identifier, "count")
       )
     ]
   )
@@ -127,7 +127,6 @@ InterfaceDeclaration(
     Members: [
       PropertyDeclaration(
         MutKeyword: null
-        Name: Token(Identifier, "x")
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
@@ -135,6 +134,7 @@ InterfaceDeclaration(
           )
         )
         Attributes: null
+        Name: Token(Identifier, "x")
       )
       IndexerDeclaration(
         MutKeyword: null
@@ -164,7 +164,6 @@ InterfaceDeclaration(
     Members: [
       PropertyDeclaration(
         MutKeyword: null
-        Name: Token(Identifier, "value")
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: TypeName(
@@ -173,6 +172,7 @@ InterfaceDeclaration(
           )
         )
         Attributes: null
+        Name: Token(Identifier, "value")
       )
     ]
   )

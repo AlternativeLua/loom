@@ -1,16 +1,23 @@
 using System.Diagnostics.CodeAnalysis;
+using Loom.Core.Parsing.AST;
+using Loom.Core.Resolving;
 using Loom.Core.TypeChecking;
 using Loom.Luau;
 using Loom.Luau.AST;
+using BinaryOperator = Loom.Luau.AST.BinaryOperator;
+using ElementAccess = Loom.Luau.AST.ElementAccess;
+using Parenthesized = Loom.Luau.AST.Parenthesized;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
+using PropertyAccess = Loom.Luau.AST.PropertyAccess;
 using Type = Loom.Core.TypeChecking.Types.Type;
+using UnaryOperator = Loom.Luau.AST.UnaryOperator;
 
 namespace Loom.Core.Generation.Macros.Providers;
 
 internal sealed class RangeMacroProvider : IMacroProvider
 {
-    public bool Supports(MacroContext _, Type type) => type.Equals(Intrinsics.Range);
-    public bool Supports(MacroContext _, Parsing.AST.Expression __) => false;
+    public bool Supports(SemanticModel _, Type type) => type.Equals(Intrinsics.Range);
+    public bool Supports(SemanticModel _, Expression __) => false;
 
     public bool IsInvocationOnlyMember(string memberName) => memberName is "clamp";
 
@@ -44,7 +51,7 @@ internal sealed class RangeMacroProvider : IMacroProvider
     public bool TryInvocation(
         MacroContext context,
         string name,
-        Parsing.AST.TypeArguments? typeArguments,
+        TypeArguments? typeArguments,
         Call call,
         [MaybeNullWhen(false)] out LuauExpression expression)
     {

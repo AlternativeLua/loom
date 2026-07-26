@@ -6,5 +6,5 @@ public enum ResolverContext : byte
     Function,
     Loop,
     Scheduler,
-    Declaration
+    Ambient
 }

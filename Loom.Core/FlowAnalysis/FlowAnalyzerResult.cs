@@ -2,5 +2,5 @@ using Loom.Core.Diagnostics;
 
 namespace Loom.Core.FlowAnalysis;
 
-public sealed record FlowAnalyzerResult(FlowState FlowState, DiagnosticBag Diagnostics)
+public sealed record FlowAnalyzerResult(DiagnosticBag Diagnostics)
     : DiagnosedResult(Diagnostics);

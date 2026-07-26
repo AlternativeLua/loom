@@ -4,7 +4,6 @@ using Loom.Core.Parsing;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Core.Text;
-using Loom.Core.TypeChecking.Types;
 using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -14,10 +13,9 @@ namespace Loom.Core.TypeChecking;
 
 public sealed class TypeNarrower
 {
-    public sealed record BranchStates(FlowState True, FlowState False);
+    private readonly SemanticModel _semanticModel;
 
     private readonly Literal _trueLiteral = new(TokenFactory.Keyword(SyntaxKind.TrueLiteral), true);
-    private readonly SemanticModel _semanticModel;
 
     public TypeNarrower(SemanticModel semanticModel)
     {
@@ -60,11 +58,19 @@ public sealed class TypeNarrower
     {
         var type = GetBaseExpressionType(expression, current);
         if (type == null || !type.IsAssignableTo(PrimitiveType.Bool))
-            return new BranchStates(current, current); // no narrowing info added - safe to share the same instance
+            return new BranchStates(current, current);
 
         var trueBuilder = current.ToBuilder();
         var falseBuilder = current.ToBuilder();
-        ApplyBinaryNarrowing(expression, _trueLiteral, SyntaxKind.EqualsEquals, current, trueBuilder, falseBuilder);
+        ApplyBinaryNarrowing(
+            expression,
+            _trueLiteral,
+            SyntaxKind.EqualsEquals,
+            current,
+            trueBuilder,
+            falseBuilder
+        );
+
         return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
     }
 
@@ -72,13 +78,19 @@ public sealed class TypeNarrower
     {
         if (!TryGetExpressionAndLiteral(binaryOperator.Left, binaryOperator.Right, out var expression, out var literal)
             && !TryGetExpressionAndLiteral(binaryOperator.Right, binaryOperator.Left, out expression, out literal))
-        {
             return new BranchStates(current, current);
-        }
 
         var trueBuilder = current.ToBuilder();
         var falseBuilder = current.ToBuilder();
-        ApplyBinaryNarrowing(expression, literal, binaryOperator.Operator.Kind, current, trueBuilder, falseBuilder);
+        ApplyBinaryNarrowing(
+            expression,
+            literal,
+            binaryOperator.Operator.Kind,
+            current,
+            trueBuilder,
+            falseBuilder
+        );
+
         return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
     }
 
@@ -86,7 +98,7 @@ public sealed class TypeNarrower
     {
         var (leftTrue, leftFalse) = ComputeBranchStates(andOp.Left, current);
         var (rightTrue, _) = ComputeBranchStates(andOp.Right, leftTrue);
-        var falseState = MergeStates(leftFalse, ApplyBranchState(andOp.Right, leftTrue, useTrue: false));
+        var falseState = MergeStates(leftFalse, ApplyBranchState(andOp.Right, leftTrue, false));
         return new BranchStates(rightTrue, falseState);
     }
 
@@ -94,7 +106,7 @@ public sealed class TypeNarrower
     {
         var (leftTrue, leftFalse) = ComputeBranchStates(orOp.Left, current);
         var (_, rightFalse) = ComputeBranchStates(orOp.Right, leftFalse);
-        var trueState = MergeStates(leftTrue, ApplyBranchState(orOp.Right, leftFalse, useTrue: true));
+        var trueState = MergeStates(leftTrue, ApplyBranchState(orOp.Right, leftFalse, true));
         return new BranchStates(trueState, rightFalse);
     }
 
@@ -138,10 +150,10 @@ public sealed class TypeNarrower
         return address switch
         {
             { Parent: not null, FieldName: not null } => ResolveEffectiveType(address.Parent, state) is { } parentType
-                ? GetMemberPropertyType(parentType, address.FieldName)
+                ? TypeSimplifier.GetMemberPropertyType(parentType, address.FieldName)
                 : null,
             { Parent: not null, ElementIndex: not null } => ResolveEffectiveType(address.Parent, state) is { } parentType
-                ? GetMemberElementType(parentType, new LiteralType(address.ElementIndex))
+                ? TypeSimplifier.GetMemberElementType(parentType, new LiteralType(address.ElementIndex))
                 : null,
             _ => null
         };
@@ -231,33 +243,12 @@ public sealed class TypeNarrower
             }
         }
 
-        if (isNone)
-        {
-            if (isEquals)
-            {
-                trueState.NarrowedTypes[address] = literalType;
-                falseState.NarrowedTypes[address] = baseType.NonNullable();
-            }
-            else
-            {
-                trueState.NarrowedTypes[address] = baseType.NonNullable();
-                falseState.NarrowedTypes[address] = literalType;
-            }
-        }
-        else
-        {
-            if (isEquals)
-            {
-                trueState.NarrowedTypes[address] = literalType;
-                falseState.NarrowedTypes[address] = RemoveType(baseType, literalType);
-            }
-            else
-            {
-                trueState.NarrowedTypes[address] = RemoveType(baseType, literalType);
-                falseState.NarrowedTypes[address] = literalType;
-            }
-        }
+        var otherType = isNone ? baseType.NonNullable() : RemoveType(baseType, literalType);
+        (trueState.NarrowedTypes[address], falseState.NarrowedTypes[address]) = AssignNarrowed(isEquals, literalType, otherType);
     }
+
+    private static (Type True, Type False) AssignNarrowed(bool isEquals, Type whenEqual, Type whenNotEqual) =>
+        isEquals ? (whenEqual, whenNotEqual) : (whenNotEqual, whenEqual);
 
     private void NarrowBaseByProperty(
         Expression baseExpression,
@@ -284,7 +275,7 @@ public sealed class TypeNarrower
             var nextAddress = FlowAddress.Field(unionAddress, name);
             currentType = currentState.NarrowedTypes.TryGetValue(nextAddress, out var narrowedStep)
                 ? narrowedStep
-                : GetMemberPropertyType(currentType, name);
+                : TypeSimplifier.GetMemberPropertyType(currentType, name);
 
             if (currentType == null) return;
             unionAddress = nextAddress;
@@ -312,18 +303,9 @@ public sealed class TypeNarrower
                 falseMembers.Add(member);
         }
 
-        var trueBaseType = BuildUnionOrNever(trueMembers);
-        var falseBaseType = BuildUnionOrNever(falseMembers);
-        if (isEquals)
-        {
-            trueState.NarrowedTypes[unionAddress] = TypeSimplifier.Simplify(trueBaseType);
-            falseState.NarrowedTypes[unionAddress] = TypeSimplifier.Simplify(falseBaseType);
-        }
-        else
-        {
-            trueState.NarrowedTypes[unionAddress] = TypeSimplifier.Simplify(falseBaseType);
-            falseState.NarrowedTypes[unionAddress] = TypeSimplifier.Simplify(trueBaseType);
-        }
+        var trueBaseType = TypeSimplifier.Simplify(BuildUnionOrNever(trueMembers));
+        var falseBaseType = TypeSimplifier.Simplify(BuildUnionOrNever(falseMembers));
+        (trueState.NarrowedTypes[unionAddress], falseState.NarrowedTypes[unionAddress]) = AssignNarrowed(isEquals, trueBaseType, falseBaseType);
     }
 
     private void NarrowBaseByElement(
@@ -345,7 +327,7 @@ public sealed class TypeNarrower
         var falseMembers = new List<Type>();
         foreach (var member in union.Types)
         {
-            var elementType = GetMemberElementType(member, indexType);
+            var elementType = TypeSimplifier.GetMemberElementType(member, indexType);
             if (elementType == null) continue;
 
             if (elementType.IsAssignableTo(literalType) && literalType.IsAssignableTo(elementType))
@@ -354,18 +336,9 @@ public sealed class TypeNarrower
                 falseMembers.Add(member);
         }
 
-        var trueBaseType = BuildUnionOrNever(trueMembers);
-        var falseBaseType = BuildUnionOrNever(falseMembers);
-        if (isEquals)
-        {
-            trueState.NarrowedTypes[baseAddress] = TypeSimplifier.Simplify(trueBaseType);
-            falseState.NarrowedTypes[baseAddress] = TypeSimplifier.Simplify(falseBaseType);
-        }
-        else
-        {
-            trueState.NarrowedTypes[baseAddress] = TypeSimplifier.Simplify(falseBaseType);
-            falseState.NarrowedTypes[baseAddress] = TypeSimplifier.Simplify(trueBaseType);
-        }
+        var trueBaseType = TypeSimplifier.Simplify(BuildUnionOrNever(trueMembers));
+        var falseBaseType = TypeSimplifier.Simplify(BuildUnionOrNever(falseMembers));
+        (trueState.NarrowedTypes[baseAddress], falseState.NarrowedTypes[baseAddress]) = AssignNarrowed(isEquals, trueBaseType, falseBaseType);
     }
 
     private Type? GetBaseExpressionType(Expression expression, FlowState currentState)
@@ -401,7 +374,7 @@ public sealed class TypeNarrower
                     return null;
 
                 var indexType = _semanticModel.GetType(element.IndexExpression);
-                return GetMemberElementType(parent, indexType);
+                return TypeSimplifier.GetMemberElementType(parent, indexType);
             }
 
             default:
@@ -453,74 +426,12 @@ public sealed class TypeNarrower
         var final = type;
         foreach (var part in path)
         {
-            final = GetMemberPropertyType(final, part);
+            final = TypeSimplifier.GetMemberPropertyType(final, part);
             if (final == null)
                 return null;
         }
 
         return final;
-    }
-
-    private static Type? GetMemberPropertyType(Type member, string propertyName)
-    {
-        if (member is InstantiatedType instantiated)
-            member = instantiated.Expand();
-
-        switch (member)
-        {
-            case UnionType union:
-            {
-                var members = union.Types
-                    .Select(t => GetMemberPropertyType(t, propertyName))
-                    .Where(t => t != null)
-                    .Cast<Type>()
-                    .ToList();
-
-                return members.Count switch
-                {
-                    0 => null,
-                    1 => members[0],
-                    _ => TypeSimplifier.Simplify(new UnionType(members))
-                };
-            }
-
-            case NativelyIndexableType indexableType:
-                var property = indexableType.GetProperty(propertyName);
-                return property?.ValueType;
-        }
-
-        return null;
-    }
-
-    private static Type? GetMemberElementType(Type member, Type indexType)
-    {
-        if (member is InstantiatedType instantiated)
-            member = instantiated.Expand();
-
-        switch (member)
-        {
-            case UnionType union:
-            {
-                var members = union.Types
-                    .Select(t => GetMemberElementType(t, indexType))
-                    .Where(t => t != null)
-                    .Cast<Type>()
-                    .ToList();
-
-                return members.Count switch
-                {
-                    0 => null,
-                    1 => members[0],
-                    _ => TypeSimplifier.Simplify(new UnionType(members))
-                };
-            }
-
-            case NativelyIndexableType indexableType:
-                var result = indexableType.GetTypeAtIndex(indexType);
-                return result.BodyType?.ValueType;
-        }
-
-        return null;
     }
 
     private static Type BuildUnionOrNever(List<Type> types) =>
@@ -585,4 +496,6 @@ public sealed class TypeNarrower
         var symbol = _semanticModel.GetSymbol(identifier);
         return symbol != null ? FlowAddress.Variable(symbol) : null;
     }
+
+    public sealed record BranchStates(FlowState True, FlowState False);
 }

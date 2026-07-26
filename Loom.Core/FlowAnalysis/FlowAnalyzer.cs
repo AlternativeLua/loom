@@ -1,6 +1,7 @@
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
 
 namespace Loom.Core.FlowAnalysis;
@@ -12,7 +13,12 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
     private readonly Dictionary<Node, FlowState> _states = [];
 
     public FlowState GetState(Node node) => _states.TryGetValue(node, out var existingState) ? existingState : FlowState.Empty;
-    public FlowAnalyzerResult Analyze() => new(BindState(semanticModel.Tree, AnalyzeStatements(semanticModel.Tree.Statements, new FlowState())), _diagnostics);
+
+    public FlowAnalyzerResult Analyze()
+    {
+        BindState(semanticModel.Tree, AnalyzeStatements(semanticModel.Tree.Statements, new FlowState()));
+        return new FlowAnalyzerResult(_diagnostics);
+    }
 
     private FlowState AnalyzeStatements(IReadOnlyList<Statement> statements, FlowState state) =>
         statements.Aggregate(state, (current, statement) => AnalyzeStatement(statement, current));
@@ -24,7 +30,9 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
             Block block => AnalyzeBlock(block, state),
             VariableDeclaration variableDeclaration => AnalyzeVariableDeclaration(variableDeclaration, state),
             FunctionDeclaration functionDeclaration => AnalyzeFunctionDeclaration(functionDeclaration, state),
+            EventDeclaration eventDeclaration => AnalyzeEventDeclaration(eventDeclaration, state),
             InterfaceDeclaration interfaceDeclaration => AnalyzeInterfaceDeclaration(interfaceDeclaration, state),
+            EnumDeclaration enumDeclaration => AnalyzeEnumDeclaration(enumDeclaration, state),
             Implement implement => AnalyzeImplement(implement, state),
             Return @return => AnalyzeReturn(@return, state),
             Break @break => AnalyzeBreak(@break, state),
@@ -46,13 +54,91 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
     private FlowState AnalyzeUnhandledStatement(Statement statement, FlowState state, out FlowState exitState)
     {
         foreach (var child in statement.Children)
-        {
             if (child is Statement childStatement)
                 state = AnalyzeStatement(childStatement, state);
-        }
 
         exitState = state;
         return state;
+    }
+
+    private FlowState AnalyzeExpression(Expression expression, FlowState state)
+    {
+        BindState(expression, state);
+        return expression switch
+        {
+            AssignmentOperator assignmentOperator => AnalyzeAssignment(assignmentOperator, state),
+            Identifier identifier => AnalyzeIdentifier(identifier, state),
+            MatchExpression matchExpression => AnalyzeMatchExpression(matchExpression, state),
+            _ => AnalyzeUnhandledExpression(expression, state)
+        };
+    }
+
+    private FlowState AnalyzeUnhandledExpression(Expression expression, FlowState state) =>
+        expression.Children.Aggregate(state, (current, child) => AnalyzeExpression(child, current));
+
+    private FlowState AnalyzeMatchExpression(MatchExpression matchExpression, FlowState state)
+    {
+        var afterScrutinee = AnalyzeExpression(matchExpression.Expression, state);
+        if (matchExpression.Arms.Count == 0)
+            return BindState(matchExpression, afterScrutinee);
+
+        FlowState? merged = null;
+        foreach (var arm in matchExpression.Arms)
+        {
+            var armState = AnalyzeMatchArm(arm, new FlowState(afterScrutinee));
+            merged = merged == null ? armState : merged.Merge(armState);
+        }
+
+        return BindState(matchExpression, merged!);
+    }
+
+    private FlowState AnalyzeMatchArm(MatchArm matchArm, FlowState state)
+    {
+        var armState = MarkPatternBindingsInitialized(matchArm.Pattern, state);
+        if (matchArm.Guard != null)
+            armState = AnalyzeExpression(matchArm.Guard, armState);
+
+        armState = AnalyzeExpression(matchArm.Body, armState);
+        return BindState(matchArm, armState);
+    }
+
+    private FlowState MarkPatternBindingsInitialized(Pattern pattern, FlowState state) => state.WithInitialized(CollectPatternBindingSymbols(pattern));
+
+    private IEnumerable<Symbol> CollectPatternBindingSymbols(Pattern pattern) =>
+        pattern switch
+        {
+            IdentifierPattern or LetPattern =>
+                semanticModel.GetDeclarationSymbol(pattern) is { } binding ? [binding] : [],
+            TypedPattern typedPattern =>
+                CollectTypedPatternBindingSymbols(typedPattern),
+            TypePattern { ObjectPattern: not null } typePattern =>
+                CollectPatternBindingSymbols(typePattern.ObjectPattern),
+            ObjectPattern objectPattern =>
+                objectPattern.Fields.SelectMany(field => CollectPatternBindingSymbols(field.Pattern)),
+            ArrayPattern arrayPattern =>
+                arrayPattern.Elements
+                    .SelectMany(CollectPatternBindingSymbols)
+                    .Concat(arrayPattern.Rest != null ? CollectPatternBindingSymbols(arrayPattern.Rest) : []),
+            RestPattern restPattern =>
+                CollectPatternBindingSymbols(restPattern.Pattern),
+            OrPattern orPattern =>
+                orPattern.Patterns.SelectMany(CollectPatternBindingSymbols),
+            RangePattern rangePattern =>
+                CollectPatternBindingSymbols(rangePattern.Minimum)
+                    .Concat(CollectPatternBindingSymbols(rangePattern.Maximum)),
+            _ => []
+        };
+
+    private IEnumerable<Symbol> CollectTypedPatternBindingSymbols(TypedPattern typedPattern)
+    {
+        if (semanticModel.GetDeclarationSymbol(typedPattern) is { } typedBinding)
+            yield return typedBinding;
+
+        if (typedPattern.ObjectPattern == null)
+            yield break;
+
+        foreach (var symbol in CollectPatternBindingSymbols(typedPattern.ObjectPattern))
+            yield return symbol;
     }
 
     private FlowState AnalyzeImplement(Implement implement, FlowState state)
@@ -68,26 +154,28 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         return AnalyzeStatement(implement.Body, bodyState);
     }
 
-    private FlowState AnalyzeExpression(Expression expression, FlowState state)
-    {
-        BindState(expression, state);
-        return expression switch
-        {
-            AssignmentOperator assignmentOperator => AnalyzeAssignment(assignmentOperator, state),
-            Identifier identifier => AnalyzeIdentifier(identifier, state),
-            _ => AnalyzeUnhandledExpression(expression, state)
-        };
-    }
-
-    private FlowState AnalyzeUnhandledExpression(Expression expression, FlowState state) =>
-        expression.Children.Aggregate(state, (current, child) => AnalyzeExpression(child, current));
-
     private FlowState AnalyzeBlock(Block block, FlowState state) => BindState(block, AnalyzeStatements(block.Statements, state));
+
+    private FlowState AnalyzeEventDeclaration(EventDeclaration eventDeclaration, FlowState state) =>
+        BindState(
+            eventDeclaration,
+            semanticModel.GetDeclarationSymbol(eventDeclaration, SymbolKind.Event) is { } symbol
+                ? state.WithInitialized(symbol)
+                : state
+        );
 
     private FlowState AnalyzeInterfaceDeclaration(InterfaceDeclaration interfaceDeclaration, FlowState state) =>
         BindState(
             interfaceDeclaration,
             semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Variable) is { } symbol
+                ? state.WithInitialized(symbol)
+                : state
+        );
+
+    private FlowState AnalyzeEnumDeclaration(EnumDeclaration enumDeclaration, FlowState state) =>
+        BindState(
+            enumDeclaration,
+            semanticModel.GetDeclarationSymbol(enumDeclaration, SymbolKind.Variable) is { } symbol
                 ? state.WithInitialized(symbol)
                 : state
         );
@@ -202,6 +290,8 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
     private void CheckReassignment(AssignmentOperator assignment, Identifier identifier, Symbol symbol)
     {
         if (symbol.IsMutable) return;
+        if (symbol.Kind == SymbolKind.Event && assignment.Operator.Kind is SyntaxKind.PlusEquals or SyntaxKind.MinusEquals) return;
+
         _diagnostics.Error(
             assignment,
             InternalCodes.AssignToImmutable,
@@ -215,12 +305,11 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         var symbol = semanticModel.GetSymbol(identifier);
         if (symbol is null
             || symbol.IsIntrinsic
+            || semanticModel.IsImported(symbol)
             || symbol.Declaration.FirstAncestorOfType<Declare>() is not null
             || symbol is { IsValueSymbol: false }
             || state.DefinitelyInitialized.Contains(symbol))
-        {
             return BindState(identifier, state);
-        }
 
         if (state.MaybeInitialized.Contains(symbol))
             _diagnostics.Error(identifier, InternalCodes.UseOfMaybeUninitialized, $"Variable '{symbol.Name}' might not be initialized on this path.");

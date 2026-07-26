@@ -10,6 +10,8 @@ public sealed partial class Parser
     private Dictionary<SyntaxKind, StatementParser> StatementParsers =>
         field ??= new Dictionary<SyntaxKind, StatementParser>
         {
+            [SyntaxKind.ExportKeyword] = ParseExport,
+            [SyntaxKind.ImportKeyword] = ParseImport,
             [SyntaxKind.LBrace] = ParseBlock,
             [SyntaxKind.ReturnKeyword] = ParseReturn,
             [SyntaxKind.FnKeyword] = ParseFunctionDeclaration,
@@ -17,6 +19,7 @@ public sealed partial class Parser
             [SyntaxKind.MutKeyword] = ParseVariableDeclaration,
             [SyntaxKind.TypeKeyword] = ParseTypeAlias,
             [SyntaxKind.EnumKeyword] = ParseEnumDeclaration,
+            [SyntaxKind.EventKeyword] = keyword => ParseEventDeclaration(keyword, null),
             [SyntaxKind.DeclareKeyword] = ParseDeclare,
             [SyntaxKind.ImplementKeyword] = ParseImplement,
             [SyntaxKind.TraitKeyword] = ParseTraitDeclaration,
@@ -42,6 +45,14 @@ public sealed partial class Parser
         if (IsEof())
             return new ExpressionStatement(ParseExpression());
 
+        if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBeforeEvent())
+        {
+            var leftBracket = Advance();
+            var attributes = ParseAttributes(leftBracket);
+            var eventKeyword = Expect(SyntaxKind.EventKeyword);
+            return ParseEventDeclaration(eventKeyword, attributes);
+        }
+
         var token = Advance();
         var statementParser = StatementParsers.GetValueOrDefault(token.Kind);
         if (statementParser != null)
@@ -49,6 +60,12 @@ public sealed partial class Parser
 
         _position--;
         return new ExpressionStatement(ParseExpression());
+    }
+
+    private bool LooksLikeAttributesBeforeEvent()
+    {
+        var end = OffsetAfterBrackets();
+        return end != null && PeekKind(end.Value + 1) == SyntaxKind.EventKeyword;
     }
 
     private Block ParseBlock(Token leftBrace)
@@ -66,7 +83,7 @@ public sealed partial class Parser
 
         return new Block(leftBrace, Expect(SyntaxKind.RBrace), statements);
     }
-    
+
     private Implement ParseImplement(Token keyword)
     {
         var traitNameIdentifier = ExpectIdentifier("trait name");
@@ -84,10 +101,10 @@ public sealed partial class Parser
         var leftBrace = Expect(SyntaxKind.LBrace);
         var implementations = ParseImplementMethods();
         var rightBrace = Expect(SyntaxKind.RBrace);
-        
+
         return new ImplementBody(leftBrace, rightBrace, implementations);
     }
-    
+
     private List<FunctionDeclaration> ParseImplementMethods()
     {
         var members = new List<Statement>();
@@ -115,12 +132,6 @@ public sealed partial class Parser
     {
         var names = ParseDelimited(() => new Identifier(ExpectIdentifier()));
         var colon = Expect(SyntaxKind.Colon);
-        // A 'mut' prefix on the collection marks a mutable iteration binding; it does not
-        // form an array literal here, so consume it before parsing the collection so
-        // ParsePrimary does not treat it as an orphaned 'mut'.
-        if (PeekKind(0) == SyntaxKind.MutKeyword && PeekKind(1) != SyntaxKind.LBracket)
-            Advance();
-
         var expression = ParseExpression();
         var body = ParseStatement();
         return new For(keyword, names, colon, expression, body);

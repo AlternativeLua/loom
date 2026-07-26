@@ -3,5 +3,5 @@ using Loom.Core.Text;
 
 namespace Loom.Core.Lexing;
 
-public sealed record LexerResult(SourceFile File, List<Token> Tokens, List<Token> TokensWithTrivia, DiagnosticBag Diagnostics)
+public sealed record LexerResult(List<Token> Tokens, List<Token> TokensWithTrivia, DiagnosticBag Diagnostics)
     : DiagnosedResult(Diagnostics);

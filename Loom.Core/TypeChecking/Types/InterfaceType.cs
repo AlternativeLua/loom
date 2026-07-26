@@ -7,6 +7,10 @@ public sealed class InterfaceType(
     HashSet<string>? traitMethodNames = null
 ) : NativelyIndexableType
 {
+    private List<ObjectProperty>? _cachedProperties;
+
+    private int _propertiesVersion = -1;
+    private Dictionary<string, ObjectProperty>? _propertyMap;
     public string Name { get; } = name;
     public List<InterfaceType> Constraints { get; } = constraints;
     public ObjectType ObjectType { get; } = objectType;
@@ -21,7 +25,44 @@ public sealed class InterfaceType(
         get => ObjectType.Indexer ?? Constraints.Select(c => c.Indexer).FirstOrDefault(i => i != null);
         internal set => throw new NotImplementedException();
     }
-    public override List<ObjectProperty> Properties => [..ObjectType.Properties, ..Constraints.SelectMany(c => c.Properties)];
+
+    /// <summary>
+    ///     Cheap-to-recompute version signal combining this interface's own <see cref="ObjectType.Version" />
+    ///     with each constraint's effective version, so caches invalidate when a constraint's properties
+    ///     grow (via <see cref="ObjectType.AddProperties" />) after this interface was constructed. Constraint
+    ///     lists are small (0-3 typically), so summing across them on every access is cheap - only the
+    ///     expensive merged-list rebuild below is actually guarded by it.
+    /// </summary>
+    private int EffectiveVersion => ObjectType.Version + Constraints.Sum(c => c.EffectiveVersion);
+
+    public override List<ObjectProperty> Properties
+    {
+        get
+        {
+            EnsureCaches();
+            return _cachedProperties!;
+        }
+    }
+
+    private void EnsureCaches()
+    {
+        var currentVersion = EffectiveVersion;
+        if (_cachedProperties != null && _propertiesVersion == currentVersion)
+            return;
+
+        _cachedProperties = [..ObjectType.Properties, ..Constraints.SelectMany(c => c.Properties)];
+        _propertyMap = new Dictionary<string, ObjectProperty>(_cachedProperties.Count);
+        foreach (var property in _cachedProperties)
+            _propertyMap.TryAdd(property.Name, property);
+
+        _propertiesVersion = currentVersion;
+    }
+
+    protected override ObjectProperty? FindProperty(string name)
+    {
+        EnsureCaches();
+        return _propertyMap!.GetValueOrDefault(name);
+    }
 
     public override Type PropertyKeyUnion()
     {
@@ -41,7 +82,7 @@ public sealed class InterfaceType(
         );
 
     public override int GetHashCode() => HashCode.Combine(Name, Constraints.Count, ObjectType.GetHashCode());
-    public override bool IsAssignableTo(Type other) => AssignabilityType.IsAssignableTo(other);
+    public override bool IsAssignableTo(Type other) => GuardedAssignableTo(this, other, () => AssignabilityType.IsAssignableTo(other));
     public override string ToString() => Name;
 
     internal bool MatchOrMatchConstraint(Predicate<InterfaceType> predicate) => predicate(this) || Constraints.Any(c => c.MatchOrMatchConstraint(predicate));

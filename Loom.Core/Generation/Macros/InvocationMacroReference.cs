@@ -1,25 +1,24 @@
 using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Generation.Macros.Providers;
 using Loom.Core.Parsing.AST;
+using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking;
-using Loom.Core.TypeChecking.Types;
 using Type = Loom.Core.TypeChecking.Types.Type;
-using UnionType = Loom.Core.TypeChecking.Types.UnionType;
 
 namespace Loom.Core.Generation.Macros;
 
 internal static class InvocationMacroReference
 {
-    public static bool IsValidReferenceContext(Expression expression)
+    public static bool IsValidReferenceContext(Expression expression, SemanticModel semanticModel)
     {
-        if (expression.FirstAncestorOfType<ArrayLiteral>() is not null)
+        if (expression.IsDescendantOf<ArrayLiteral>())
             return false;
 
         for (Node? node = expression; node is not null; node = node.Parent)
-        {
-            if (node.Parent is Arguments && node.Parent.Parent is Invocation)
+            if (node.Parent is AssignmentOperator assignmentOperator && semanticModel.GetSymbol(assignmentOperator.Left) is { Kind: SymbolKind.Event }
+                || node.Parent is Arguments && node.Parent.Parent is Invocation)
                 return true;
-        }
 
         return false;
     }
@@ -27,7 +26,7 @@ internal static class InvocationMacroReference
     public static bool IsDirectInvocationCallee(Expression expression) => expression.Parent is Invocation invocation && invocation.Expression == expression;
 
     public static bool TryClassify(
-        MacroContext context,
+        SemanticModel semanticModel,
         Expression expression,
         [NotNullWhen(true)] out IMacroProvider? provider,
         [NotNullWhen(true)] out string? memberName)
@@ -39,7 +38,7 @@ internal static class InvocationMacroReference
         {
             Identifier identifier => TryClassifyIdentifier(identifier, out provider, out memberName),
             QualifiedName qualified => TryClassifyNamedAccess(
-                context,
+                semanticModel,
                 qualified.Identifier,
                 qualified.Names,
                 qualified.Names.Count - 1,
@@ -47,15 +46,15 @@ internal static class InvocationMacroReference
                 out memberName
             ),
             PropertyAccess property => TryClassifyNamedAccess(
-                context,
+                semanticModel,
                 property.Expression,
                 property.Names,
                 property.Names.Count - 1,
                 out provider,
                 out memberName
             ),
-            ElementAccess element when context.SemanticModel.GetConstantValue(element.IndexExpression) is string name =>
-                TryClassifyElementAccess(context, element, name, out provider, out memberName),
+            ElementAccess element when semanticModel.GetConstantValue(element.IndexExpression) is string name =>
+                TryClassifyElementAccess(semanticModel, element, name, out provider, out memberName),
             _ => false
         };
     }
@@ -75,13 +74,13 @@ internal static class InvocationMacroReference
     }
 
     private static bool TryClassifyElementAccess(
-        MacroContext context,
+        SemanticModel semanticModel,
         ElementAccess element,
         string name,
         out IMacroProvider? provider,
         out string? memberName)
     {
-        provider = GetProvider(context, element.Expression);
+        provider = GetProvider(semanticModel, element.Expression);
         if (provider is null || !provider.IsInvocationOnlyMember(name))
         {
             provider = null;
@@ -94,7 +93,7 @@ internal static class InvocationMacroReference
     }
 
     private static bool TryClassifyNamedAccess(
-        MacroContext context,
+        SemanticModel semanticModel,
         Expression rootExpression,
         List<DotName> names,
         int memberIndex,
@@ -107,19 +106,19 @@ internal static class InvocationMacroReference
         if (names.Count == 0)
             return false;
 
-        var currentType = context.SemanticModel.GetType(rootExpression);
+        var currentType = semanticModel.GetType(rootExpression);
         IMacroProvider? foundProvider = null;
         var foundIndex = -1;
 
         for (var i = 0; i < names.Count; i++)
         {
-            if (GetProvider(context, currentType) is { } macroProvider)
+            if (GetProvider(semanticModel, currentType) is { } macroProvider)
             {
                 foundProvider = macroProvider;
                 foundIndex = i;
             }
 
-            currentType = GetMemberPropertyType(currentType, names[i].Name.Text);
+            currentType = TypeSimplifier.GetMemberPropertyType(currentType, names[i].Name.Text);
             if (currentType is null)
                 return false;
         }
@@ -135,38 +134,9 @@ internal static class InvocationMacroReference
         return true;
     }
 
-    private static IMacroProvider? GetProvider(MacroContext context, Expression receiver) =>
-        GetProvider(context, context.SemanticModel.GetType(receiver)) ?? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(context, receiver));
+    private static IMacroProvider? GetProvider(SemanticModel semanticModel, Expression receiver) =>
+        GetProvider(semanticModel, semanticModel.GetType(receiver)) ?? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(semanticModel, receiver));
 
-    private static IMacroProvider? GetProvider(MacroContext context, Type? type) =>
-        type is not null ? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(context, type)) : null;
-
-    private static Type? GetMemberPropertyType(Type type, string propertyName)
-    {
-        if (type is InstantiatedType instantiated)
-            type = instantiated.Expand();
-
-        return type switch
-        {
-            UnionType union => ResolveUnionAccess(propertyName, union),
-            NativelyIndexableType indexableType => indexableType.GetProperty(propertyName)?.ValueType,
-            _ => null
-        };
-    }
-
-    private static Type? ResolveUnionAccess(string propertyName, UnionType union)
-    {
-        var members = union.Types
-            .Select(type => GetMemberPropertyType(type, propertyName))
-            .Where(type => type is not null)
-            .Cast<Type>()
-            .ToList();
-
-        return members.Count switch
-        {
-            0 => null,
-            1 => members[0],
-            _ => TypeSimplifier.Simplify(new UnionType(members))
-        };
-    }
+    private static IMacroProvider? GetProvider(SemanticModel semanticModel, Type? type) =>
+        type is not null ? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(semanticModel, type)) : null;
 }

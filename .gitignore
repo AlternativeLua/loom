@@ -3,3 +3,7 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+.claude/
+**/TestResults/
+*.Corrupted.*.Tmp
+Loom.sln.DotSettings.user

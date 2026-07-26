@@ -4,13 +4,11 @@ using Loom.Core.Generation.Macros.Providers;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Core.TypeChecking;
-using Loom.Core.TypeChecking.Types;
 using Loom.Luau.AST;
 using ElementAccess = Loom.Core.Parsing.AST.ElementAccess;
 using Identifier = Loom.Core.Parsing.AST.Identifier;
 using PropertyAccess = Loom.Core.Parsing.AST.PropertyAccess;
 using Type = Loom.Core.TypeChecking.Types.Type;
-using UnionType = Loom.Core.TypeChecking.Types.UnionType;
 using FunctionType = Loom.Core.TypeChecking.Types.FunctionType;
 using Return = Loom.Luau.AST.Return;
 using Parameter = Loom.Luau.AST.Parameter;
@@ -28,7 +26,7 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
         new ResultStaticMacroProvider(),
         new IntrinsicGlobalInvocationMacroProvider()
     ];
-    
+
     private readonly MacroContext _context = new(semanticModel, state, diagnostics);
 
     public bool TryGetInvocationMacro(Invocation invocation, Call luauCall, [MaybeNullWhen(false)] out LuauExpression expression)
@@ -46,10 +44,10 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
     {
         _context.Node = expression;
         referenceExpression = null;
-        if (!InvocationMacroReference.TryClassify(_context, expression, out var provider, out var memberName))
+        if (!InvocationMacroReference.TryClassify(semanticModel, expression, out var provider, out var memberName))
             return false;
 
-        if (!InvocationMacroReference.IsValidReferenceContext(expression))
+        if (!InvocationMacroReference.IsValidReferenceContext(expression, semanticModel))
             return false;
 
         if (semanticModel.GetType(expression) is not FunctionType functionType)
@@ -214,7 +212,7 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
                 macroIndex = i;
             }
 
-            currentType = GetMemberPropertyType(currentType, names[i].Name.Text);
+            currentType = TypeSimplifier.GetMemberPropertyType(currentType, names[i].Name.Text);
             if (currentType == null)
                 break;
 
@@ -222,36 +220,6 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
         }
 
         return provider != null;
-    }
-
-    private static Type? GetMemberPropertyType(Type type, string propertyName)
-    {
-        if (type is InstantiatedType instantiated)
-            type = instantiated.Expand();
-
-        return type switch
-        {
-            UnionType union => ResolveUnionAccess(propertyName, union),
-            ObjectType objectType => objectType.GetProperty(propertyName)?.ValueType,
-            InterfaceType interfaceType => interfaceType.GetProperty(propertyName)?.ValueType,
-            _ => null
-        };
-    }
-
-    private static Type? ResolveUnionAccess(string propertyName, UnionType union)
-    {
-        var members = union.Types
-            .Select(t => GetMemberPropertyType(t, propertyName))
-            .Where(t => t != null)
-            .Cast<Type>()
-            .ToList();
-
-        return members.Count switch
-        {
-            0 => null,
-            1 => members[0],
-            _ => TypeSimplifier.Simplify(new UnionType(members))
-        };
     }
 
     private bool TryGetNamedAccessMacro(Expression objectExpression, string name, LuauExpression target, [MaybeNullWhen(false)] out LuauExpression expression)
@@ -275,7 +243,7 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
     }
 
     private IMacroProvider? GetProvider(Expression receiver) =>
-        GetProvider(semanticModel.GetType(receiver)) ?? Providers.FirstOrDefault(provider => provider.Supports(_context, receiver));
+        GetProvider(semanticModel.GetType(receiver)) ?? Providers.FirstOrDefault(provider => provider.Supports(semanticModel, receiver));
 
-    private IMacroProvider? GetProvider(Type type) => Providers.FirstOrDefault(provider => provider.Supports(_context, type));
+    private IMacroProvider? GetProvider(Type type) => Providers.FirstOrDefault(provider => provider.Supports(semanticModel, type));
 }

@@ -1,0 +1,12 @@
+interface EventObject {
+    event consumer(param: string);
+}
+
+fn on_consumer(p: string): void {
+    print("param: " + p)
+}
+
+let eo = none as never as EventObject;
+eo.consumer += on_consumer;
+eo.consumer("abc");
+eo.consumer -= on_consumer;

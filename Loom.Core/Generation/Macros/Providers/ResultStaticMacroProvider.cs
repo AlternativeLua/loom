@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using Loom.Core.Parsing.AST;
+using Loom.Core.Resolving;
 using Loom.Core.TypeChecking.Types;
 using Loom.Luau.AST;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -7,25 +9,25 @@ namespace Loom.Core.Generation.Macros.Providers;
 
 internal sealed class ResultStaticMacroProvider : IMacroProvider
 {
-    public bool Supports(MacroContext _, Type type) => type is InterfaceType { Name: "ResultStatic" };
-    public bool Supports(MacroContext _, Parsing.AST.Expression __) => false;
+    public bool Supports(SemanticModel _, Type type) => type is InterfaceType { Name: "ResultStatic" };
+    public bool Supports(SemanticModel _, Expression __) => false;
 
     public bool IsInvocationOnlyMember(string memberName) => memberName is "ok" or "err";
 
     public bool TryInvocation(
         MacroContext context,
         string name,
-        Parsing.AST.TypeArguments? typeArguments,
+        TypeArguments? typeArguments,
         Call call,
         [MaybeNullWhen(false)] out LuauExpression expression)
     {
         switch (name)
         {
             case "ok":
-                expression = CreateResultConstructor(call, isOk: true);
+                expression = CreateResultConstructor(call, true);
                 return true;
             case "err":
-                expression = CreateResultConstructor(call, isOk: false);
+                expression = CreateResultConstructor(call, false);
                 return true;
         }
 

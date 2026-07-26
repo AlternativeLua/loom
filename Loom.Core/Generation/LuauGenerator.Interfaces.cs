@@ -1,9 +1,17 @@
-using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Luau;
 using Loom.Luau.AST;
+using BinaryOperator = Loom.Luau.AST.BinaryOperator;
+using ExpressionStatement = Loom.Luau.AST.ExpressionStatement;
+using FunctionType = Loom.Luau.AST.FunctionType;
+using Identifier = Loom.Luau.AST.Identifier;
+using IntersectionType = Loom.Luau.AST.IntersectionType;
+using Parameter = Loom.Luau.AST.Parameter;
+using PropertyAccess = Loom.Luau.AST.PropertyAccess;
+using TypeAlias = Loom.Luau.AST.TypeAlias;
 using TypeName = Loom.Luau.AST.TypeName;
 using TypeParameters = Loom.Luau.AST.TypeParameters;
 
@@ -15,16 +23,16 @@ public sealed partial class LuauGenerator
     {
         var interfaceName = Visit(implement.InterfaceName);
         var metaName = GetImplementationMetaName(implement);
-        var identifier = new Luau.AST.Identifier(metaName);
+        var identifier = new Identifier(metaName);
         var variable = new LocalVariable(metaName, null, Table.Empty);
-        _state.Postreq(new Luau.AST.ExpressionStatement(new Luau.AST.BinaryOperator(new Luau.AST.PropertyAccess(identifier, ["__index"]), "=", identifier)));
-        _state.Postreq(new Luau.AST.ExpressionStatement(new Luau.AST.BinaryOperator(identifier, "=", new TypeCast(identifier, interfaceName))));
+        _state.Postreq(new ExpressionStatement(new BinaryOperator(new PropertyAccess(identifier, ["__index"]), "=", identifier)));
+        _state.Postreq(new ExpressionStatement(new BinaryOperator(identifier, "=", new TypeCast(identifier, interfaceName))));
 
         foreach (var declaration in implement.Body.Implementations)
         {
             var typeParameters = MaybeVisit<TypeParameters>(declaration.TypeParameters);
-            var parameters = declaration.Parameters?.ParameterList.ConvertAll(Visit<Luau.AST.Parameter>) ?? [];
-            parameters.Insert(0, new Luau.AST.Parameter("self", interfaceName));
+            var parameters = declaration.Parameters?.ParameterList.ConvertAll(Visit<Parameter>) ?? [];
+            parameters.Insert(0, new Parameter("self", interfaceName));
 
             var returnType = MaybeVisit<LuauType>(declaration.ReturnType);
             var body = GenerateFunctionBody(declaration);
@@ -57,7 +65,7 @@ public sealed partial class LuauGenerator
                 return new TableTypeProperty(
                     null,
                     signature.Name.Text,
-                    new Luau.AST.FunctionType(
+                    new FunctionType(
                         GenerateTypeParameters(signature.TypeParameters),
                         parameterTypes,
                         Visit(signature.ReturnType)
@@ -68,7 +76,7 @@ public sealed partial class LuauGenerator
 
         var tableType = new TableType(null, properties);
         var typeParameters = GenerateTypeParameters(traitDeclaration.TypeParameters);
-        return new Luau.AST.TypeAlias(traitDeclaration.Name.Text, typeParameters, tableType);
+        return new TypeAlias(traitDeclaration.Name.Text, typeParameters, tableType);
     }
 
     public override LuauNode VisitInterfaceDeclaration(InterfaceDeclaration interfaceDeclaration)
@@ -79,21 +87,24 @@ public sealed partial class LuauGenerator
 
         var indexer = interfaceDeclaration.Body?.Members.OfType<IndexerDeclaration>().FirstOrDefault();
         var propertyDeclarations = interfaceDeclaration.Body?.Members.OfType<PropertyDeclaration>() ?? [];
+        var eventDeclarations = interfaceDeclaration.Body?.Members.OfType<EventDeclaration>() ?? [];
         var tableIndexer = indexer != null
             ? new TableTypeIndexer(indexer.MutKeyword == null ? LuauVisibility.Read : null, Visit(indexer.IndexType), Visit(indexer.ColonTypeClause))
             : null;
 
         var typeParameters = GenerateTypeParameters(interfaceDeclaration.TypeParameters);
-        var properties = propertyDeclarations
-            .Select(property => GenerateInterfacePropertyType(interfaceDeclaration, property, typeParameters))
+        var properties = MergeOverloadedPropertyTypes(
+                propertyDeclarations.Select(property => GenerateInterfacePropertyType(interfaceDeclaration, property, typeParameters)).ToList()
+            )
+            .Concat(eventDeclarations.Select(GenerateInterfaceEventType))
             .ToList();
 
         var tableType = new TableType(tableIndexer, properties);
-        return new Luau.AST.TypeAlias(
+        return new TypeAlias(
             interfaceDeclaration.Name.Text,
             typeParameters,
             interfaceDeclaration.ColonTypeListClause != null || interfaceSymbol.Implementations.Count > 0
-                ? new Luau.AST.IntersectionType(
+                ? new IntersectionType(
                     [
                         ..interfaceDeclaration.ColonTypeListClause?.Types.ConvertAll(Visit) ?? [],
                         tableType,
@@ -104,6 +115,29 @@ public sealed partial class LuauGenerator
         );
     }
 
+    // Mirrors TypeChecker.Interfaces.cs's MergeOverloadedProperties: same-named function-typed table properties become one field typed as their intersection.
+    private static List<TableTypeProperty> MergeOverloadedPropertyTypes(List<TableTypeProperty> properties)
+    {
+        var merged = new List<TableTypeProperty>();
+        var indexByName = new Dictionary<string, int>();
+        foreach (var property in properties)
+        {
+            if (indexByName.TryGetValue(property.Name, out var index)
+                && property.Type is FunctionType
+                && merged[index].Type is FunctionType or IntersectionType)
+            {
+                var existingSignatures = merged[index].Type is IntersectionType existingIntersection ? existingIntersection.Types : [merged[index].Type];
+                merged[index] = new TableTypeProperty(merged[index].Visibility, merged[index].Name, new IntersectionType([..existingSignatures, property.Type]));
+                continue;
+            }
+
+            indexByName[property.Name] = merged.Count;
+            merged.Add(property);
+        }
+
+        return merged;
+    }
+
     private TableTypeProperty GenerateInterfacePropertyType(InterfaceDeclaration interfaceDeclaration, PropertyDeclaration property, TypeParameters typeParameters)
     {
         LuauVisibility? visibility = property.MutKeyword == null ? LuauVisibility.Read : null;
@@ -112,14 +146,12 @@ public sealed partial class LuauGenerator
         var tableProperty = new TableTypeProperty(visibility, name, type);
         if (property.TryGetIntrinsicAttribute(_semanticModel, "luau_name", out var luauNameAttribute)
             && ValidateLuauNameAttribute(luauNameAttribute, out var nameLiteral))
-        {
             tableProperty = new TableTypeProperty(visibility, nameLiteral.Value, type);
-        }
 
         if (!property.TryGetIntrinsicAttribute(_semanticModel, "luau_method", out var luauMethodAttribute))
             return tableProperty;
 
-        if (type is not Luau.AST.FunctionType functionType)
+        if (type is not FunctionType functionType)
         {
             _diagnostics.Error(
                 luauMethodAttribute.Attribute,
@@ -140,85 +172,18 @@ public sealed partial class LuauGenerator
         return tableProperty;
     }
 
-    private bool ValidateLuauNameAttribute(AttributeSymbol luauNameAttribute, [MaybeNullWhen(false)] out StringLiteral nameLiteral)
+    private TableTypeProperty GenerateInterfaceEventType(EventDeclaration eventDeclaration)
     {
-        var luauName = Visit(luauNameAttribute.Attribute.Arguments.ArgumentList[0]);
-        if (luauName is not StringLiteral stringLiteral)
-        {
-            _diagnostics.Error(
-                luauNameAttribute.Attribute,
-                InternalCodes.InvalidLuauNameAttribute,
-                "May only use string literals for name parameter on 'luau_name' attribute"
-            );
+        _semanticModel.RuntimeReferences += 1;
+        var parameterTypes = eventDeclaration.Parameters?.ParameterList.ConvertAll(p => Visit(p.ColonTypeClause!.Type)) ?? [];
+        var eventType = LuauFactory.QualifyRuntimeType(new TypeName("Event", parameterTypes));
+        var name = eventDeclaration.Name.Text;
+        if (eventDeclaration.TryGetIntrinsicAttribute(_semanticModel, "luau_name", out var luauNameAttribute)
+            && ValidateLuauNameAttribute(luauNameAttribute, out var nameLiteral))
+            name = nameLiteral.Value;
 
-            nameLiteral = null;
-            return false;
-        }
-
-        nameLiteral = stringLiteral;
-        return true;
+        return new TableTypeProperty(LuauVisibility.Read, name, eventType);
     }
-
-    public override LuauNode VisitInterfaceInvocation(InterfaceInvocation interfaceInvocation)
-    {
-        var symbol = _semanticModel.GetSymbol(interfaceInvocation.Name, SymbolKind.Interface);
-        if (symbol is not InterfaceSymbol interfaceSymbol)
-            return new NoOpStatement();
-
-        var table = GenerateInterfaceInvocationBody(interfaceInvocation.Body, interfaceSymbol);
-        if (interfaceSymbol.Implements.Count == 0)
-            return table;
-
-        _semanticModel.RuntimeReferences += 1; // merge_meta;
-        var metaNames = interfaceSymbol.Implementations.ConvertAll(LuauExpression (i) => new Luau.AST.Identifier(GetImplementationMetaName(i)));
-        var call = LuauFactory.SetMetatableCall(table, LuauFactory.RuntimeLibraryCall(["merge_meta"], metaNames));
-        return new TypeCast(call, new TypeName(interfaceInvocation.Name.Token.Text));
-    }
-
-    private Table GenerateInterfaceInvocationBody(InterfaceInvocationBody interfaceInvocationBody, InterfaceSymbol interfaceSymbol) =>
-        new(
-            interfaceInvocationBody.Initializers.ConvertAll(TableInitializer (i) => i switch
-                {
-                    InterfaceInvocationIndexInitializer indexInitializer => GenerateInterfaceInvocationIndexInitializer(indexInitializer),
-                    InterfaceInvocationPropertyInitializer propertyInitializer => GenerateInterfaceInvocationPropertyInitializer(
-                        propertyInitializer,
-                        interfaceSymbol
-                    ),
-                    InterfaceInvocationShorthandPropertyInitializer shorthandPropertyInitializer => GenerateInterfaceInvocationShorthandPropertyInitializer(
-                        shorthandPropertyInitializer,
-                        interfaceSymbol
-                    ),
-                    _ => (_diagnostics.CompilerError(i, "Unhandled interface invocation initializer type") as TableInitializer)!
-                }
-            )
-        );
-
-    private ComputedPropertyTableInitializer GenerateInterfaceInvocationIndexInitializer(InterfaceInvocationIndexInitializer indexInitializer) =>
-        new(Visit(indexInitializer.IndexExpression), Visit(indexInitializer.Expression));
-
-    private PropertyTableInitializer GenerateInterfaceInvocationPropertyInitializer(
-        InterfaceInvocationPropertyInitializer propertyInitializer,
-        InterfaceSymbol interfaceSymbol)
-    {
-        var name = GetRenamedPropertyName(interfaceSymbol, propertyInitializer.Name.Text);
-        var initializedValue = Visit(propertyInitializer.Expression);
-        return new PropertyTableInitializer(name, initializedValue);
-    }
-
-    private string GetRenamedPropertyName(InterfaceSymbol interfaceSymbol, string name)
-    {
-        var propertySymbol = interfaceSymbol.GetPropertyAtPath([name]);
-        return propertySymbol == null
-            || !propertySymbol.TryGetIntrinsicAttribute("luau_name", out var luauNameAttribute)
-            || !ValidateLuauNameAttribute(luauNameAttribute, out var nameLiteral)
-                ? name
-                : nameLiteral.Value;
-    }
-
-    private PropertyTableInitializer GenerateInterfaceInvocationShorthandPropertyInitializer(
-        InterfaceInvocationShorthandPropertyInitializer shorthandPropertyInitializer,
-        InterfaceSymbol interfaceSymbol) =>
-        new(GetRenamedPropertyName(interfaceSymbol, shorthandPropertyInitializer.Identifier.Name.Text), Visit(shorthandPropertyInitializer.Identifier));
 
     private static string GetImplementationMetaName(Implement implement)
     {

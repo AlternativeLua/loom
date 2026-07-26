@@ -2,7 +2,10 @@ using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking.Types;
+using FunctionType = Loom.Core.TypeChecking.Types.FunctionType;
+using IntersectionType = Loom.Core.TypeChecking.Types.IntersectionType;
 using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -17,7 +20,7 @@ public sealed partial class TypeChecker
         var interfaceType = Visit(implement.InterfaceName);
         foreach (var declaration in implement.Body.Implementations)
         {
-            var declarationType = (Types.FunctionType)GetTypeAtIndex(declaration, traitType, new LiteralType(declaration.Name.Text));
+            var declarationType = (FunctionType)GetTypeAtIndex(declaration, traitType, new LiteralType(declaration.Name.Text));
             BindType(declaration, declarationType);
             MaybeVisit(declaration.TypeParameters);
 
@@ -47,7 +50,7 @@ public sealed partial class TypeChecker
             Visit(declaration.Body);
         }
 
-        return TypeSimplifier.Simplify(new Types.IntersectionType([traitType, interfaceType]));
+        return TypeSimplifier.Simplify(new IntersectionType([traitType, interfaceType]));
     }
 
     public override Type VisitTraitDeclaration(TraitDeclaration traitDeclaration)
@@ -63,14 +66,23 @@ public sealed partial class TypeChecker
         BindType(traitDeclaration, publishedType);
 
         var properties = ResolveTraitProperties(traitDeclaration.Body.Members);
-        objectType.Properties.AddRange(properties);
+        objectType.AddProperties(properties);
 
-        return publishedType;
+        if (publishedType is GenericType generic)
+            publishedType = VarianceInferrer.ApplyInferredVariance(generic);
+
+        return BindType(traitDeclaration, publishedType);
     }
 
     public override Type VisitInterfaceDeclaration(InterfaceDeclaration interfaceDeclaration)
     {
         var name = interfaceDeclaration.Name.Text;
+        if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol)
+        {
+            _diagnostics.Error(interfaceDeclaration, InternalCodes.CannotFindSymbol, $"Cannot find symbol for declaration of interface '{name}'.");
+            return BindType(interfaceDeclaration, PrimitiveType.Never);
+        }
+
         var typeParameters = interfaceDeclaration.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter);
         var constraints = interfaceDeclaration.ColonTypeListClause?.Types
                 .Select(Visit)
@@ -90,21 +102,28 @@ public sealed partial class TypeChecker
         var indexerDeclaration = interfaceDeclaration.Body?.Members.OfType<IndexerDeclaration>().FirstOrDefault();
         var indexer = ResolveInterfaceIndexer(constraints, indexerDeclaration);
         objectType.Indexer = indexer;
+
+        var eventDeclarations = interfaceDeclaration.Body?.Members.OfType<EventDeclaration>().ToList() ?? [];
         var propertyDeclarations = interfaceDeclaration.Body?.Members.OfType<PropertyDeclaration>().ToList() ?? [];
+        var events = ResolveInterfaceEvents(eventDeclarations);
         var properties = ResolveInterfaceProperties(constraints, propertyDeclarations);
-        objectType.Properties.AddRange(properties);
+        objectType.AddProperties(events);
+        objectType.AddProperties(properties);
+
+        if (publishedType is GenericType generic)
+            publishedType = VarianceInferrer.ApplyInferredVariance(generic);
 
         return BindType(interfaceDeclaration, publishedType);
     }
 
-    public override Type VisitInterfaceInvocation(InterfaceInvocation node)
+    public override Type VisitInterfaceInvocation(InterfaceInvocation interfaceInvocation)
     {
-        var type = Visit(node.Name);
+        var type = Visit(interfaceInvocation.Name);
         if (type.Equals(Intrinsics.Range))
-            _diagnostics.Warn(node, InternalCodes.SimplifiableCode, "Use range literal.");
+            _diagnostics.Warn(interfaceInvocation, InternalCodes.SimplifiableCode, "Use a range literal.");
 
         var traitProperties = new List<ObjectProperty>();
-        if (_semanticModel.GetSymbol(node.Name, SymbolKind.Interface) is InterfaceSymbol interfaceSymbol)
+        if (_semanticModel.GetSymbol(interfaceInvocation.Name, SymbolKind.Interface) is InterfaceSymbol interfaceSymbol)
             traitProperties.AddRange(
                 from declaration in interfaceSymbol.Implementations.SelectMany(i => i.Body.Implementations)
                 let methodType = _semanticModel.GetType(declaration)
@@ -112,25 +131,25 @@ public sealed partial class TypeChecker
             );
 
         if (type is InterfaceType nonGeneric)
-            return BindInterfaceInvocation(node, nonGeneric, traitProperties);
+            return BindInterfaceInvocation(interfaceInvocation, nonGeneric, traitProperties);
 
         if (type is not GenericType { UnderlyingType: InterfaceType underlying } generic)
         {
-            _diagnostics.Error(node, InternalCodes.InvalidInvocation, $"Type '{type}' is not an interface.");
-            return BindType(node, PrimitiveType.Never);
+            _diagnostics.Error(interfaceInvocation, InternalCodes.InvalidInvocation, $"Type '{type}' is not an interface.");
+            return BindType(interfaceInvocation, PrimitiveType.Never);
         }
 
-        if (!TrySubstituteGenericInterface(node, generic, underlying, out var interfaceType))
-            return BindType(node, PrimitiveType.Never);
+        if (!TrySubstituteGenericInterface(interfaceInvocation, generic, underlying, out var interfaceType))
+            return BindType(interfaceInvocation, PrimitiveType.Never);
 
-        return BindInterfaceInvocation(node, interfaceType, traitProperties);
+        return BindInterfaceInvocation(interfaceInvocation, interfaceType, traitProperties);
     }
 
     private InterfaceType BindInterfaceInvocation(InterfaceInvocation node, InterfaceType interfaceType, List<ObjectProperty> traitProperties)
     {
         var traitMethodNames = traitProperties.Select(p => p.Name).ToHashSet();
         CheckInterfaceInvocationInitializers(node, interfaceType);
-        interfaceType.ObjectType.Properties.AddRange(traitProperties);
+        interfaceType.ObjectType.AddProperties(traitProperties);
         interfaceType.TraitMethodNames = traitMethodNames;
 
         return BindType(node, interfaceType);
@@ -163,12 +182,15 @@ public sealed partial class TypeChecker
     }
 
     private List<ObjectProperty> ResolveTraitProperties(List<DeclareFunctionSignature> signatures) =>
-    (
-        from signature in signatures
-        let name = signature.Name.Text
-        let fnType = Visit(signature)
-        select new ObjectProperty(false, name, fnType)
-    ).ToList();
+        signatures.ConvertAll(s => new ObjectProperty(false, s.Name.Text, Visit(s)));
+
+    private List<ObjectProperty> ResolveInterfaceEvents(List<EventDeclaration> eventDeclarations) =>
+        eventDeclarations.ConvertAll(e =>
+            {
+                MaybeVisit(e.Attributes);
+                return new ObjectProperty(false, e.Name.Text, Visit(e));
+            }
+        );
 
     private List<ObjectProperty> ResolveInterfaceProperties(List<InterfaceType> constraints, List<PropertyDeclaration> propertyDeclarations)
     {
@@ -190,7 +212,46 @@ public sealed partial class TypeChecker
             properties.Add(new ObjectProperty(isMutable, name, valueType));
         }
 
-        return properties;
+        return MergeOverloadedProperties(properties);
+    }
+
+    // A property name declared more than once, where every declaration is function-typed, is an overload set (e.g. CFrame.new's constructor shapes) merged into one IntersectionType.
+    private static List<ObjectProperty> MergeOverloadedProperties(List<ObjectProperty> properties)
+    {
+        var merged = new List<ObjectProperty>();
+        var indexByName = new Dictionary<string, int>();
+        foreach (var property in properties)
+        {
+            if (indexByName.TryGetValue(property.Name, out var index)
+                && property.ValueType is FunctionType newSignature
+                && TryGetSignatures(merged[index].ValueType, out var existingSignatures))
+            {
+                existingSignatures.Add(newSignature);
+                merged[index] = new ObjectProperty(merged[index].IsMutable, property.Name, new IntersectionType([..existingSignatures]));
+                continue;
+            }
+
+            indexByName[property.Name] = merged.Count;
+            merged.Add(property);
+        }
+
+        return merged;
+    }
+
+    private static bool TryGetSignatures(Type type, [MaybeNullWhen(false)] out List<FunctionType> signatures)
+    {
+        switch (type)
+        {
+            case FunctionType functionType:
+                signatures = [functionType];
+                return true;
+            case IntersectionType intersection when intersection.Types.TrueForAll(t => t is FunctionType):
+                signatures = intersection.Types.ConvertAll(t => (FunctionType)t);
+                return true;
+            default:
+                signatures = null;
+                return false;
+        }
     }
 
     private ObjectIndexer? ResolveInterfaceIndexer(List<InterfaceType> constraints, IndexerDeclaration? indexerDeclaration)
@@ -228,7 +289,7 @@ public sealed partial class TypeChecker
         var providedProperties = new HashSet<string>();
         switch (initializer)
         {
-            case InterfaceInvocationPropertyInitializer propertyInitializer:
+            case PropertyInitializer propertyInitializer:
             {
                 var propertyName = CheckPropertyInitializer(propertyInitializer, propertyInitializer.Name.Text, propertyInitializer.Expression, interfaceType);
                 if (propertyName != null)
@@ -236,7 +297,7 @@ public sealed partial class TypeChecker
 
                 break;
             }
-            case InterfaceInvocationShorthandPropertyInitializer shorthandPropertyInitializer:
+            case ShorthandPropertyInitializer shorthandPropertyInitializer:
                 var shorthandPropertyName = CheckPropertyInitializer(
                     shorthandPropertyInitializer,
                     shorthandPropertyInitializer.Identifier.Name.Text,
@@ -248,7 +309,7 @@ public sealed partial class TypeChecker
                     providedProperties.Add(shorthandPropertyName);
 
                 break;
-            case InterfaceInvocationIndexInitializer indexInitializer:
+            case IndexInitializer indexInitializer:
             {
                 CheckIndexInitializer(indexInitializer, interfaceType);
                 break;
@@ -276,7 +337,7 @@ public sealed partial class TypeChecker
         return name;
     }
 
-    private void CheckIndexInitializer(InterfaceInvocationIndexInitializer initializer, InterfaceType interfaceType)
+    private void CheckIndexInitializer(IndexInitializer initializer, InterfaceType interfaceType)
     {
         var indexer = interfaceType.Indexer;
         if (indexer == null)

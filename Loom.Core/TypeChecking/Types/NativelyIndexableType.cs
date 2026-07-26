@@ -7,7 +7,9 @@ public abstract class NativelyIndexableType : Type
 
     public abstract Type PropertyKeyUnion();
 
-    public ObjectProperty? GetProperty(string name) => Properties.Find(p => p.Name == name);
+    public ObjectProperty? GetProperty(string name) => FindProperty(name);
+
+    protected virtual ObjectProperty? FindProperty(string name) => Properties.Find(p => p.Name == name);
 
     public (ObjectBodyType? BodyType, string CannotFindReason) GetTypeAtIndex(Type indexType)
     {
@@ -20,25 +22,23 @@ public abstract class NativelyIndexableType : Type
 
             indexType = parameter.Constraint;
         }
-        
+
         if (indexType is LiteralType { Value: string name })
         {
             var property = GetProperty(name);
             if (property != null)
                 return (property, "");
-            
+
             if (Indexer == null)
                 return (null, $" Property '{name}' does not exist on type '{this}'.");
         }
-        
+
         if (Properties.Count > 0 && indexType.Equals(PropertyKeyUnion()))
-        {
             return (new ObjectIndexer(
-                IsMutable: Properties.Any(p => p.IsMutable),
-                KeyType: indexType,
-                ValueType: ValueUnionForKeyType(indexType)
+                Properties.Any(p => p.IsMutable),
+                indexType,
+                ValueUnionForKeyType(indexType)
             ), "");
-        }
 
         if (Indexer != null && indexType.IsAssignableTo(Indexer.KeyType))
             return (Indexer, "");
@@ -47,7 +47,7 @@ public abstract class NativelyIndexableType : Type
             ? (null, "")
             : (null, $" Index is not of type '{Indexer.KeyType}'.");
     }
-    
+
     private Type ValueUnionForKeyType(Type keyType)
     {
         var matches = (
