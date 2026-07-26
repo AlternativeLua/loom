@@ -80,7 +80,7 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
         catch (Exception e)
         {
             var diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics);
-            // DiagnosticBag.FailFast = true;
+            DiagnosticBag.FailFast = true;
             diagnostics.CompilerError(file, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
             return null;
         }

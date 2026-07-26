@@ -1,3 +1,0 @@
-export let pi = 3;
-export fn square(x: number): number -> x * x;
-export type Scalar = number;
