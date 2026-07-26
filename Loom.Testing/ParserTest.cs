@@ -24,6 +24,15 @@ public class ParserTest
         new("1 = 1", InternalCodes.InvalidAssignmentTarget, "Invalid assignment target.", null),
         new("a ? b : c = d", InternalCodes.InvalidAssignmentTarget, "Invalid assignment target.", null),
         new("fn foo", InternalCodes.MissingFunctionBody, "Expected function body, got EOF.", null),
+        new("{", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("{{", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("fn add() {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("fn add(a, b) {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("fn f() { if true {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("if true {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("while true {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("for x : items {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
+        new("fn f() { } fn g() {", InternalCodes.UnexpectedEof, "Expected '}', got EOF.", null),
         new("if true let x = 42", InternalCodes.DeclarationOutsideOfBlock, "Declarations can only be declared inside of a block.", "surround with '{' and '}'"),
         new(
             "if true { return 1 } else let x = 42",
@@ -544,6 +553,85 @@ public class ParserTest
         var declaration = Assert.IsType<VariableDeclaration>(tree.Statements.First());
         Assert.Null(declaration.ColonTypeClause);
         Assert.Null(declaration.EqualsValueClause);
+    }
+
+    public static readonly IEnumerable<TheoryDataRow<string>> IncompleteInputCases =
+        TypedPrefixes(
+                "fn add(a, b) -> a + b;",
+                "fn add(a: number, b: number) { return a + b; }"
+            )
+            .Concat(
+            [
+                // Unclosed / nested blocks and control flow
+                "{",
+                "{{",
+                "fn add() {",
+                "fn add(a, b) {",
+                "fn add() { return",
+                "fn f() { if true {",
+                "fn f() { } fn g() {",
+                "if true {",
+                "while true {",
+                "for x : items {",
+                "after 5 {",
+                // Other unfinished top-level forms
+                "let x =",
+                "mut x =",
+                "type T =",
+                "enum E {",
+                "interface I {",
+                "trait T {",
+                "declare fn",
+                "implement Foo for Bar {",
+                "}{",
+                "fn f() { } }",
+            ]
+            )
+            .Distinct()
+            .Select(source => new TheoryDataRow<string>(source));
+
+    private static IEnumerable<string> TypedPrefixes(params string[] sources) =>
+        sources.SelectMany(source => Enumerable.Range(1, source.Length).Select(length => source[..length]));
+
+    [Theory]
+    [MemberData(nameof(IncompleteInputCases))]
+    public void IncompleteInput_Terminates(string source)
+    {
+        var result = Utility.Parse(source);
+        Assert.NotNull(result.Tree);
+        Assert.NotEmpty(result.Tree.Statements);
+    }
+
+    [Theory]
+    [InlineData("{")]
+    [InlineData("{{")]
+    [InlineData("fn add() {")]
+    [InlineData("fn add(a, b) {")]
+    [InlineData("fn f() { if true {")]
+    [InlineData("if true {")]
+    [InlineData("while true {")]
+    [InlineData("for x : items {")]
+    public void UnclosedBlock_ReportsMissingBrace(string source)
+    {
+        var result = Utility.Parse(source);
+        Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.UnexpectedEof, "Expected '}', got EOF.");
+    }
+
+    [Fact]
+    public void UnclosedTopLevelBlock_StillProducesBlock()
+    {
+        var tree = Utility.GetAST("{");
+        Assert.Single(tree.Statements);
+        Assert.IsType<Block>(tree.Statements.First());
+    }
+
+    [Fact]
+    public void UnclosedFunctionBlock_StillProducesFunctionDeclaration()
+    {
+        var tree = Utility.GetAST("fn add(a, b) {");
+        Assert.Single(tree.Statements);
+        var function = Assert.IsType<FunctionDeclaration>(tree.Statements.First());
+        Assert.IsType<Block>(function.Body);
     }
 
     [Fact]
