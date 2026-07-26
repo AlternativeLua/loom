@@ -86,7 +86,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         foreach (var arm in matchExpression.Arms)
         {
             var armState = AnalyzeMatchArm(arm, new FlowState(afterScrutinee));
-            merged = merged == null ? armState : merged.Merge(armState);
+            merged = merged == null ? armState : MergeStates(merged, armState);
         }
 
         return BindState(matchExpression, merged!);
@@ -213,7 +213,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         AnalyzeExpression(@if.Condition, state);
         var thenState = AnalyzeStatement(@if.ThenBranch, state);
         var elseState = @if.ElseBranch != null ? AnalyzeStatement(@if.ElseBranch.Branch, state) : state;
-        return BindState(@if, thenState.Merge(elseState));
+        return BindState(@if, MergeStates(thenState, elseState));
     }
 
     private FlowState AnalyzeAfter(After after, FlowState state)
@@ -345,4 +345,11 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         _states[node] = state;
         return state;
     }
+
+    private static FlowState MergeStates(FlowState left, FlowState right) =>
+        left.IsUnreachable
+            ? right
+            : right.IsUnreachable
+                ? left
+                : left.Merge(right);
 }
