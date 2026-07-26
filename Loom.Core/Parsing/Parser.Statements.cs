@@ -54,11 +54,17 @@ public sealed partial class Parser
     private Block ParseBlock(Token leftBrace)
     {
         var statements = new List<Statement>();
-        Token? rightBrace;
-        while (!Match(out rightBrace, SyntaxKind.RBrace))
-            statements.Add(ParseStatement());
+        while (!IsEof())
+        {
+            if (Match(out var rightBrace, SyntaxKind.RBrace))
+                return new Block(leftBrace, rightBrace, statements);
 
-        return new Block(leftBrace, rightBrace, statements);
+            var previousPosition = _position;
+            statements.Add(ParseStatement());
+            EnsureProgress(previousPosition);
+        }
+
+        return new Block(leftBrace, Expect(SyntaxKind.RBrace), statements);
     }
     
     private Implement ParseImplement(Token keyword)

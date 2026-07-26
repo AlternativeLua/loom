@@ -15,10 +15,22 @@ public sealed partial class Parser(LexerResult lexerResult)
     {
         var statements = new List<Statement>();
         while (!IsEof())
+        {
+            var previousPosition = _position;
             statements.Add(ParseStatement());
+            EnsureProgress(previousPosition);
+        }
 
         var tree = new Tree(lexerResult, statements);
         return new ParserResult(tree, _diagnostics);
+    }
+
+    private void EnsureProgress(int previousPosition)
+    {
+        if (_position != previousPosition || IsEof())
+            return;
+
+        Advance();
     }
 
     private List<T> ParseDelimited<T>(Func<T> parse, SyntaxKind delimiter = SyntaxKind.Comma)
