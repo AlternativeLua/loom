@@ -26,6 +26,33 @@ public sealed class RojoResolver
     }
 
     public IReadOnlyList<string>? ResolveRuntimePath() => FindFile(_project.Tree, [], RuntimeFileName);
+    
+    public IReadOnlyList<string>? ResolvePath(string filePath) => FindPath(_project.Tree, [], Path.GetFullPath(filePath));
+
+    private IReadOnlyList<string>? FindPath(RojoNode node, IReadOnlyList<string> segments, string filePath)
+    {
+        foreach (var (name, child) in node.Children)
+        {
+            var resolved = FindPath(child, [..segments, name], filePath);
+            if (resolved != null)
+                return resolved;
+        }
+
+        if (node.Path == null)
+            return null;
+
+        var mapped = Path.GetFullPath(Path.Combine(_projectDirectory, node.Path));
+        
+        if (mapped == filePath)
+            return segments;
+
+        var prefix = mapped + Path.DirectorySeparatorChar;
+        if (!filePath.StartsWith(prefix, StringComparison.Ordinal))
+            return null;
+
+        var parts = filePath[prefix.Length..].Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        return [..segments, ..ToInstanceSegments(parts)];
+    }
 
     private IReadOnlyList<string>? FindFile(RojoNode node, IReadOnlyList<string> segments, string fileName)
     {

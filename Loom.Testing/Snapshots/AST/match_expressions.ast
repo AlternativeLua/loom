@@ -11,7 +11,7 @@
         Pattern: WildcardPattern(
           Token(Identifier, "_")
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -53,7 +53,7 @@ ExpressionStatement(
             )
           ]
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -83,7 +83,7 @@ ExpressionStatement(
             )
           ]
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -108,7 +108,7 @@ ExpressionStatement(
           Token(StringLiteral, ""lava"")
           Value: "lava"
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -121,7 +121,7 @@ ExpressionStatement(
           Token(StringLiteral, ""something"")
           Value: "something"
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -133,7 +133,7 @@ ExpressionStatement(
         Pattern: IdentifierPattern(
           Name: Token(Identifier, "other")
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -160,7 +160,7 @@ VariableDeclaration(
             Token(NumberLiteral, "0")
             Value: 0
           )
-          When: Token(Arrow, "->")
+          When: null
           Guard: null
           Arrow: Token(Arrow, "->")
           Body: Literal(
@@ -172,7 +172,7 @@ VariableDeclaration(
           Pattern: WildcardPattern(
             Token(Identifier, "_")
           )
-          When: Token(Arrow, "->")
+          When: null
           Guard: null
           Arrow: Token(Arrow, "->")
           Body: Literal(
@@ -209,7 +209,7 @@ ExpressionStatement(
             )
           ]
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -256,7 +256,7 @@ ExpressionStatement(
             )
           ]
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -268,7 +268,7 @@ ExpressionStatement(
         Pattern: WildcardPattern(
           Token(Identifier, "_")
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -329,7 +329,7 @@ ExpressionStatement(
             )
           ]
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -341,7 +341,7 @@ ExpressionStatement(
         Pattern: WildcardPattern(
           Token(Identifier, "_")
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Literal(
@@ -386,7 +386,7 @@ ExpressionStatement(
             ]
           )
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -414,7 +414,7 @@ ExpressionStatement(
             ]
           )
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -465,7 +465,7 @@ ExpressionStatement(
           )
           ObjectPattern: null
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -507,7 +507,7 @@ ExpressionStatement(
             ]
           )
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -584,7 +584,7 @@ ExpressionStatement(
           ]
           Rest: null
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(
@@ -608,7 +608,7 @@ ExpressionStatement(
             )
           )
         )
-        When: Token(Arrow, "->")
+        When: null
         Guard: null
         Arrow: Token(Arrow, "->")
         Body: Identifier(

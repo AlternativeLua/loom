@@ -11,57 +11,85 @@ namespace Loom.Core;
 
 public sealed class Compiler(CompilationUnit unit, SourceFile file)
 {
+    private readonly List<DiagnosticBag> _pipelineDiagnostics = [];
+
     public CompiledFile Compile()
     {
-        var pipelineDiagnostics = new List<DiagnosticBag>();
+        var parsedFile = Parse();
+        return parsedFile == null ? null! : Analyze(parsedFile);
+    }
+
+    /// <summary>
+    /// Phase one: lex and parse. Runs for every file in the unit before any file is analyzed, so
+    /// that module dependencies can be resolved from the parsed trees and analyzed in order.
+    /// </summary>
+    public ParsedFile? Parse() =>
+        RunPhase(() =>
+            {
+                var lexer = new Lexer(file);
+                var lexerResult = TrackDiagnostics(lexer.Tokenize());
+                var parser = new Parser(lexerResult);
+                var parserResult = TrackDiagnostics(parser.Parse());
+
+                return new ParsedFile(file, lexerResult, parserResult);
+            }
+        );
+
+    /// <summary>
+    /// Phase two: everything after the parser. Diagnostics from <see cref="Parse"/> are carried over, as
+    /// are <paramref name="moduleDiagnostics"/> from building the unit's module graph, so the returned
+    /// file reports every diagnostic raised against it regardless of which phase found it.
+    /// </summary>
+    public CompiledFile Analyze(ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics = null) =>
+        RunPhase(() =>
+            {
+                if (moduleDiagnostics != null)
+                    _pipelineDiagnostics.Add(moduleDiagnostics);
+
+                var resolver = new Resolver(parsedFile.ParserResult, unit);
+                var semanticModel = TrackDiagnostics(resolver.Resolve());
+                var flowAnalyzer = new FlowAnalyzer(semanticModel);
+                TrackDiagnostics(flowAnalyzer.Analyze());
+                var typeChecker = new TypeChecker(semanticModel, flowAnalyzer);
+                var typeCheckerResult = TrackDiagnostics(typeChecker.Check());
+                var generator = new LuauGenerator(semanticModel, unit.RuntimeImport, unit.ModuleRequirePaths);
+                var generatorResult = TrackDiagnostics(generator.Generate());
+                var renderedLuau = generatorResult.LuauTree.Render();
+
+                return new CompiledFile(file)
+                {
+                    Path = FileManager.GetOutputPath(file, unit.Config),
+                    Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics),
+                    RenderedLuau = renderedLuau,
+                    LuauTree = generatorResult.LuauTree,
+                    ReturnType = typeCheckerResult.ReturnType,
+                    SemanticModel = semanticModel,
+                    Tree = parsedFile.Tree,
+                    Tokens = parsedFile.LexerResult.Tokens
+                };
+            }
+        )!;
+
+    private T? RunPhase<T>(Func<T> phase)
+        where T : class
+    {
         try
         {
-            var lexer = new Lexer(file);
-            var lexerResult = trackDiagnostics(lexer.Tokenize());
-            var parser = new Parser(lexerResult);
-            var parserResult = trackDiagnostics(parser.Parse());
-            var resolver = new Resolver(parserResult, unit);
-            var semanticModel = trackDiagnostics(resolver.Resolve());
-            var flowAnalyzer = new FlowAnalyzer(semanticModel);
-            trackDiagnostics(flowAnalyzer.Analyze());
-            var typeChecker = new TypeChecker(semanticModel, flowAnalyzer);
-            var typeCheckerResult = trackDiagnostics(typeChecker.Check());
-            var generator = new LuauGenerator(semanticModel, unit.RuntimeImport);
-            var generatorResult = trackDiagnostics(generator.Generate());
-            var renderedLuau = generatorResult.LuauTree.Render();
-            var diagnostics = DiagnosticBag.Concat(pipelineDiagnostics);
-            var compiledFilePath = file.AbsolutePath
-                .Replace(
-                    Path.GetFileName(unit.Config.Files.SourceDirectory) + Path.DirectorySeparatorChar,
-                    Path.GetFileName(unit.Config.Files.OutputDirectory) + Path.DirectorySeparatorChar
-                )
-                .Replace(FileManager.LoomExtension, ".luau");
-
-            return new CompiledFile(file)
-            {
-                Path = compiledFilePath,
-                Diagnostics = diagnostics,
-                RenderedLuau = renderedLuau,
-                LuauTree = generatorResult.LuauTree,
-                ReturnType = typeCheckerResult.ReturnType,
-                SemanticModel = semanticModel,
-                Tree = parserResult.Tree,
-                Tokens = lexerResult.Tokens
-            };
+            return phase();
         }
         catch (Exception e)
         {
-            var diagnostics = DiagnosticBag.Concat(pipelineDiagnostics);
-            DiagnosticBag.FailFast = true;
+            var diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics);
+            // DiagnosticBag.FailFast = true;
             diagnostics.CompilerError(file, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
-            return null!;
+            return null;
         }
+    }
 
-        T trackDiagnostics<T>(T result)
-            where T : DiagnosedResult
-        {
-            pipelineDiagnostics.Add(result.Diagnostics);
-            return result;
-        }
+    private T TrackDiagnostics<T>(T result)
+        where T : DiagnosedResult
+    {
+        _pipelineDiagnostics.Add(result.Diagnostics);
+        return result;
     }
 }

@@ -27,7 +27,33 @@ public class LuauGeneratorTest
     [InlineData("declare let x: number;")]
     [InlineData("declare mut x: number;")]
     [InlineData("declare fn x(): number;")]
+    [InlineData("import { square } from \"./math\"")]
+    [InlineData("import { square as sq } from \"./math\"")]
+    [InlineData("import type { Vector } from \"./vector\"")]
     public void Generates_Nothing(string source) => Assert.Empty(Utility.GetLuauAST(source).Statements);
+
+    [Theory]
+    [InlineData("export type Alias = number;")]
+    [InlineData("export interface Point { x: number }")]
+    [InlineData("export enum Direction { Up, Down }")]
+    [InlineData("export trait Drawable { fn draw: void; }")]
+    public void Generates_ExportedTypeAlias_WithoutExportTable(string source)
+    {
+        var statements = Utility.GetLuauAST(source, true).Statements;
+        var typeAlias = Assert.IsType<TypeAlias>(Assert.Single(statements));
+        Assert.True(typeAlias.IsExported);
+    }
+
+    [Fact]
+    public void Generates_ExportTable_WithValueExportsOnly()
+    {
+        var statements = Utility.GetLuauAST("export let x = 1; export type A = number;", true).Statements;
+        var table = Assert.IsType<Table>(Assert.IsType<Return>(statements.Last()).Expression);
+        var initializer = Assert.IsType<PropertyTableInitializer>(Assert.Single(table.Initializers));
+
+        Assert.Equal("x", initializer.PropertyName);
+        Assert.Equal("x", Assert.IsType<Identifier>(initializer.Value).Name);
+    }
     
     [Theory]
     [InlineData("##hello!")]

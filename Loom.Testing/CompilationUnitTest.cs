@@ -1,5 +1,6 @@
 using Loom.Config;
 using Loom.Core;
+using Loom.Core.Diagnostics;
 using Loom.Luau.AST;
 using BinaryOperator = Loom.Core.Parsing.AST.BinaryOperator;
 using ExpressionStatement = Loom.Core.Parsing.AST.ExpressionStatement;
@@ -85,6 +86,22 @@ public class CompilationUnitTest
         {
             Directory.Delete(dir, true);
         }
+    }
+
+    [Fact]
+    public void Compiles_EveryFile_WhenAnotherFileHasDiagnostics()
+    {
+        Utility.WithTempProject(
+            [("bad.loom", "import { } from \"./math\""), ("good.loom", "let x = 1;")],
+            (_, result) =>
+            {
+                Assert.Equal(2, result.Files.Count);
+                Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.EmptyImportClause, "Import declaration must name at least one member.");
+
+                var good = Assert.Single(result.Files, file => file.SourceFile.Name == "good.loom");
+                Assert.Contains("const x = 1", good.RenderedLuau);
+            }
+        );
     }
 
     private static LoomConfig GetConfig()

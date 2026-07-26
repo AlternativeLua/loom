@@ -5,7 +5,7 @@ namespace Loom.Core.Diagnostics;
 
 public sealed class DiagnosticBag(HashSet<Diagnostic>? diagnostics = null)
 {
-    public static bool FailFast { get; set; } = true;
+    public static bool FailFast { get; set; }
     public static DiagnosticBag Concat(List<DiagnosticBag> bags) => new(bags.SelectMany(bag => bag.Set).ToHashSet());
     
     public HashSet<Diagnostic> Set { get; } = diagnostics ?? [];

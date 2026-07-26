@@ -1,0 +1,43 @@
+﻿ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: VariableDeclaration(
+    EqualsValueClause(
+      EqualsToken: Token(Equals, "=")
+      Value: Literal(
+        Token(NumberLiteral, "69")
+        Value: 69
+      )
+    )
+    ColonTypeClause: null
+    Name: Token(Identifier, "constant")
+  )
+)
+ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: FunctionDeclaration(
+    ReturnType: null
+    Body: ExpressionBody(
+      Arrow: Token(Arrow, "->")
+      Expression: Invocation(
+        Expression: Identifier(
+          Name: Token(Identifier, "print")
+          Token(Identifier, "print")
+        )
+        TypeArguments: null
+        Arguments(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          ArgumentList: [
+            Literal(
+              Token(StringLiteral, ""doing something"")
+              Value: "doing something"
+            )
+          ]
+        )
+      )
+    )
+    Parameters: null
+    TypeParameters: null
+    Name: Token(Identifier, "do_something")
+  )
+)

@@ -157,6 +157,20 @@ public class LuauRenderingTest
     public void Renders_TypeAlias() => Assert.Equal("type A = boolean", new TypeAlias("A", new TypeParameters(), PrimitiveType.Boolean).Render());
 
     [Fact]
+    public void Renders_TypeAlias_Exported() =>
+        Assert.Equal(
+            "export type A = boolean",
+            new TypeAlias("A", new TypeParameters(), PrimitiveType.Boolean) { IsExported = true }.Render()
+        );
+
+    [Fact]
+    public void Renders_TypeAlias_ExportedGeneric()
+    {
+        var typeParameters = new TypeParameters([new TypeParameter("T")]);
+        Assert.Equal("export type Id<T> = T", new TypeAlias("Id", typeParameters, new TypeName("T")) { IsExported = true }.Render());
+    }
+
+    [Fact]
     public void Renders_ForStatement()
     {
         var statement = new ForStatement(

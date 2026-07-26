@@ -10,6 +10,8 @@ public sealed partial class Parser
     private Dictionary<SyntaxKind, StatementParser> StatementParsers =>
         field ??= new Dictionary<SyntaxKind, StatementParser>
         {
+            [SyntaxKind.ExportKeyword] = ParseExport,
+            [SyntaxKind.ImportKeyword] = ParseImport,
             [SyntaxKind.LBrace] = ParseBlock,
             [SyntaxKind.ReturnKeyword] = ParseReturn,
             [SyntaxKind.FnKeyword] = ParseFunctionDeclaration,

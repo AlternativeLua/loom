@@ -302,6 +302,16 @@ public sealed partial class TypeChecker
         return BindType(variableDeclaration, TypeSimplifier.Simplify(finalType));
     }
 
+    /// <remarks>
+    /// Imported declarations are typed by the module that exports them, and the base implementation would
+    /// return the type of the module path string — which would become the file's type when a module ends
+    /// with an import.
+    /// </remarks>
+    public override Type VisitImportDeclaration(ImportDeclaration import) => BindType(import, Types.PrimitiveType.Void);
+
+    /// <remarks>The resolver already bound the namespace's object type; re-binding here would discard it.</remarks>
+    public override Type VisitNamespaceImport(NamespaceImport import) => _semanticModel.GetType(import);
+
     public override Type VisitDeclare(Declare declare)
     {
         var type = declare.Signature switch

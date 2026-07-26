@@ -76,11 +76,30 @@ public static class InternalCodes
     public const string UnresolvedEventDisconnect = "L352";
     public const string RuntimeLibraryNotFound = "L353";
     public const string ReservedLuauKeyword = "L354";
-    public const string NonExhaustiveMatch = "L355";
-    public const string NoOverloadMatch = "L356";
-    public const string RestParameterNotLast = "L357";
-    public const string MissingRestParameterType = "L358";
-    public const string InvalidRestParameterType = "L359";
+    public const string ExpectedExportableDeclaration = "L355";
+    public const string CannotExportMutable = "L356";
+    public const string ExportOutsideModuleScope = "L357";
+    public const string EmptyImportClause = "L358";
+    public const string ModuleNotFound = "L359";
+    public const string SelfImport = "L360";
+    public const string ModuleOutsideSourceDirectory = "L361";
+    public const string UnsupportedModuleSpecifier = "L362";
+    public const string CircularModuleDependency = "L363";
+    public const string ImportInDeclarationFile = "L364";
+    public const string ImportOutsideModuleScope = "L365";
+    public const string NoExportedMember = "L366";
+    public const string DuplicateImport = "L367";
+    public const string TypeOnlyImportOfValue = "L368";
+    public const string UnusedImport = "L369";
+    public const string EmptyExportList = "L370";
+    public const string DuplicateExport = "L371";
+    public const string TypeOnlyExportOfValue = "L372";
+    public const string ModuleNotFoundInRojo = "L373";
+    public const string NonExhaustiveMatch = "L374";
+    public const string NoOverloadMatch = "L375";
+    public const string RestParameterNotLast = "L376";
+    public const string MissingRestParameterType = "L377";
+    public const string InvalidRestParameterType = "L378";
 
     public const string SimplifiableCode = "L400";
 }
