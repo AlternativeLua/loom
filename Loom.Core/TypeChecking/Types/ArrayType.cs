@@ -39,11 +39,10 @@ public sealed class ArrayType(Type elementType, bool isMutable)
         if (other is not ArrayType targetArray)
             return false;
 
-        if (!IsMutable && !targetArray.IsMutable)
+        if (!targetArray.IsMutable)
             return ElementType.IsAssignableTo(targetArray.ElementType);
 
-        var validMutability = IsMutable || !targetArray.IsMutable;
-        return validMutability && (IsNever(ElementType) || ElementType.Equals(targetArray.ElementType));
+        return IsMutable && (IsNever(ElementType) || ElementType.Equals(targetArray.ElementType));
     }
 
     public override string ToString() => $"{ParenthesizeIfNeeded(ElementType)}[{(IsMutable ? "mut" : "")}]";
