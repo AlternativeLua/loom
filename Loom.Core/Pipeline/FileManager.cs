@@ -16,13 +16,12 @@ public static class FileManager
         File.WriteAllText(file.Path, file.RenderedLuau);
     }
 
-    public static string GetOutputPath(SourceFile file, LoomConfig config) =>
-        file.AbsolutePath
-            .Replace(
-                Path.GetFileName(config.Files.SourceDirectory) + Path.DirectorySeparatorChar,
-                Path.GetFileName(config.Files.OutputDirectory) + Path.DirectorySeparatorChar
-            )
-            .Replace(LoomExtension, ".luau");
+    public static string GetOutputPath(SourceFile file, LoomConfig config)
+    {
+        var relativePath = Path.GetRelativePath(config.Files.SourceDirectory, file.AbsolutePath);
+        var outputPath = Path.Combine(config.Files.OutputDirectory, relativePath);
+        return Path.ChangeExtension(outputPath, ".luau");
+    }
 
     public static bool IsLoomFile(string path) => Path.GetExtension(path) == LoomExtension;
 
