@@ -1,0 +1,107 @@
+﻿ExportList(
+  ExportKeyword: Token(ExportKeyword, "export")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ExportSpecifier(
+      Name: Token(Identifier, "tau")
+      AsKeyword: null
+      Alias: null
+      ExportedName: Token(Identifier, "tau")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: null
+  ModuleSpecifier: null
+  IsTypeOnly: False
+  IsReExport: False
+  ModulePath: null
+)
+ExportList(
+  ExportKeyword: Token(ExportKeyword, "export")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ExportSpecifier(
+      Name: Token(Identifier, "tau")
+      AsKeyword: null
+      Alias: null
+      ExportedName: Token(Identifier, "tau")
+    )
+    ExportSpecifier(
+      Name: Token(Identifier, "tau")
+      AsKeyword: Token(AsKeyword, "as")
+      Alias: Token(Identifier, "TAU")
+      ExportedName: Token(Identifier, "TAU")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: null
+  ModuleSpecifier: null
+  IsTypeOnly: False
+  IsReExport: False
+  ModulePath: null
+)
+ExportList(
+  ExportKeyword: Token(ExportKeyword, "export")
+  TypeKeyword: Token(TypeKeyword, "type")
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ExportSpecifier(
+      Name: Token(Identifier, "Local")
+      AsKeyword: null
+      Alias: null
+      ExportedName: Token(Identifier, "Local")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: null
+  ModuleSpecifier: null
+  IsTypeOnly: True
+  IsReExport: False
+  ModulePath: null
+)
+ExportList(
+  ExportKeyword: Token(ExportKeyword, "export")
+  TypeKeyword: null
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ExportSpecifier(
+      Name: Token(Identifier, "pi")
+      AsKeyword: null
+      Alias: null
+      ExportedName: Token(Identifier, "pi")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  IsTypeOnly: False
+  IsReExport: True
+  ModulePath: "./math"
+)
+ExportList(
+  ExportKeyword: Token(ExportKeyword, "export")
+  TypeKeyword: Token(TypeKeyword, "type")
+  LeftBrace: Token(LBrace, "{")
+  Specifiers: [
+    ExportSpecifier(
+      Name: Token(Identifier, "Point")
+      AsKeyword: Token(AsKeyword, "as")
+      Alias: Token(Identifier, "P")
+      ExportedName: Token(Identifier, "P")
+    )
+  ]
+  RightBrace: Token(RBrace, "}")
+  FromKeyword: Token(Identifier, "from")
+  ModuleSpecifier: Literal(
+    Token(StringLiteral, ""./math"")
+    Value: "./math"
+  )
+  IsTypeOnly: True
+  IsReExport: True
+  ModulePath: "./math"
+)

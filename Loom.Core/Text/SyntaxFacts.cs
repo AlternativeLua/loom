@@ -11,6 +11,8 @@ public static class SyntaxFacts
             new("mut", SyntaxKind.MutKeyword),
             new("type", SyntaxKind.TypeKeyword),
             new("interface", SyntaxKind.InterfaceKeyword),
+            new ("export", SyntaxKind.ExportKeyword),
+            new ("import", SyntaxKind.ImportKeyword),
             new("fn", SyntaxKind.FnKeyword),
             new("return", SyntaxKind.ReturnKeyword),
             new("continue", SyntaxKind.ContinueKeyword),

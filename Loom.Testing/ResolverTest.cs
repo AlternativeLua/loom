@@ -567,6 +567,25 @@ public class ResolverTest
         var diagnostics = Utility.GetSemanticModel("match missing { _ -> 0 }").Diagnostics;
         Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'missing'.");
     }
+
+    [Fact]
+    public void ThrowsFor_ExportMutable()
+    {
+        var diagnostics = Utility.GetSemanticModel("export mut x = 1;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotExportMutable, "Mutable variables cannot be exported.", "use 'let' instead of 'mut'");
+    }
+
+    [Fact]
+    public void ThrowsFor_ExportOutsideModuleScope()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn f() { export let x = 1; }").Diagnostics;
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ExportOutsideModuleScope,
+            "Declarations can only be exported at the top level of a module.",
+            "move the 'export' declaration out of the enclosing block"
+        );
+    }
     #endregion ThrowsFor
 
     [Fact]
@@ -577,6 +596,63 @@ public class ResolverTest
     }
 
     #region Resolves
+    [Fact]
+    public void Resolves_ExportedDeclarations()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("export let constant = 69; export fn do_something() { }"));
+
+        Assert.Equal(2, model.Exports.Count);
+        Assert.Equal(["constant", "do_something"], model.Exports.Select(s => s.Name));
+
+        var variable = Assert.IsType<ExportDeclaration>(model.Tree.Statements[0]).Declaration;
+        Assert.Same(model.GetDeclarationSymbol(variable), model.Exports[0].Symbol);
+    }
+
+    [Fact]
+    public void Resolves_ExportedTypeDeclarations()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                export type Alias = number;
+                export interface Point { x: number y: number }
+                export sealed interface Handle;
+                export enum Direction { Up, Down }
+                export trait Drawable { fn draw: void; }
+                """
+            )
+        );
+
+        // interfaces and enums declare a value symbol as well as a type symbol, and both are exported so
+        // that an importer can use the name in either namespace
+        Assert.Equal(
+            ["Alias", "Point", "Point", "Handle", "Handle", "Direction", "Direction", "Drawable"],
+            model.Exports.Select(s => s.Name)
+        );
+
+        Assert.Equal(
+            [
+                SymbolKind.Type,
+                SymbolKind.Variable, SymbolKind.Interface,
+                SymbolKind.Variable, SymbolKind.Interface,
+                SymbolKind.Variable, SymbolKind.EnumType,
+                SymbolKind.Trait
+            ],
+            model.Exports.Select(s => s.Symbol.Kind)
+        );
+
+        // ...which is what FindExports hands an importing module
+        Assert.Equal([SymbolKind.Variable, SymbolKind.Interface], model.FindExports("Point").Select(s => s.Symbol.Kind));
+        Assert.Equal([SymbolKind.Type], model.FindExports("Alias").Select(s => s.Symbol.Kind));
+        Assert.Empty(model.FindExports("Nope"));
+
+        // none of these emit a runtime local, so none reach the module's return table
+        Assert.DoesNotContain(model.Exports, s => s.EmitsRuntimeBinding);
+
+        var trait = Assert.IsType<ExportDeclaration>(model.Tree.Statements[4]).Declaration;
+        Assert.Same(model.GetDeclarationSymbol(trait), model.Exports[7].Symbol);
+    }
+
     [Fact]
     public void Resolves_InterfaceAndTraitRelationship()
     {

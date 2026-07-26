@@ -82,6 +82,17 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
         );
 
     public virtual T VisitDeclare(Declare declare) => Visit(declare.Signature);
+    public virtual T VisitExportDeclaration(ExportDeclaration export) => Visit(export.Declaration);
+
+    public virtual T VisitImportDeclaration(ImportDeclaration import) => CombineResults([VisitList(import.Specifiers), Visit(import.ModuleSpecifier)]);
+    public virtual T VisitImportSpecifier(ImportSpecifier specifier) => DefaultValue(specifier);
+    
+    public virtual T VisitNamespaceImport(NamespaceImport import) => DefaultValue(import);
+
+    public virtual T VisitExportList(ExportList export) =>
+        CombineResults([VisitList(export.Specifiers), VisitWithDefault(export.ModuleSpecifier)]);
+
+    public virtual T VisitExportSpecifier(ExportSpecifier specifier) => DefaultValue(specifier);
 
     public virtual T VisitDeclareVariableSignature(DeclareVariableSignature declareVariableSignature) => VisitWithDefault(declareVariableSignature.ColonTypeClause);
 
@@ -209,16 +220,24 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
         node is null ? default : Visit<TResult>(node);
 
     protected T? MaybeVisit(Node? node) => node is null ? default : Visit(node);
-    private T VisitWithDefault(Node? node) => MaybeVisit(node) ?? DefaultValue(node);
+
+    /// <remarks>
+    /// Cannot be written as <c>MaybeVisit(node) ?? DefaultValue(node)</c>: when <typeparamref name="T"/>
+    /// is a value type the null coalescence never runs, so a missing node would yield
+    /// <c>default(T)</c> instead of the visitor's default value.
+    /// </remarks>
+    private T VisitWithDefault(Node? node) => node is null ? DefaultValue(node) : MaybeVisit(node) ?? DefaultValue(node);
 
     private T VisitList<TNode>(List<TNode> nodes)
         where TNode : Node
     {
-        T result = default!;
+        if (nodes.Count == 0)
+            return DefaultValue(null);
 
-        foreach (var node in nodes)
-            result = Visit(node);
+        var results = new T?[nodes.Count];
+        for (var i = 0; i < nodes.Count; i++)
+            results[i] = Visit(nodes[i]);
 
-        return result;
+        return CombineResults(results);
     }
 }

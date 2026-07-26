@@ -1,0 +1,103 @@
+﻿ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: TypeAlias(
+    EqualsTypeClause(
+      EqualsToken: Token(Equals, "=")
+      Type: PrimitiveType(
+        Kind: Number
+      )
+    )
+    TypeParameters: null
+    Name: Token(Identifier, "Alias")
+  )
+)
+ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: InterfaceDeclaration(
+    SealedKeyword: null
+    ColonTypeListClause: null
+    Body: InterfaceBody(
+      LeftBrace: Token(LBrace, "{")
+      RightBrace: Token(RBrace, "}")
+      Members: [
+        PropertyDeclaration(
+          MutKeyword: null
+          ColonTypeClause(
+            ColonToken: Token(Colon, ":")
+            Type: PrimitiveType(
+              Kind: Number
+            )
+          )
+          Attributes: null
+          Name: Token(Identifier, "x")
+        )
+        PropertyDeclaration(
+          MutKeyword: null
+          ColonTypeClause(
+            ColonToken: Token(Colon, ":")
+            Type: PrimitiveType(
+              Kind: Number
+            )
+          )
+          Attributes: null
+          Name: Token(Identifier, "y")
+        )
+      ]
+    )
+    TypeParameters: null
+    Name: Token(Identifier, "Point")
+  )
+)
+ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: InterfaceDeclaration(
+    SealedKeyword: Token(SealedKeyword, "sealed")
+    ColonTypeListClause: null
+    Body: null
+    TypeParameters: null
+    Name: Token(Identifier, "Handle")
+  )
+)
+ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: EnumDeclaration(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    ColonTypeClause: null
+    Members: [
+      EnumMember(
+        Name: Token(Identifier, "Up")
+        EqualsValueClause: null
+      )
+      EnumMember(
+        Name: Token(Identifier, "Down")
+        EqualsValueClause: null
+      )
+    ]
+    Name: Token(Identifier, "Direction")
+  )
+)
+ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: TraitDeclaration(
+    Body: TraitBody(
+      LeftBrace: Token(LBrace, "{")
+      RightBrace: Token(RBrace, "}")
+      Members: [
+        DeclareFunctionSignature(
+          Parameters: null
+          ReturnType: ColonTypeClause(
+            ColonToken: Token(Colon, ":")
+            Type: PrimitiveType(
+              Kind: Void
+            )
+          )
+          TypeParameters: null
+          Name: Token(Identifier, "draw")
+        )
+      ]
+    )
+    TypeParameters: null
+    Name: Token(Identifier, "Drawable")
+  )
+)

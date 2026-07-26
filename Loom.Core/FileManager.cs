@@ -1,3 +1,4 @@
+using Loom.Config;
 using Loom.Core.Text;
 
 namespace Loom.Core;
@@ -13,6 +14,14 @@ public static class FileManager
             Directory.CreateDirectory(directory);
         File.WriteAllText(file.Path, file.RenderedLuau);
     }
+    
+    public static string GetOutputPath(SourceFile file, LoomConfig config) =>
+        file.AbsolutePath
+            .Replace(
+                Path.GetFileName(config.Files.SourceDirectory) + Path.DirectorySeparatorChar,
+                Path.GetFileName(config.Files.OutputDirectory) + Path.DirectorySeparatorChar
+            )
+            .Replace(LoomExtension, ".luau");
 
     public static SourceFile LoadSingle(string path) => new(Path.GetFullPath(path));
 

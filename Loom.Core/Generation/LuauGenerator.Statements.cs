@@ -11,6 +11,7 @@ using ExpressionStatement = Loom.Core.Parsing.AST.ExpressionStatement;
 using Return = Loom.Core.Parsing.AST.Return;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
+using Identifier = Loom.Luau.AST.Identifier;
 using PropertyAccess = Loom.Luau.AST.PropertyAccess;
 using UnaryOperator = Loom.Luau.AST.UnaryOperator;
 
@@ -32,6 +33,20 @@ public sealed partial class LuauGenerator
             .ToList();
 
         statements.AddRange(GenerateStatements(tree.Statements));
+
+        MarkListExportedTypes(statements);
+        statements.AddRange(GenerateExportedTypeAliases());
+
+        var valueExports = _semanticModel.Exports.FindAll(export => export.EmitsRuntimeBinding);
+        if (valueExports.Count > 0)
+        {
+            var initializers = valueExports.ConvertAll(TableInitializer (export) =>
+                new PropertyTableInitializer(export.Name, GenerateExportedValue(export))
+            );
+
+            statements.Add(new Luau.AST.Return(new Table(initializers)));
+        }
+
         return new LuauTree(statements);
     }
 
@@ -46,6 +61,19 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitReturn(Return @return) => new Luau.AST.Return(MaybeVisit<LuauExpression>(@return.Expression));
     public override LuauNode VisitDeclare(Declare declare) => declare.Signature is InterfaceDeclaration ? Visit(declare.Signature) : new NoOpStatement();
     public override LuauNode VisitExpressionStatement(ExpressionStatement expressionStatement) => WrapExpressionAsStatement(Visit(expressionStatement.Expression));
+    
+    public override LuauNode VisitImportDeclaration(ImportDeclaration import) => new NoOpStatement();
+    public override LuauNode VisitNamespaceImport(NamespaceImport import) => new NoOpStatement();
+    public override LuauNode VisitExportList(ExportList export) => new NoOpStatement();
+
+    public override LuauNode VisitExportDeclaration(ExportDeclaration export)
+    {
+        var generated = Visit(export.Declaration);
+        if (generated is Luau.AST.TypeAlias typeAlias)
+            typeAlias.IsExported = true;
+        
+        return generated;
+    }
 
     public override LuauNode VisitVariableDeclaration(VariableDeclaration variableDeclaration)
     {

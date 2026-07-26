@@ -11,6 +11,13 @@ namespace Loom.Core.Resolving;
 public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolTable Declarations, SymbolTable References)
     : DiagnosedResult(Diagnostics)
 {
+    public List<ExportBinding> Exports { get; } = [];
+
+    private Dictionary<string, List<ExportBinding>> ExportsByName { get; } = [];
+    
+    public List<ImportBinding> ImportBindings { get; } = [];
+
+    private HashSet<Symbol> ImportedSymbols { get; } = [];
     public bool DisableRuntimeLibraryImport { get; set; }
     public bool EmitDebugDiagnostics { get; set; }
     public bool MustImportRuntimeLibrary =>
@@ -33,6 +40,50 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     internal int RuntimeReferences = 0;
     internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag());
     private SymbolLookup DeclarationsByName => field ??= Declarations.Values.SelectMany(s => s).GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.ToList());
+
+    internal void AddExport(ExportBinding binding)
+    {
+        Exports.Add(binding);
+        if (!ExportsByName.TryGetValue(binding.Name, out var bindings))
+            ExportsByName[binding.Name] = bindings = [];
+
+        bindings.Add(binding);
+    }
+    
+    public List<ExportBinding> FindExports(string name) => ExportsByName.GetValueOrDefault(name, []);
+    
+    public List<NamespaceImportBinding> NamespaceImports { get; } = [];
+
+    internal void AddImportBinding(ImportBinding binding)
+    {
+        ImportBindings.Add(binding);
+        ImportedSymbols.Add(binding.Symbol);
+    }
+
+    internal void AddNamespaceImport(NamespaceImportBinding binding)
+    {
+        NamespaceImports.Add(binding);
+        ImportedSymbols.Add(binding.Symbol);
+    }
+
+    /// <summary>
+    /// Whether the symbol was declared by another module and brought in by an import. Its declaration
+    /// belongs to a tree this model never walked, so anything reasoning about the declaration's position —
+    /// flow analysis in particular — has to treat it as coming from outside.
+    /// </summary>
+    public bool IsImported(Symbol symbol) => ImportedSymbols.Contains(symbol);
+    
+    internal void MarkImportUsed(Symbol symbol)
+    {
+        if (!ImportedSymbols.Contains(symbol))
+            return;
+
+        foreach (var binding in ImportBindings.Where(binding => binding.Symbol == symbol))
+            binding.MarkUsed();
+
+        foreach (var binding in NamespaceImports.Where(binding => binding.Symbol == symbol))
+            binding.MarkUsed();
+    }
 
     public bool IsCompileTimeConstant(Expression expression) =>
         expression is Literal or NameOf

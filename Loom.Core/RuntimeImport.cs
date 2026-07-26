@@ -5,7 +5,7 @@ namespace Loom.Core;
 public sealed record RuntimeImport(RuntimeImportStatus Status, string Path)
 {
     public const string DefaultPath = PathPrefix + "ReplicatedStorage/include/loom_runtime";
-    private const string PathPrefix = "@game/";
+    internal const string PathPrefix = "@game/";
 
     public static RuntimeImport Default { get; } = new(RuntimeImportStatus.RojoMissing, DefaultPath);
 

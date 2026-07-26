@@ -1,5 +1,6 @@
-const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
-const abc: Loom.Event = Loom.Event.new()
-const function h()
-end
-const h_conn = abc:Connect(h)
+const math = require("@game/ServerScriptService/Loom/math")
+const square = math.square
+const PI = math.pi
+type Scalar = math.Scalar
+const total: Scalar = square(PI)
+print(total)

@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
 using Loom.Core.Generation.Macros;
+using Loom.Core.Modules;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Luau;
@@ -26,21 +27,26 @@ public sealed partial class LuauGenerator
     private readonly SemanticModel _semanticModel;
     private readonly LuauState _state = new();
     private readonly RuntimeImport _runtimeImport;
+    private readonly ModuleRequirePathResolver? _moduleRequirePaths;
     private readonly HashSet<(EventTarget Target, Symbol Function)> _localSafeConnections;
 
-    public LuauGenerator(SemanticModel semanticModel, RuntimeImport? runtimeImport = null)
+    public LuauGenerator(SemanticModel semanticModel, RuntimeImport? runtimeImport = null, ModuleRequirePathResolver? moduleRequirePaths = null)
         : base(_ => new NoOpStatement())
     {
         _semanticModel = semanticModel;
         _runtimeImport = runtimeImport ?? RuntimeImport.Default;
+        _moduleRequirePaths = moduleRequirePaths;
         _macroExpander = new MacroExpander(semanticModel, _state, _diagnostics);
         _localSafeConnections = ComputeLocalSafeConnections();
     }
 
     public LuauGeneratorResult Generate()
     {
+        var moduleImports = GenerateModuleImports();
         var luauTree = VisitTree(_semanticModel.Tree);
         luauTree.Statements.InsertRange(0, _eventConnections.StoreDeclarations);
+        luauTree.Statements.InsertRange(0, moduleImports);
+
         if (_semanticModel.MustImportRuntimeLibrary)
         {
             if (_runtimeImport.Status == RuntimeImportStatus.NotFoundInRojo)

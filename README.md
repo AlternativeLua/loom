@@ -945,6 +945,33 @@ handler_conn:Disconnect();
 
 ---
 
+## Exports
+
+Expose `let` and `fn` with `export`
+
+```rs
+export let pi = 3.14;
+
+export fn square(n: number): number -> n * n;
+
+fn double(n: number): number -> n * 2;
+```
+
+```luau
+const pi = 3.14
+const function square(n: number): number
+  return n * n
+end
+const function double(n: number): number
+  return n * 2
+end
+return { pi = pi, square = square }
+```
+
+`double` is still emitted, but only the exported members (`pi`, `square`) appear in the returned table, so only they are visible to other modules.
+
+---
+
 ## Contributing
 
 Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on the process for submitting pull requests and building language

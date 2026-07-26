@@ -1,5 +1,4 @@
-event abc;
-
-fn h {}
-
-abc += h;
+import { square, pi as PI } from "./math"
+import type { Scalar } from "./math"
+let total: Scalar = square(PI);
+print(total);

@@ -1,0 +1,9 @@
+export let constant = 69;
+export fn do_something -> print("doing something");
+
+export type Alias = number;
+export interface Point { x: number y: number }
+export enum Direction { Up, Down }
+export trait Drawable {
+    fn draw: void;
+}
