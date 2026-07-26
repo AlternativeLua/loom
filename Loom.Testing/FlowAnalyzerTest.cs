@@ -151,6 +151,19 @@ public class FlowAnalyzerTest
         """
     )]
     [InlineData("enum Colors { Red, Green, Blue }; Colors.Red;")]
+    [InlineData(
+        """
+        fn test() {
+            mut x: number;
+            if true {
+                return;
+            } else {
+                x = 1;
+            }
+            x;
+        }
+        """
+    )]
     public void Allows(string source) => Utility.AssertNoErrors(Utility.FlowAnalyze(source).AnalyzerResult);
 
     [Theory]
