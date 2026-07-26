@@ -1,5 +1,4 @@
 using Loom.Config;
-using Loom.Core;
 using Loom.Core.Diagnostics;
 using Loom.Core.FlowAnalysis;
 using Loom.Core.Generation;

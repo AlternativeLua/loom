@@ -1,11 +1,8 @@
-using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
 using Loom.Core.Generation.Macros;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Text;
 using Loom.Core.TypeChecking.Types;
-using ArrayType = Loom.Core.Parsing.AST.ArrayType;
-using FunctionType = Loom.Core.Parsing.AST.FunctionType;
 
 namespace Loom.Core.TypeChecking;
 

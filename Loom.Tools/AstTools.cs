@@ -1,6 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using Loom.Core;
 using Loom.Core.Debug;
 using Loom.Core.Lexing;
 using Loom.Core.Parsing;

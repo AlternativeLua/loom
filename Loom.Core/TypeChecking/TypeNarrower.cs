@@ -116,7 +116,7 @@ public sealed class TypeNarrower
         return new BranchStates(falseState, trueState);
     }
 
-    private FlowState ApplyBranchState(Expression expr, FlowState state, bool useTrue = false)
+    private FlowState ApplyBranchState(Expression expr, FlowState state, bool useTrue)
     {
         var (trueState, falseState) = ComputeBranchStates(expr, state);
         return useTrue ? trueState : falseState;

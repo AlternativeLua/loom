@@ -1,4 +1,3 @@
-using Loom.Core.Diagnostics;
 using Loom.Core.FlowAnalysis;
 using Loom.Core.Parsing.AST;
 using Loom.Core.TypeChecking.Types;

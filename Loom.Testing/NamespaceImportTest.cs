@@ -1,4 +1,3 @@
-using Loom.Core;
 using Loom.Core.Diagnostics;
 using Loom.Core.Pipeline;
 using Loom.Core.Resolving;
@@ -86,7 +85,7 @@ public class NamespaceImportTest
     public void Warns_WhenTheNamespaceIsNeverUsed() =>
         WithImportingModule(
             "import * as math from \"./math\"\nlet x = 1;\nprint(x);",
-            (result, bindings) =>
+            static (result, bindings) =>
             {
                 Assert.False(bindings[0].IsUsed);
                 Utility.AssertDiagnostic(
@@ -102,7 +101,7 @@ public class NamespaceImportTest
     public void Reports_ANamespaceName_CollidingWithALocalDeclaration() =>
         WithImportingModule(
             "let math = 1;\nimport * as math from \"./math\"\nprint(math);",
-            (result, _) => Utility.AssertDiagnostic(
+            static (result, _) => Utility.AssertDiagnostic(
                 result.Diagnostics,
                 InternalCodes.DuplicateName,
                 "Variable 'math' is already declared in this scope."

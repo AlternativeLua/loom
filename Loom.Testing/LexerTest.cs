@@ -237,7 +237,7 @@ public class LexerTest
     [Fact]
     public void Tokenizes_WithTriviaFalse_ExcludesWhitespaceAndComments()
     {
-        var tokens = Utility.GetTokens("true  ## comment\nfalse", false);
+        var tokens = Utility.GetTokens("true  ## comment\nfalse");
         Assert.Equal(3, tokens.Count);
         Assert.Equal(SyntaxKind.TrueLiteral, tokens[0].Kind);
         Assert.Equal(SyntaxKind.FalseLiteral, tokens[1].Kind);

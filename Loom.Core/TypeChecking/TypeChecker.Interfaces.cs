@@ -1,7 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
-using Loom.Core.Resolving;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking.Types;
 using FunctionType = Loom.Core.TypeChecking.Types.FunctionType;

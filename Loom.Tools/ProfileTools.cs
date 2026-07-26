@@ -1,6 +1,5 @@
 using System.Diagnostics;
 using Loom.Config;
-using Loom.Core;
 using Loom.Core.FlowAnalysis;
 using Loom.Core.Generation;
 using Loom.Core.Lexing;

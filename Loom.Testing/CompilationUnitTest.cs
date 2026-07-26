@@ -1,5 +1,4 @@
 using Loom.Config;
-using Loom.Core;
 using Loom.Core.Diagnostics;
 using Loom.Core.Pipeline;
 using Loom.Luau.AST;
