@@ -695,6 +695,8 @@ public class TypesTest
         var mutStrings = new ArrayType(String, true);
         Assert.False(immutStrings.IsAssignableTo(mutStrings));
         Assert.True(mutStrings.IsAssignableTo(immutStrings));
+
+        Assert.True(mutNumbers.IsAssignableTo(new ArrayType(Unknown, false)));
     }
 
     [Fact]

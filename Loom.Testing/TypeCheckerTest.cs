@@ -3945,6 +3945,24 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_OverloadedInvocation_PicksRestParameterCandidate_WithManyArguments()
+    {
+        const string source = """
+            declare interface Shape { x: number; y: number; }
+            declare interface ShapeStatic {
+                create: fn(x: number): Shape;
+                create: fn(..points: number[]): Shape;
+            }
+            declare let Shape: ShapeStatic;
+
+            Shape.create(1, 2, 3, 4, 5)
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
     public void ThrowsFor_OverloadedInvocation_NoCandidateMatches()
     {
         const string source = """
