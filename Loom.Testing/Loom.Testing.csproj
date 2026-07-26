@@ -25,6 +25,7 @@
     <ItemGroup>
         <ProjectReference Include="..\Loom.Luau\Loom.Luau.csproj"/>
         <ProjectReference Include="..\Loom.Core\Loom.Core.csproj"/>
+        <ProjectReference Include="..\Loom.TypeGenerator\Loom.TypeGenerator.csproj"/>
     </ItemGroup>
 
 </Project>
