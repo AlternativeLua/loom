@@ -34,7 +34,7 @@ public sealed partial class TypeChecker
     private readonly TypeInferrer _inferrer;
     private readonly TypeNarrower _narrower;
     private FlowState _flowState;
-    private Symbol? _resolvingHoisted;
+    private readonly HashSet<Symbol> _resolvingHoisted = [];
 
     private MacroContext EmptyMacroContext => field ??= new MacroContext(_semanticModel, new LuauState(), _diagnostics);
 
@@ -233,7 +233,10 @@ public sealed partial class TypeChecker
         MaybeVisit(functionDeclaration.ReturnType);
 
         var returnType = GetReturnType(functionDeclaration);
-        var functionType = BindType(functionDeclaration, new Types.FunctionType(typeParameters, parameterTypes, returnType));
+        var functionType = BindType(
+            functionDeclaration,
+            new Types.FunctionType(typeParameters, parameterTypes, returnType, HasRestParameter(functionDeclaration.Parameters))
+        );
 
         if (functionDeclaration.Body is ExpressionBody body)
         {
@@ -317,8 +320,11 @@ public sealed partial class TypeChecker
         new Types.FunctionType(
             declareFunctionSignature.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter) ?? [],
             declareFunctionSignature.Parameters?.ParameterList.ConvertAll(Visit) ?? [],
-            Visit(declareFunctionSignature.ReturnType)
+            Visit(declareFunctionSignature.ReturnType),
+            HasRestParameter(declareFunctionSignature.Parameters)
         );
+
+    private static bool HasRestParameter(Parameters? parameters) => parameters?.ParameterList is [.., { DotDot: not null }];
 
     public override Type VisitParameter(Parameter parameter)
     {
@@ -327,8 +333,17 @@ public sealed partial class TypeChecker
         if (declaredType != null && parameter.EqualsValueClause != null)
             _semanticModel.TypeSolver.AddConstraint(initializerType!, declaredType, parameter.EqualsValueClause.Value);
 
+        if (parameter.DotDot != null && declaredType != null && !IsArrayType(declaredType))
+            _diagnostics.Error(
+                parameter,
+                InternalCodes.InvalidRestParameterType,
+                $"Rest parameter '{parameter.Name.Text}' must have an array type, but got '{declaredType}'."
+            );
+
         return BindType(parameter, declaredType ?? initializerType!);
     }
+
+    private static bool IsArrayType(Type type) => (type is Types.InstantiatedType instantiated ? instantiated.Expand() : type) is Types.ArrayType;
 
     public override Type VisitAs(As @as)
     {
@@ -401,7 +416,7 @@ public sealed partial class TypeChecker
     {
         var declaration = _semanticModel.GetSymbol(invocation.Expression)?.Declaration as DeclareFunctionSignature;
         var argumentList = invocation.Arguments.ArgumentList;
-        var argumentTypes = BuildArgumentTypes(argumentList, functionType.ParameterTypes);
+        var argumentTypes = BuildArgumentTypes(argumentList, functionType.ParameterTypes, functionType.HasRestParameter);
 
         return BindNonGenericInvocation(invocation, argumentTypes, functionType, declaration);
     }
@@ -425,9 +440,9 @@ public sealed partial class TypeChecker
         var substitutedParameterTypes = SubstituteTypeParameters(invocation.Arguments, functionType.ParameterTypes, substitution);
         var substitutedReturnType = SubstituteTypeParameters(invocation, functionType.ReturnType, substitution);
         var argumentList = invocation.Arguments.ArgumentList;
-        var argumentTypes = BuildArgumentTypes(argumentList, substitutedParameterTypes);
+        var argumentTypes = BuildArgumentTypes(argumentList, substitutedParameterTypes, functionType.HasRestParameter);
 
-        CheckArity(invocation.Arguments, declaration?.Parameters, argumentTypes, substitutedParameterTypes);
+        CheckArity(invocation.Arguments, declaration?.Parameters, argumentTypes, substitutedParameterTypes, functionType.HasRestParameter);
         return BindType(invocation, substitutedReturnType);
     }
 
@@ -441,7 +456,7 @@ public sealed partial class TypeChecker
 
         var substitutedParameterTypes = SubstituteTypeParameters(invocation.Arguments, functionType.ParameterTypes, substitution);
         var substitutedReturnType = SubstituteTypeParameters(invocation, functionType.ReturnType, substitution);
-        CheckArguments(invocation.Arguments, declaration?.Parameters, argumentTypes, substitutedParameterTypes, argumentList);
+        CheckArguments(invocation.Arguments, declaration?.Parameters, argumentTypes, substitutedParameterTypes, argumentList, functionType.HasRestParameter);
 
         return BindType(invocation, substitutedReturnType);
     }
@@ -457,26 +472,45 @@ public sealed partial class TypeChecker
         return BindType(invocation, Types.PrimitiveType.Void);
     }
 
-    private List<Type> BuildArgumentTypes(List<Expression> argumentList, List<Type> parameterTypes)
+    private List<Type> BuildArgumentTypes(List<Expression> argumentList, List<Type> parameterTypes, bool hasRestParameter = false)
     {
+        var fixedCount = hasRestParameter ? parameterTypes.Count - 1 : parameterTypes.Count;
+        var restElementType = GetRestElementType(parameterTypes, hasRestParameter);
         var argumentTypes = new List<Type>(argumentList.Count);
         argumentTypes.AddRange(
-            argumentList.Select((t, i) => i < parameterTypes.Count
+            argumentList.Select((t, i) => i < fixedCount
                 ? Check(t, parameterTypes[i])
-                : Visit(t)
+                : restElementType != null
+                    ? Check(t, restElementType)
+                    : Visit(t)
             )
         );
 
         return argumentTypes;
     }
 
-    private void CheckArguments(Arguments arguments, Parameters? parameters, List<Type> argumentTypes, List<Type> parameterTypes, List<Expression> args)
+    private void CheckArguments(
+        Arguments arguments,
+        Parameters? parameters,
+        List<Type> argumentTypes,
+        List<Type> parameterTypes,
+        List<Expression> args,
+        bool hasRestParameter = false)
     {
-        CheckArity(arguments, parameters, argumentTypes, parameterTypes);
+        CheckArity(arguments, parameters, argumentTypes, parameterTypes, hasRestParameter);
+        var fixedCount = hasRestParameter ? parameterTypes.Count - 1 : parameterTypes.Count;
+        var restElementType = GetRestElementType(parameterTypes, hasRestParameter);
         for (var i = 0; i < args.Count; i++)
-            if (i < parameterTypes.Count)
+        {
+            if (i < fixedCount)
                 Check(args[i], parameterTypes[i]);
+            else if (restElementType != null)
+                Check(args[i], restElementType);
+        }
     }
+
+    private static Type? GetRestElementType(List<Type> parameterTypes, bool hasRestParameter) =>
+        hasRestParameter && parameterTypes.Count > 0 && parameterTypes[^1] is Types.ArrayType restArray ? restArray.ElementType : null;
 
     public override Type VisitQualifiedName(QualifiedName qualifiedName) => GetTypeOfNamedAccess(qualifiedName, qualifiedName.Identifier, qualifiedName.Names);
     public override Type VisitPropertyAccess(PropertyAccess propertyAccess) => GetTypeOfNamedAccess(propertyAccess, propertyAccess.Expression, propertyAccess.Names);
@@ -790,7 +824,8 @@ public sealed partial class TypeChecker
             new Types.FunctionType(
                 functionType.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter) ?? [],
                 functionType.Parameters?.ParameterList.ConvertAll(Visit) ?? [],
-                Visit(functionType.ReturnType)
+                Visit(functionType.ReturnType),
+                HasRestParameter(functionType.Parameters)
             )
         );
 
@@ -911,9 +946,14 @@ public sealed partial class TypeChecker
     private Type? GetInvocationArgumentType(Invocation invocation, Expression argument)
     {
         var index = invocation.Arguments.ArgumentList.IndexOf(argument);
-        return index < 0 || _semanticModel.GetType(invocation.Expression) is not Types.FunctionType functionType || index >= functionType.ParameterTypes.Count
-            ? null
-            : functionType.ParameterTypes[index];
+        if (index < 0 || _semanticModel.GetType(invocation.Expression) is not Types.FunctionType functionType)
+            return null;
+
+        var fixedCount = functionType.HasRestParameter ? functionType.ParameterTypes.Count - 1 : functionType.ParameterTypes.Count;
+        if (index < fixedCount)
+            return functionType.ParameterTypes[index];
+
+        return GetRestElementType(functionType.ParameterTypes, functionType.HasRestParameter);
     }
 
     private Type? GetEnclosingDeclaredReturnType(Return @return)
@@ -1033,18 +1073,21 @@ public sealed partial class TypeChecker
         );
     }
 
-    private void CheckArity(Arguments arguments, Parameters? parameters, List<Type> argumentTypes, List<Type> parameterTypes)
+    private void CheckArity(Arguments arguments, Parameters? parameters, List<Type> argumentTypes, List<Type> parameterTypes, bool hasRestParameter = false)
     {
+        var fixedParameterTypes = hasRestParameter ? parameterTypes.Take(parameterTypes.Count - 1).ToList() : parameterTypes;
         var requiredParameterTypes = new List<Type>();
         if (parameters == null)
         {
-            requiredParameterTypes = parameterTypes.FindAll(Type.IsNotOptional);
+            requiredParameterTypes = fixedParameterTypes.FindAll(Type.IsNotOptional);
         }
         else
         {
-            for (var i = 0; i < parameters.ParameterList.Count; i++)
+            var declaredCount = hasRestParameter ? parameters.ParameterList.Count - 1 : parameters.ParameterList.Count;
+            var loopBound = Math.Min(declaredCount, fixedParameterTypes.Count);
+            for (var i = 0; i < loopBound; i++)
             {
-                var parameterType = parameterTypes[i];
+                var parameterType = fixedParameterTypes[i];
                 var parameter = parameters.ParameterList[i];
                 if (parameter.EqualsValueClause != null || !Type.IsNotOptional(parameterType)) continue;
 
@@ -1053,20 +1096,22 @@ public sealed partial class TypeChecker
         }
 
         var minimum = requiredParameterTypes.Count;
-        var maximum = parameterTypes.Count;
-        var arityDisplay = minimum == maximum
-            ? maximum.ToString()
-            : $"{minimum}-{maximum}";
+        var maximum = fixedParameterTypes.Count;
+        var arityDisplay = hasRestParameter
+            ? $"{minimum}+"
+            : minimum == maximum
+                ? maximum.ToString()
+                : $"{minimum}-{maximum}";
 
-        if (argumentTypes.Count <= maximum && argumentTypes.Count >= minimum) return;
+        if ((hasRestParameter || argumentTypes.Count <= maximum) && argumentTypes.Count >= minimum) return;
 
-        var s = minimum != maximum || maximum != 1 ? "s" : "";
+        var s = hasRestParameter || minimum != maximum || maximum != 1 ? "s" : "";
         _diagnostics.Error(arguments, InternalCodes.InvocationArity, $"Function expects {arityDisplay} argument{s}, but {argumentTypes.Count} were provided.");
     }
 
     private Type BindNonGenericInvocation(Invocation invocation, List<Type> argumentTypes, Types.FunctionType functionType, DeclareFunctionSignature? declaration)
     {
-        CheckArity(invocation.Arguments, declaration?.Parameters, argumentTypes, functionType.ParameterTypes);
+        CheckArity(invocation.Arguments, declaration?.Parameters, argumentTypes, functionType.ParameterTypes, functionType.HasRestParameter);
 
         // COMMENT THIS OUT BECAUSE THE CHECK ALREADY DID IT SO NO NEED TO ADD CONSTRAINTS HERE
         // AddArgumentConstraints(invocation.Arguments, argumentTypes, functionType.ParameterTypes);
@@ -1156,16 +1201,18 @@ public sealed partial class TypeChecker
 
     private Type ResolveHoistedType(Symbol symbol)
     {
-        var type = GetTypeFromSymbol(symbol);
-        if (ReferenceEquals(symbol, _resolvingHoisted) || type is not TypeVariable)
-            return type;
+        if (!_resolvingHoisted.Add(symbol))
+            return _semanticModel.GetType(symbol.Declaration);
 
-        var outer = _resolvingHoisted;
-        _resolvingHoisted = symbol;
-        type = Visit(symbol.Declaration);
-        _resolvingHoisted = outer;
-
-        return type;
+        try
+        {
+            var type = GetTypeFromSymbol(symbol);
+            return type is TypeVariable ? Visit(symbol.Declaration) : type;
+        }
+        finally
+        {
+            _resolvingHoisted.Remove(symbol);
+        }
     }
 
     private bool TryGetEventParameterTypes(Node failNode, Type type, [MaybeNullWhen(false)] out List<Type> typeArguments)
