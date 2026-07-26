@@ -66,6 +66,9 @@ public enum SyntaxKind : ushort
     TrueLiteral,
     FalseLiteral,
     NoneLiteral,
+    InterpolatedStringStart,
+    InterpolatedStringText,
+    InterpolatedStringEnd,
 
     LetKeyword,
     MutKeyword,
@@ -95,6 +98,8 @@ public enum SyntaxKind : ushort
     SealedKeyword,
     TraitKeyword,
     ImplementKeyword,
+    MatchKeyword,
+    WhenKeyword,
 
     Identifier,
     Eof

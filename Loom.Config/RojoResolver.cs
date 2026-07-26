@@ -4,7 +4,7 @@ public sealed class RojoResolver
 {
     public const string ProjectFileName = "default.project.json";
     public const string RuntimeFileName = "loom_runtime.luau";
-    private static readonly string[] LuauSuffixes = [".server.luau", ".client.luau", ".luau"];
+    private static readonly string[] _luauSuffixes = [".server.luau", ".client.luau", ".luau"];
 
     private readonly string _projectDirectory;
     private readonly RojoProject _project;
@@ -69,27 +69,27 @@ public sealed class RojoResolver
             if (resolved != null)
                 return resolved;
         }
-        
+
         return null;
     }
 
     private IReadOnlyList<string>? ResolveInPath(string nodePath, IReadOnlyList<string> segments, string fileName)
     {
         var absolute = Path.GetFullPath(Path.Combine(_projectDirectory, nodePath));
-        
+
         if (File.Exists(absolute))
             return Path.GetFileName(absolute) == fileName ? segments : null;
-        
+
         if (!Directory.Exists(absolute))
-            return  null;
+            return null;
 
         var match = Directory.EnumerateFiles(absolute, fileName, SearchOption.AllDirectories).FirstOrDefault();
-        if (match == null) 
-            return  null;
+        if (match == null)
+            return null;
 
         var relative = Path.GetRelativePath(absolute, match);
         var parts = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        return [.. segments, .. ToInstanceSegments(parts)];
+        return [..segments, ..ToInstanceSegments(parts)];
     }
 
     private static IEnumerable<string> ToInstanceSegments(IReadOnlyList<string> parts)
@@ -103,7 +103,7 @@ public sealed class RojoResolver
             else
             {
                 var name = StripLuauSuffix(parts[i]);
-                if (name != "init") 
+                if (name != "init")
                     yield return name;
             }
         }
@@ -111,11 +111,10 @@ public sealed class RojoResolver
 
     private static string StripLuauSuffix(string fileName)
     {
-        foreach (var suffix in LuauSuffixes)
+        foreach (var suffix in _luauSuffixes)
             if (fileName.EndsWith(suffix))
                 return fileName[..^suffix.Length];
-        
+
         return fileName;
     }
-
 }

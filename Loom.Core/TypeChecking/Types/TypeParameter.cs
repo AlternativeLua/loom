@@ -1,10 +1,13 @@
 namespace Loom.Core.TypeChecking.Types;
 
-public sealed class TypeParameter(string name, Type? constraint = null, Type? defaultType = null) : Type
+public sealed class TypeParameter(string name, Type? constraint = null, Type? defaultType = null, Variance variance = Variance.Invariant) : Type
 {
     public string Name { get; } = name;
     public Type? Constraint { get; } = constraint;
     public Type? DefaultType { get; } = defaultType;
+    public Variance Variance { get; } = variance;
+
+    public TypeParameter WithVariance(Variance newVariance) => new(Name, Constraint, DefaultType, newVariance);
 
     public override int GetHashCode()
     {

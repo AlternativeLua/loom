@@ -11,10 +11,8 @@ public class LocationTest
     {
         var firstLineStart = new Location(_testFile, 0);
         var secondLineStart = new Location(_testFile, 19);
-
         Assert.Equal(firstLineStart.Character, secondLineStart.Character);
         Assert.NotEqual(firstLineStart.Line, secondLineStart.Line);
-
         Assert.NotEqual(firstLineStart, secondLineStart);
         Assert.False(firstLineStart.Equals(secondLineStart));
     }
@@ -24,7 +22,6 @@ public class LocationTest
     {
         var a = new Location(_testFile, 19);
         var b = new Location(_testFile, 19);
-
         Assert.Equal(a, b);
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
     }
@@ -34,7 +31,6 @@ public class LocationTest
     {
         var firstLineStart = new Location(_testFile, 0);
         var secondLineStart = new Location(_testFile, 19);
-
         Assert.NotEqual(firstLineStart.GetHashCode(), secondLineStart.GetHashCode());
     }
 
@@ -44,7 +40,6 @@ public class LocationTest
         var a = new Location(_testFile, 19);
         var b = new Location(_testFile, 19);
         var c = new Location(_testFile, 0);
-
         Assert.True(a == b);
         Assert.False(a == c);
     }
@@ -54,7 +49,6 @@ public class LocationTest
     {
         var a = new Location(_testFile, 19);
         var b = new Location(_testFile, 0);
-
         Assert.True(a != b);
         Assert.False(a != new Location(_testFile, 19));
     }
@@ -63,7 +57,9 @@ public class LocationTest
     public void ObjectEquals_NonLocationObject_ReturnsFalse()
     {
         var location = new Location(_testFile, 0);
-        Assert.False(location.Equals((object)"not a location"));
+
+        // ReSharper disable once SuspiciousTypeConversion.Global
+        Assert.False(location.Equals("not a location"));
     }
 
     [Fact]
@@ -71,7 +67,6 @@ public class LocationTest
     {
         var a = new Location(_testFile, 19);
         object b = new Location(_testFile, 19);
-
         Assert.True(a.Equals(b));
     }
 
@@ -80,7 +75,6 @@ public class LocationTest
     {
         var start = new Location(_testFile, 0);
         var advanced = start + 4;
-
         Assert.Equal(4, advanced.Position);
         Assert.Equal(start.File, advanced.File);
     }

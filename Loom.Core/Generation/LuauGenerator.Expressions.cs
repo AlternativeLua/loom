@@ -67,6 +67,14 @@ public sealed partial class LuauGenerator
         if (SyntaxFacts.IsBitwiseOperator(binaryOperator.Operator.Kind))
             return GenerateBitwiseOperator(binaryOperator);
 
+        if (binaryOperator.Operator.Kind == SyntaxKind.InKeyword)
+        {
+            var index = Visit(binaryOperator.Left);
+            var target = Visit(binaryOperator.Right);
+            var access = new Luau.AST.ElementAccess(target, index);
+            return new Luau.AST.BinaryOperator(access, "~=", new NilLiteral());
+        }
+
         var op = binaryOperator.Operator.Text;
         var leftType = _semanticModel.GetType(binaryOperator.Left);
         var rightType = _semanticModel.GetType(binaryOperator.Right);
@@ -106,6 +114,20 @@ public sealed partial class LuauGenerator
             bool b => new BooleanLiteral(b),
             _ => new NilLiteral()
         };
+
+    public override LuauNode VisitInterpolatedStringLiteral(InterpolatedStringLiteral interpolatedStringLiteral)
+    {
+        var segments = interpolatedStringLiteral.Parts.ConvertAll<InterpolatedStringSegment>(
+            part => part switch
+            {
+                InterpolationTextPart text => new InterpolatedStringTextSegment(text.Text),
+                InterpolationHolePart hole => new InterpolatedStringExpressionSegment(Visit(hole.Expression)),
+                _ => throw new ArgumentException($"Unknown interpolation part type: {part.GetType()}")
+            }
+        );
+
+        return new InterpolatedString(segments);
+    }
 
     public override LuauNode VisitIdentifier(Identifier identifier)
     {

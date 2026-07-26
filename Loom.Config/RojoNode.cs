@@ -4,9 +4,9 @@ namespace Loom.Config;
 
 public sealed class RojoNode
 {
-    public string? Path { get; init; }
+    public string? Path { get; private init; }
     public string? ClassName { get; init; }
-    public IReadOnlyDictionary<string, RojoNode> Children { get; init; } = new Dictionary<string, RojoNode>();
+    public IReadOnlyDictionary<string, RojoNode> Children { get; private init; } = new Dictionary<string, RojoNode>();
 
     public static RojoNode Parse(JsonElement element)
     {
@@ -25,11 +25,13 @@ public sealed class RojoNode
                     className = property.Value.ToString();
                     break;
                 default:
-                    if (!property.Name.StartsWith("$") && property.Value.ValueKind == JsonValueKind.Object) children[property.Name] = Parse(property.Value);
+                    if (!property.Name.StartsWith('$') && property.Value.ValueKind == JsonValueKind.Object)
+                        children[property.Name] = Parse(property.Value);
+
                     break;
             }
         }
-        
+
         return new RojoNode { Path = path, ClassName = className, Children = children };
     }
 }

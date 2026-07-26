@@ -472,6 +472,88 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
         return true;
     }
 
+    public override bool VisitMatchExpression(MatchExpression matchExpression)
+    {
+        if (!Visit(matchExpression.Expression))
+            return false;
+
+        foreach (var arm in matchExpression.Arms)
+            if (!Visit(arm))
+                return false;
+
+        return true;
+    }
+
+    public override bool VisitMatchArm(MatchArm matchArm)
+    {
+        PushScope();
+
+        var success =
+            Visit(matchArm.Pattern)
+            && (matchArm.Guard == null || Visit(matchArm.Guard))
+            && Visit(matchArm.Body);
+
+        PopScope();
+        return success;
+    }
+
+    public override bool VisitIdentifierPattern(IdentifierPattern identifierPattern)
+        => DeclareVariable(identifierPattern, identifierPattern.Name.Text, SymbolKind.Variable);
+
+    public override bool VisitLetPattern(LetPattern letPattern)
+        => DeclareVariable(letPattern, letPattern.Name.Text, SymbolKind.Variable);
+
+    public override bool VisitTypedPattern(TypedPattern typedPattern)
+        => DeclareVariable(typedPattern, typedPattern.Name.Text, SymbolKind.Variable)
+        && Visit(typedPattern.Type)
+        && (typedPattern.ObjectPattern == null || Visit(typedPattern.ObjectPattern));
+
+    public override bool VisitTypePattern(TypePattern typePattern)
+        => Visit(typePattern.Type)
+        && (typePattern.ObjectPattern == null || Visit(typePattern.ObjectPattern));
+
+    public override bool VisitObjectPattern(ObjectPattern objectPattern)
+    {
+        foreach (var field in objectPattern.Fields)
+            if (!Visit(field))
+                return false;
+
+        return true;
+    }
+
+    public override bool VisitObjectPatternField(ObjectPatternField objectPatternField)
+        => Visit(objectPatternField.Pattern);
+
+    public override bool VisitArrayPattern(ArrayPattern arrayPattern)
+    {
+        foreach (var element in arrayPattern.Elements)
+            if (!Visit(element))
+                return false;
+
+        return arrayPattern.Rest == null || Visit(arrayPattern.Rest);
+    }
+
+    public override bool VisitRestPattern(RestPattern restPattern)
+        => Visit(restPattern.Pattern);
+
+    public override bool VisitOrPattern(OrPattern orPattern)
+    {
+        foreach (var pattern in orPattern.Patterns)
+            if (!Visit(pattern))
+                return false;
+
+        return true;
+    }
+
+    public override bool VisitWildcardPattern(WildcardPattern wildcardPattern) => true;
+
+    public override bool VisitLiteralPattern(LiteralPattern literalPattern) => true;
+
+    public override bool VisitRangePattern(RangePattern rangePattern)
+        => Visit(rangePattern.Minimum) && Visit(rangePattern.Maximum);
+
+    public override bool VisitNullPattern(NullPattern nullPattern) => true;
+
     public override bool VisitWhile(While @while)
     {
         Visit(@while.Condition);
@@ -815,16 +897,13 @@ public sealed class Resolver(ParserResult parserResult, CompilationUnit compilat
             AddDeclaration(symbol);
         }
 
-        var propertyNames = properties.Select(p => p.Name.Text);
-        var duplicates = propertyNames.GroupBy(x => x).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
-        if (duplicates.Count <= 0)
+        var duplicateGroups = properties.GroupBy(p => p.Name.Text).Where(g => g.Count() > 1).ToList();
+        var invalidDuplicateGroups = duplicateGroups.Where(g => !g.All(p => p.ColonTypeClause.Type is FunctionType)).ToList();
+        if (invalidDuplicateGroups.Count <= 0)
             return true;
 
-        foreach (var duplicate in duplicates)
-        {
-            var property = properties.FindLast(p => p.Name.Text == duplicate)!;
-            _diagnostics.Error(property, InternalCodes.DuplicateName, $"Property '{duplicate}' already exists on type '{interfaceSymbol.Name}'");
-        }
+        foreach (var group in invalidDuplicateGroups)
+            _diagnostics.Error(group.Last(), InternalCodes.DuplicateName, $"Property '{group.Key}' already exists on type '{interfaceSymbol.Name}'");
 
         return false;
     }

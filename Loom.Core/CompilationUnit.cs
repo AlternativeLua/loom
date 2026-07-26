@@ -12,6 +12,7 @@ public sealed class CompilationUnit(LoomConfig config)
     public LoomConfig Config { get; } = config;
     public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
     public Dictionary<Symbol, Type> Globals { get; } = [];
+    public RuntimeImport RuntimeImport { get; } = RuntimeImport.Resolve(config);
 
     /// <summary>
     /// Semantic models of files already analyzed in this unit, keyed by source file. Because analysis
@@ -19,7 +20,6 @@ public sealed class CompilationUnit(LoomConfig config)
     /// file is resolved, which is how the resolver reads a dependency's exports.
     /// </summary>
     public Dictionary<SourceFile, SemanticModel> AnalyzedModules { get; } = [];
-    public RuntimeImport RuntimeImport { get; } = ResolveRuntimeImport(config);
 
     /// <summary>Names modules for the requires the generator emits, through the unit's Rojo project.</summary>
     public ModuleRequirePathResolver ModuleRequirePaths { get; } = new(config);
@@ -29,18 +29,6 @@ public sealed class CompilationUnit(LoomConfig config)
     /// it to find the module an import refers to, so it is null until <see cref="Compile()"/> runs.
     /// </summary>
     public ModuleGraph? ModuleGraph { get; private set; }
-
-    private static RuntimeImport ResolveRuntimeImport(LoomConfig config)
-    {
-        var resolver = RojoResolver.FromProjectDirectory(config.ProjectDirectory);
-        if (resolver == null)
-            return RuntimeImport.Default;
-
-        var segments = resolver.ResolveRuntimePath();
-        return segments == null
-            ? new RuntimeImport(RuntimeImportStatus.NotFoundInRojo, Core.RuntimeImport.DefaultPath)
-            : new RuntimeImport(RuntimeImportStatus.Resolved, RuntimeImport.PathPrefix + string.Join('/', segments));
-    }
     
     public CompilationResult Compile()
     {
@@ -87,9 +75,8 @@ public sealed class CompilationUnit(LoomConfig config)
     private List<(Compiler Compiler, ParsedFile ParsedFile)> ParseAll()
     {
         var parsedFiles = new List<(Compiler, ParsedFile)>(SourceFiles.Count);
-        foreach (var file in SourceFiles)
+        foreach (var compiler in SourceFiles.Select(file => new Compiler(this, file)))
         {
-            var compiler = new Compiler(this, file);
             if (compiler.Parse() is { } parsedFile)
                 parsedFiles.Add((compiler, parsedFile));
         }

@@ -1,0 +1,621 @@
+﻿ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "x")
+      Token(Identifier, "x")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: WildcardPattern(
+          Token(Identifier, "_")
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(NumberLiteral, "0")
+          Value: 0
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "result")
+      Token(Identifier, "result")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: ObjectPattern(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Fields: [
+            ObjectPatternField(
+              Name: Token(Identifier, "ok")
+              Colon: Token(Colon, ":")
+              Pattern: LiteralPattern(
+                Token(TrueLiteral, "true")
+                Value: True
+              )
+            )
+            ObjectPatternField(
+              Name: Token(Identifier, "value")
+              Colon: Token(Colon, ":")
+              Pattern: IdentifierPattern(
+                Name: Token(Identifier, "v")
+              )
+            )
+          ]
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "v")
+          Token(Identifier, "v")
+        )
+      )
+      MatchArm(
+        Pattern: ObjectPattern(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Fields: [
+            ObjectPatternField(
+              Name: Token(Identifier, "ok")
+              Colon: Token(Colon, ":")
+              Pattern: LiteralPattern(
+                Token(FalseLiteral, "false")
+                Value: False
+              )
+            )
+            ObjectPatternField(
+              Name: Token(Identifier, "error")
+              Colon: Token(Colon, ":")
+              Pattern: IdentifierPattern(
+                Name: Token(Identifier, "e")
+              )
+            )
+          ]
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "e")
+          Token(Identifier, "e")
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "tag")
+      Token(Identifier, "tag")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: LiteralPattern(
+          Token(StringLiteral, ""lava"")
+          Value: "lava"
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(NumberLiteral, "1")
+          Value: 1
+        )
+      )
+      MatchArm(
+        Pattern: LiteralPattern(
+          Token(StringLiteral, ""something"")
+          Value: "something"
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(NumberLiteral, "2")
+          Value: 2
+        )
+      )
+      MatchArm(
+        Pattern: IdentifierPattern(
+          Name: Token(Identifier, "other")
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(NumberLiteral, "3")
+          Value: 3
+        )
+      )
+    ]
+  )
+)
+VariableDeclaration(
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: MatchExpression(
+      Expression: Identifier(
+        Name: Token(Identifier, "n")
+        Token(Identifier, "n")
+      )
+      LeftBrace: Token(LBrace, "{")
+      RightBrace: Token(RBrace, "}")
+      Arms: [
+        MatchArm(
+          Pattern: LiteralPattern(
+            Token(NumberLiteral, "0")
+            Value: 0
+          )
+          When: null
+          Guard: null
+          Arrow: Token(Arrow, "->")
+          Body: Literal(
+            Token(StringLiteral, ""zero"")
+            Value: "zero"
+          )
+        )
+        MatchArm(
+          Pattern: WildcardPattern(
+            Token(Identifier, "_")
+          )
+          When: null
+          Guard: null
+          Arrow: Token(Arrow, "->")
+          Body: Literal(
+            Token(StringLiteral, ""other"")
+            Value: "other"
+          )
+        )
+      ]
+    )
+  )
+  ColonTypeClause: null
+  Name: Token(Identifier, "x")
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: ObjectPattern(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Fields: [
+            ObjectPatternField(
+              Name: Token(Identifier, "value")
+              Colon: null
+              Pattern: IdentifierPattern(
+                Name: Token(Identifier, "value")
+              )
+            )
+          ]
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "value")
+          Token(Identifier, "value")
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "n")
+      Token(Identifier, "n")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: OrPattern(
+          Pipes: [
+            Token(
+              Kind: Pipe
+              Text: "|"
+            )
+            Token(
+              Kind: Pipe
+              Text: "|"
+            )
+          ]
+          Patterns: [
+            LiteralPattern(
+              Token(NumberLiteral, "2")
+              Value: 2
+            )
+            LiteralPattern(
+              Token(NumberLiteral, "3")
+              Value: 3
+            )
+            LiteralPattern(
+              Token(NumberLiteral, "4")
+              Value: 4
+            )
+          ]
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(TrueLiteral, "true")
+          Value: True
+        )
+      )
+      MatchArm(
+        Pattern: WildcardPattern(
+          Token(Identifier, "_")
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(FalseLiteral, "false")
+          Value: False
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "n")
+      Token(Identifier, "n")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: OrPattern(
+          Pipes: [
+            Token(
+              Kind: Pipe
+              Text: "|"
+            )
+            Token(
+              Kind: Pipe
+              Text: "|"
+            )
+          ]
+          Patterns: [
+            RangePattern(
+              Minimum: LiteralPattern(
+                Token(NumberLiteral, "0")
+                Value: 0
+              )
+              DotDot: Token(DotDot, "..")
+              Maximum: LiteralPattern(
+                Token(NumberLiteral, "5")
+                Value: 5
+              )
+            )
+            RangePattern(
+              Minimum: LiteralPattern(
+                Token(NumberLiteral, "10")
+                Value: 10
+              )
+              DotDot: Token(DotDot, "..")
+              Maximum: LiteralPattern(
+                Token(NumberLiteral, "15")
+                Value: 15
+              )
+            )
+            LiteralPattern(
+              Token(NumberLiteral, "100")
+              Value: 100
+            )
+          ]
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(TrueLiteral, "true")
+          Value: True
+        )
+      )
+      MatchArm(
+        Pattern: WildcardPattern(
+          Token(Identifier, "_")
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Literal(
+          Token(FalseLiteral, "false")
+          Value: False
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: TypePattern(
+          Type: TypeName(
+            Name: Token(Identifier, "Foo")
+            TypeArguments: null
+          )
+          ObjectPattern(
+            LeftBrace: Token(LBrace, "{")
+            RightBrace: Token(RBrace, "}")
+            Fields: [
+              ObjectPatternField(
+                Name: Token(Identifier, "some_field")
+                Colon: Token(Colon, ":")
+                Pattern: TypedPattern(
+                  Name: Token(Identifier, "name")
+                  When: Token(WhenKeyword, "when")
+                  Type: PrimitiveType(
+                    Kind: String
+                  )
+                  ObjectPattern: null
+                )
+              )
+            ]
+          )
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "name")
+          Token(Identifier, "name")
+        )
+      )
+      MatchArm(
+        Pattern: TypePattern(
+          Type: TypeName(
+            Name: Token(Identifier, "Foo")
+            TypeArguments: null
+          )
+          ObjectPattern(
+            LeftBrace: Token(LBrace, "{")
+            RightBrace: Token(RBrace, "}")
+            Fields: [
+              ObjectPatternField(
+                Name: Token(Identifier, "some_field")
+                Colon: Token(Colon, ":")
+                Pattern: LetPattern(
+                  Name: Token(Identifier, "name")
+                )
+              )
+            ]
+          )
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "name")
+          Token(Identifier, "name")
+        )
+      )
+      MatchArm(
+        Pattern: IdentifierPattern(
+          Name: Token(Identifier, "n")
+        )
+        When: Token(WhenKeyword, "when")
+        Guard: BinaryOperator(
+          Operator: Token(RArrow, ">")
+          Left: Identifier(
+            Name: Token(Identifier, "n")
+            Token(Identifier, "n")
+          )
+          Right: Literal(
+            Token(NumberLiteral, "0")
+            Value: 0
+          )
+        )
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "n")
+          Token(Identifier, "n")
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: TypedPattern(
+          Name: Token(Identifier, "s")
+          When: Token(WhenKeyword, "when")
+          Type: PrimitiveType(
+            Kind: String
+          )
+          ObjectPattern: null
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "s")
+          Token(Identifier, "s")
+        )
+      )
+      MatchArm(
+        Pattern: TypedPattern(
+          Name: Token(Identifier, "f")
+          When: Token(WhenKeyword, "when")
+          Type: TypeName(
+            Name: Token(Identifier, "Foo")
+            TypeArguments: null
+          )
+          ObjectPattern(
+            LeftBrace: Token(LBrace, "{")
+            RightBrace: Token(RBrace, "}")
+            Fields: [
+              ObjectPatternField(
+                Name: Token(Identifier, "some_field")
+                Colon: Token(Colon, ":")
+                Pattern: LetPattern(
+                  Name: Token(Identifier, "n")
+                )
+              )
+              ObjectPatternField(
+                Name: Token(Identifier, "other")
+                Colon: Token(Colon, ":")
+                Pattern: TypedPattern(
+                  Name: Token(Identifier, "name")
+                  When: Token(WhenKeyword, "when")
+                  Type: PrimitiveType(
+                    Kind: String
+                  )
+                  ObjectPattern: null
+                )
+              )
+            ]
+          )
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "n")
+          Token(Identifier, "n")
+        )
+      )
+      MatchArm(
+        Pattern: TypedPattern(
+          Name: Token(Identifier, "f")
+          When: Token(WhenKeyword, "when")
+          Type: TypeName(
+            Name: Token(Identifier, "Foo")
+            TypeArguments: null
+          )
+          ObjectPattern(
+            LeftBrace: Token(LBrace, "{")
+            RightBrace: Token(RBrace, "}")
+            Fields: [
+              ObjectPatternField(
+                Name: Token(Identifier, "some_field")
+                Colon: Token(Colon, ":")
+                Pattern: LetPattern(
+                  Name: Token(Identifier, "n")
+                )
+              )
+            ]
+          )
+        )
+        When: Token(WhenKeyword, "when")
+        Guard: BinaryOperator(
+          Operator: Token(RArrow, ">")
+          Left: Identifier(
+            Name: Token(Identifier, "n")
+            Token(Identifier, "n")
+          )
+          Right: Literal(
+            Token(NumberLiteral, "0")
+            Value: 0
+          )
+        )
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "n")
+          Token(Identifier, "n")
+        )
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: MatchExpression(
+    Expression: Identifier(
+      Name: Token(Identifier, "xs")
+      Token(Identifier, "xs")
+    )
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Arms: [
+      MatchArm(
+        Pattern: ArrayPattern(
+          LeftBracket: Token(LBracket, "[")
+          RightBracket: Token(RBracket, "]")
+          Elements: [
+            IdentifierPattern(
+              Name: Token(Identifier, "a")
+            )
+            IdentifierPattern(
+              Name: Token(Identifier, "b")
+            )
+            IdentifierPattern(
+              Name: Token(Identifier, "c")
+            )
+          ]
+          Rest: null
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "a")
+          Token(Identifier, "a")
+        )
+      )
+      MatchArm(
+        Pattern: ArrayPattern(
+          LeftBracket: Token(LBracket, "[")
+          RightBracket: Token(RBracket, "]")
+          Elements: [
+            IdentifierPattern(
+              Name: Token(Identifier, "head")
+            )
+          ]
+          Rest: RestPattern(
+            DotDot: Token(DotDot, "..")
+            Pattern: IdentifierPattern(
+              Name: Token(Identifier, "rest")
+            )
+          )
+        )
+        When: null
+        Guard: null
+        Arrow: Token(Arrow, "->")
+        Body: Identifier(
+          Name: Token(Identifier, "head")
+          Token(Identifier, "head")
+        )
+      )
+    ]
+  )
+)

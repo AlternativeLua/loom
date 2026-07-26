@@ -7,5 +7,7 @@ fn map<T, U>(array: T[], converter: fn(e: T): U): U[] {
   return new_array;
 }
 
+fn id<T>(n: T) -> n;
 fn double(n: number) -> n * 2;
+print(map(numbers, id));
 print(map(numbers, double));

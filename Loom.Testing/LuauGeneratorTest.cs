@@ -2554,6 +2554,35 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_InterpolatedStringLiterals()
+    {
+        var luauTree = Utility.GetLuauAST("""let name = "world"; $"Welcome, {name}!" """, typeCheck: true);
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        var interpolated = Assert.IsType<InterpolatedString>(variable.Initializer);
+        Assert.Equal(3, interpolated.Segments.Count);
+
+        var leading = Assert.IsType<InterpolatedStringTextSegment>(interpolated.Segments[0]);
+        Assert.Equal("Welcome, ", leading.Value);
+
+        var hole = Assert.IsType<InterpolatedStringExpressionSegment>(interpolated.Segments[1]);
+        Assert.IsType<Identifier>(hole.Expression);
+
+        var trailing = Assert.IsType<InterpolatedStringTextSegment>(interpolated.Segments[2]);
+        Assert.Equal("!", trailing.Value);
+    }
+
+    [Fact]
+    public void Generates_InterpolatedStringLiterals_WithBinaryExpressionHole_Parenthesized()
+    {
+        var luauTree = Utility.GetLuauAST("""let n = 1; $"{n + 1}" """, typeCheck: true);
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        var interpolated = Assert.IsType<InterpolatedString>(variable.Initializer);
+        Assert.Equal("`{(n + 1)}`", interpolated.Render());
+    }
+
+    [Fact]
     public void Generates_BoolLiterals()
     {
         var luauTree = Utility.GetLuauAST("true");
@@ -2626,6 +2655,108 @@ public class LuauGeneratorTest
         var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
         Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
         Assert.Equal("handler_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_AcrossFunctionScopes_UsesModuleLevelConnectionStore()
+    {
+        // Regression test: the connection must be reachable from '-=' even though it's produced
+        // inside a different Luau function scope than where it's connected and disconnected.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            fn a -> abc += h;
+            a();
+            abc -= h;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(6, luauTree.Statements.Count);
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_abc_connections", store.Name);
+
+        var fn = Assert.IsType<Function>(luauTree.Statements[3]);
+        var connectStatement = Assert.IsType<ExpressionStatement>(fn.Body.Statements[0]);
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+        Assert.Equal("h", Assert.IsType<Identifier>(connectionSlot.Index).Name);
+
+        var returnStatement = Assert.IsType<Return>(fn.Body.Statements[1]);
+        var returnedSlot = Assert.IsType<ElementAccess>(returnStatement.Expression);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(returnedSlot.Target).Name);
+
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[5]);
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
+        Assert.Equal("h", Assert.IsType<Identifier>(disconnectSlot.Index).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_DisconnectAfterIfBlock_UsesConnectionStore()
+    {
+        // The connect's local would be declared inside the if's 'then...end' block in Luau, so it's
+        // out of scope by the time the disconnect after the block runs - this must use the store.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            if true {
+                abc += h;
+            }
+            abc -= h;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(5, luauTree.Statements.Count);
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_abc_connections", store.Name);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var connectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        var disconnectSlot = Assert.IsType<ElementAccess>(disconnectAccess.Target);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(disconnectSlot.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_ConnectBeforeIf_DisconnectInsideIf_UsesLocal()
+    {
+        // The if's 'then...end' block is nested inside the connect's scope, so the connect's local
+        // is visible there as an upvalue - a plain local is safe and correct here.
+        const string source = """
+            event abc;
+            fn h(): void { }
+            abc += h;
+            if true {
+                abc -= h;
+            }
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, typeCheck: true);
+        Assert.Equal(4, luauTree.Statements.Count);
+
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("h_conn", connVariable.Name);
+        Assert.IsType<Call>(connVariable.Initializer);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements.Single());
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("Disconnect", Assert.Single(disconnectAccess.Names));
+        Assert.Equal("h_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
     }
 
     [Fact]
@@ -2863,5 +2994,199 @@ public class LuauGeneratorTest
         var luauTree = Utility.GetLuauAST(source, typeCheck: true);
         var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
         Assert.Equal("my_event", variable.Name);
+    }
+
+    [Fact]
+    public void Generates_Match_EmptyArms_ReturnsNil()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 {}");
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
+        Assert.IsType<NilLiteral>(variable.Initializer);
+    }
+
+    [Fact]
+    public void Generates_Match_SingleWildcardArm_NoIfStatementGenerated()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { _ -> 42 }");
+        Assert.Equal(4, luauTree.Statements.Count);
+
+        Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.IsType<LocalVariable>(luauTree.Statements[1]);
+
+        var assignmentStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[2]);
+        var assignment = Assert.IsType<BinaryOperator>(assignmentStatement.Expression);
+        Assert.Equal("=", assignment.Operator);
+        Assert.Equal(42, Assert.IsType<NumberLiteral>(assignment.Right).Value);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
+        Assert.Equal("m", variable.Name);
+        Assert.Equal("_match", Assert.IsType<Identifier>(variable.Initializer).Name);
+    }
+
+    [Fact]
+    public void Generates_Match_LiteralArms_BuildsIfElseIfChain()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { 0 -> \"a\", 1 -> \"b\", 2 -> \"c\", _ -> \"d\" }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("==", condition.Operator);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(condition.Right).Value);
+
+        Assert.Equal(2, ifStatement.ElseIfBranches.Count);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(Assert.IsType<BinaryOperator>(ifStatement.ElseIfBranches[0].Condition).Right).Value);
+        Assert.Equal(2, Assert.IsType<NumberLiteral>(Assert.IsType<BinaryOperator>(ifStatement.ElseIfBranches[1].Condition).Right).Value);
+        Assert.NotNull(ifStatement.ElseBranch);
+    }
+
+    [Fact]
+    public void Generates_Match_NullPattern_ComparesSubjectToNil()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match none { none -> 1, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("==", condition.Operator);
+        Assert.IsType<NilLiteral>(condition.Right);
+    }
+
+    [Fact]
+    public void Generates_Match_GuardEmitsDiagnostic_ArmStillCompiles()
+    {
+        const string source = "let m = match 1 { 0 when true -> \"a\", _ -> \"b\" }";
+
+        var diagnostics = Utility.GetGeneratorDiagnostics(source);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.NotImplemented, "Match arm guards are not yet supported in code generation.");
+
+        var luauTree = Utility.GetLuauAST(source);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(condition.Right).Value);
+        Assert.NotNull(ifStatement.ElseBranch);
+    }
+
+    [Theory]
+    [InlineData("match 1 { n -> n, _ -> 0 }", "IdentifierPattern")]
+    [InlineData("match 1 { { x } -> 0, _ -> 0 }", "ObjectPattern")]
+    [InlineData("match 1 { [a, b] -> 0, _ -> 0 }", "ArrayPattern")]
+    [InlineData("match 1 { 0..5 -> 0, _ -> 0 }", "RangePattern")]
+    [InlineData("match 1 { 0 | 1 -> 0, _ -> 0 }", "OrPattern")]
+    [InlineData("match 1 { let a -> 0, _ -> 0 }", "LetPattern")]
+    public void Generates_Match_UnsupportedPattern_EmitsDiagnostic_AndSkipsArm(string source, string patternKindName)
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(source);
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NotImplemented,
+            $"Pattern kind '{patternKindName}' is not yet supported in code generation."
+        );
+
+        var luauTree = Utility.GetLuauAST(source);
+        Assert.DoesNotContain(luauTree.Statements, s => s is IfStatement);
+
+        var assignmentStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[2]);
+        var assignment = Assert.IsType<BinaryOperator>(assignmentStatement.Expression);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(assignment.Right).Value);
+
+        var lastStatement = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        Assert.Equal("_match", Assert.IsType<Identifier>(lastStatement.Initializer).Name);
+    }
+
+    [Fact]
+    public void Generates_Match_AllArmsUnsupported_NoIfStatementGenerated()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { n -> n }");
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+
+        var matchLocal = Assert.IsType<LocalVariable>(luauTree.Statements[1]);
+        Assert.Equal("_match", matchLocal.Name);
+        Assert.Null(matchLocal.Initializer);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("_match", Assert.IsType<Identifier>(variable.Initializer).Name);
+    }
+
+    [Fact]
+    public void Generates_FunctionParameter_WithDefaultValue_WrapsTypeAsOptional()
+    {
+        var luauTree = Utility.GetLuauAST("fn greet(name: string = \"world\") { return name }");
+        var fn = Assert.IsType<Function>(luauTree.Statements.Single());
+        var parameter = fn.Parameters.Single();
+
+        var optional = Assert.IsType<OptionalType>(parameter.DeclaredType);
+        var inner = Assert.IsType<PrimitiveType>(optional.Inner);
+        Assert.Equal(PrimitiveTypeKind.String, inner.Kind);
+    }
+
+    [Fact]
+    public void Generates_FunctionParameter_AlreadyOptionalWithDefaultValue_DoesNotDoubleWrap()
+    {
+        var luauTree = Utility.GetLuauAST("fn f(x: number? = none) { return x }");
+        var fn = Assert.IsType<Function>(luauTree.Statements.Single());
+        var parameter = fn.Parameters.Single();
+
+        var optional = Assert.IsType<OptionalType>(parameter.DeclaredType);
+        var inner = Assert.IsType<PrimitiveType>(optional.Inner);
+        Assert.Equal(PrimitiveTypeKind.Number, inner.Kind);
+    }
+
+    [Fact]
+    public void Generates_EnumDeclaration_WithoutTypeCheck_EmitsEmptyPlaceholder()
+    {
+        var luauTree = Utility.GetLuauAST("enum Abc { A, B }");
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
+        Assert.Equal("_", variable.Name);
+        Assert.IsType<NilLiteral>(variable.Initializer);
+    }
+
+    [Fact]
+    public void Generates_StandaloneBlock_WrapsInDoStatement()
+    {
+        var luauTree = Utility.GetLuauAST("{ let x = 1 }");
+        var doStatement = Assert.IsType<Do>(Assert.Single(luauTree.Statements));
+
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(doStatement.Body.Statements));
+        Assert.Equal("x", variable.Name);
+    }
+
+    [Fact]
+    public void Generates_ForLoop_OverArray_WithTwoNames_ReversesToIndexValueOrder()
+    {
+        var luauTree = Utility.GetLuauAST("for i, x : [1, 2, 3] { }", typeCheck: true);
+        var forStmt = Assert.IsType<ForStatement>(luauTree.Statements.First());
+        Assert.Equal(["x", "i"], forStmt.Names);
+    }
+
+    [Fact]
+    public void Generates_ForLoop_OverObjectValue_SingleName_PrependsKeyPlaceholder()
+    {
+        var luauTree = Utility.GetLuauAST(
+            "interface Data { a: number, b: string } for v : new Data { a: 1, b: \"hi\" } { }",
+            typeCheck: true
+        );
+
+        var forStmt = Assert.IsType<ForStatement>(luauTree.Statements.Last());
+        Assert.Equal(["_", "v"], forStmt.Names);
+    }
+
+    [Fact]
+    public void Generates_VariableDeclaration_UnwrapsParenthesizedInitializer()
+    {
+        var luauTree = Utility.GetLuauAST("let x = (1)");
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
+        Assert.IsType<NumberLiteral>(variable.Initializer);
+    }
+
+    [Fact]
+    public void Generates_UnaryOperator_Minus_PassesThroughUnchanged()
+    {
+        var luauTree = Utility.GetLuauAST("let x = 1; -x");
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var unary = Assert.IsType<UnaryOperator>(variable.Initializer);
+        Assert.Equal("-", unary.Operator);
+        Assert.Equal("x", Assert.IsType<Identifier>(unary.Operand).Name);
     }
 }

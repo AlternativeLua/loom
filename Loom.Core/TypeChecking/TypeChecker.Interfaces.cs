@@ -65,13 +65,16 @@ public sealed partial class TypeChecker
         var properties = ResolveTraitProperties(traitDeclaration.Body.Members);
         objectType.AddProperties(properties);
 
-        return publishedType;
+        if (publishedType is GenericType generic)
+            publishedType = VarianceInferrer.ApplyInferredVariance(generic);
+
+        return BindType(traitDeclaration, publishedType);
     }
 
     public override Type VisitInterfaceDeclaration(InterfaceDeclaration interfaceDeclaration)
     {
         var name = interfaceDeclaration.Name.Text;
-        if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol symbol)
+        if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol)
         {
             _diagnostics.Error(interfaceDeclaration, InternalCodes.CannotFindSymbol, $"Cannot find symbol for declaration of interface '{name}'.");
             return BindType(interfaceDeclaration, PrimitiveType.Never);
@@ -103,6 +106,9 @@ public sealed partial class TypeChecker
         var properties = ResolveInterfaceProperties(constraints, propertyDeclarations);
         objectType.AddProperties(events);
         objectType.AddProperties(properties);
+
+        if (publishedType is GenericType generic)
+            publishedType = VarianceInferrer.ApplyInferredVariance(generic);
 
         return BindType(interfaceDeclaration, publishedType);
     }
@@ -202,7 +208,46 @@ public sealed partial class TypeChecker
             properties.Add(new ObjectProperty(isMutable, name, valueType));
         }
 
-        return properties;
+        return MergeOverloadedProperties(properties);
+    }
+
+    // A property name declared more than once, where every declaration is function-typed, is an overload set (e.g. CFrame.new's constructor shapes) merged into one IntersectionType.
+    private static List<ObjectProperty> MergeOverloadedProperties(List<ObjectProperty> properties)
+    {
+        var merged = new List<ObjectProperty>();
+        var indexByName = new Dictionary<string, int>();
+        foreach (var property in properties)
+        {
+            if (indexByName.TryGetValue(property.Name, out var index)
+                && property.ValueType is Types.FunctionType newSignature
+                && TryGetSignatures(merged[index].ValueType, out var existingSignatures))
+            {
+                existingSignatures.Add(newSignature);
+                merged[index] = new ObjectProperty(merged[index].IsMutable, property.Name, new Types.IntersectionType([..existingSignatures]));
+                continue;
+            }
+
+            indexByName[property.Name] = merged.Count;
+            merged.Add(property);
+        }
+
+        return merged;
+    }
+
+    private static bool TryGetSignatures(Type type, [MaybeNullWhen(false)] out List<Types.FunctionType> signatures)
+    {
+        switch (type)
+        {
+            case Types.FunctionType functionType:
+                signatures = [functionType];
+                return true;
+            case Types.IntersectionType intersection when intersection.Types.TrueForAll(t => t is Types.FunctionType):
+                signatures = intersection.Types.ConvertAll(t => (Types.FunctionType)t);
+                return true;
+            default:
+                signatures = null;
+                return false;
+        }
     }
 
     private ObjectIndexer? ResolveInterfaceIndexer(List<InterfaceType> constraints, IndexerDeclaration? indexerDeclaration)

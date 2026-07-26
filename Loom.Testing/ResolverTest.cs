@@ -142,6 +142,26 @@ public class ResolverTest
     }
 
     [Fact]
+    public void ThrowsFor_UndefinedVariable_InInterpolationHole()
+    {
+        var diagnostics = Utility.GetSemanticModel("""$"{x}";""").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'x'.");
+    }
+
+    [Fact]
+    public void Resolves_Variable_InInterpolationHole()
+    {
+        var model = Utility.GetSemanticModel("""let x = 1; $"{x}";""");
+        Utility.AssertNoErrors(model.Diagnostics);
+
+        var interpolated = Assert.IsType<InterpolatedStringLiteral>(
+            Assert.IsType<ExpressionStatement>(model.Tree.Statements[1]).Expression
+        );
+        var identifier = Assert.IsType<Identifier>(Assert.IsType<InterpolationHolePart>(interpolated.Parts[0]).Expression);
+        Assert.NotNull(model.GetSymbol(identifier));
+    }
+
+    [Fact]
     public void ThrowsFor_UndefinedType()
     {
         var diagnostics = Utility.GetSemanticModel("let x: Abc = 1").Diagnostics;
@@ -210,6 +230,13 @@ public class ResolverTest
             InternalCodes.DuplicateName,
             "Property 'x' already exists on type 'I'"
         );
+    }
+
+    [Fact]
+    public void Resolves_Interface_DuplicateFunctionProperty_AsOverloadSet()
+    {
+        var diagnostics = Utility.GetSemanticModel("interface I { create: fn(): number, create: fn(x: number): number }").Diagnostics;
+        Utility.AssertNoErrors(diagnostics);
     }
 
     [Fact]
@@ -497,6 +524,48 @@ public class ResolverTest
             .Diagnostics;
 
         Utility.AssertDiagnostic(diagnostics, InternalCodes.IntrinsicImplementation, "Trait 'Foo' may not be implemented on intrinsic interface 'Range'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_MatchBinding_UsedOutsideArm()
+    {
+        var diagnostics = Utility.GetSemanticModel("match 1 { x -> x }; x;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'x'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_MatchBinding_NotVisibleInOtherArm()
+    {
+        var diagnostics = Utility.GetSemanticModel("match 1 { a -> a, _ -> a }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'a'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_UnknownNameInBody()
+    {
+        var diagnostics = Utility.GetSemanticModel("match 1 { _ -> y }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'y'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_DuplicatePatternBinding()
+    {
+        var diagnostics = Utility.GetSemanticModel("match 1 { [a, a] -> a }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.DuplicateName, "Variable 'a' is already declared in this scope.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_UnknownTypeInTypedPattern()
+    {
+        var diagnostics = Utility.GetSemanticModel("match 1 { s when Foo -> s }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find type 'Foo'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_UnknownScrutinee()
+    {
+        var diagnostics = Utility.GetSemanticModel("match missing { _ -> 0 }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'missing'.");
     }
 
     [Fact]
@@ -1005,6 +1074,65 @@ public class ResolverTest
         Assert.NotNull(symbol);
         Assert.Equal("factorial", symbol.Name);
     }
+
+    [Fact]
+    public void Resolves_MatchPatternBinding_InBody()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { x -> x }"));
+        var match = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(model.Tree.Statements.Single()).Expression);
+        var arm = Assert.Single(match.Arms);
+        var pattern = Assert.IsType<IdentifierPattern>(arm.Pattern);
+        var declaration = model.GetDeclarationSymbol(pattern);
+        Assert.NotNull(declaration);
+        Assert.Equal("x", declaration.Name);
+        Assert.Equal(SymbolKind.Variable, declaration.Kind);
+
+        var body = Assert.IsType<Identifier>(arm.Body);
+        Assert.Equal(declaration, model.GetSymbol(body));
+    }
+
+    [Fact]
+    public void Resolves_MatchPatternBinding_InGuard()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { n when n > 0 -> n }"));
+        var match = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(model.Tree.Statements.Single()).Expression);
+        var arm = Assert.Single(match.Arms);
+        var pattern = Assert.IsType<IdentifierPattern>(arm.Pattern);
+        var declaration = model.GetDeclarationSymbol(pattern);
+        Assert.NotNull(declaration);
+
+        var guard = Assert.IsType<BinaryOperator>(arm.Guard);
+        var guardIdent = Assert.IsType<Identifier>(guard.Left);
+        Assert.Equal(declaration, model.GetSymbol(guardIdent));
+    }
+
+    [Fact]
+    public void Resolves_MatchTypedPattern_TypeName()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("interface Foo {}; match 1 { s when Foo -> s }"));
+        var match = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(model.Tree.Statements[1]).Expression);
+        var arm = Assert.Single(match.Arms);
+        var typed = Assert.IsType<TypedPattern>(arm.Pattern);
+        var typeName = Assert.IsType<TypeName>(typed.Type);
+        var symbol = model.GetSymbol(typeName);
+        Assert.NotNull(symbol);
+        Assert.Equal("Foo", symbol.Name);
+    }
+
+    [Fact]
+    public void Resolves_MatchArrayRestBinding()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { [head, ..rest] -> rest }"));
+        var match = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(model.Tree.Statements.Single()).Expression);
+        var arm = Assert.Single(match.Arms);
+        var array = Assert.IsType<ArrayPattern>(arm.Pattern);
+        Assert.NotNull(array.Rest);
+        var restPattern = Assert.IsType<IdentifierPattern>(array.Rest.Pattern);
+        var declaration = model.GetDeclarationSymbol(restPattern);
+        Assert.NotNull(declaration);
+        Assert.Equal("rest", declaration.Name);
+        Assert.Equal(declaration, model.GetSymbol(Assert.IsType<Identifier>(arm.Body)));
+    }
     #endregion
 
     #region Allows
@@ -1187,6 +1315,52 @@ public class ResolverTest
     [Fact]
     public void Allows_VariableFromOuterScope_ToBeReassignedInInnerScope() =>
         Utility.AssertNoErrors(Utility.GetSemanticModel("let condition = true; mut x = 1; if condition { x = 2; } x;"));
+
+    [Fact]
+    public void Allows_Match_WildcardAndLiteralArms() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("""match 1 { 0 -> "zero", _ -> "other" }"""));
+
+    [Fact]
+    public void Allows_Match_ArrayAndRestBindings() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                let xs = 1;
+                match xs {
+                    [a, b, c] -> a,
+                    [head, ..rest] -> head,
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Allows_Match_ObjectShorthandBinding() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { { value } -> value }"));
+
+    [Fact]
+    public void Allows_Match_ObjectFieldBinding() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { { ok: true, value: v } -> v }"));
+
+    [Fact]
+    public void Allows_Match_OrAndRangePatterns() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { 2 | 3 | 4 -> true, 0..5 | 10..15 | 100 -> false, _ -> false }"));
+
+    [Fact]
+    public void Allows_Match_LetPatternBinding() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { let name -> name }"));
+
+    [Fact]
+    public void Allows_Match_TypedPattern_WithPrimitive() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { s when string -> s, _ -> \"\" }"));
+
+    [Fact]
+    public void Allows_Match_PatternBinding_ShadowsOuterVariable() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let x = 1; match 2 { x -> x }"));
+
+    [Fact]
+    public void Allows_Match_AsVariableInitializer() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("""let n = 1; let x = match n { 0 -> "zero", _ -> "other" };"""));
     #endregion Allows
 
     [Fact]

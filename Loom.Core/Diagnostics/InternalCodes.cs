@@ -95,6 +95,11 @@ public static class InternalCodes
     public const string DuplicateExport = "L371";
     public const string TypeOnlyExportOfValue = "L372";
     public const string ModuleNotFoundInRojo = "L373";
+    public const string NonExhaustiveMatch = "L374";
+    public const string NoOverloadMatch = "L375";
+    public const string RestParameterNotLast = "L376";
+    public const string MissingRestParameterType = "L377";
+    public const string InvalidRestParameterType = "L378";
 
     public const string SimplifiableCode = "L400";
 }

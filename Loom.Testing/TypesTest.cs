@@ -879,6 +879,18 @@ public class TypesTest
     }
 
     [Fact]
+    public void Union_Assignability_ToNonUnionTarget_RequiresEveryMemberAssignable()
+    {
+        var memberA = new ObjectType(null, [new ObjectProperty(false, "x", new LiteralType(1))]);
+        var memberB = new ObjectType(null, [new ObjectProperty(false, "x", new LiteralType(2))]);
+        var union = new UnionType([memberA, memberB]);
+        var target = new ObjectType(null, [new ObjectProperty(false, "x", Number)]);
+
+        Assert.True(union.IsAssignableTo(target));
+        Assert.False(union.IsAssignableTo(memberA));
+    }
+
+    [Fact]
     public void Union_Literal_Assignability()
     {
         var union = new UnionType([Bool, Number]);
@@ -1011,6 +1023,37 @@ public class TypesTest
         Assert.True(a.Equals(b));
         Assert.False(a.Equals(c));
         Assert.False(a.Equals(d));
+    }
+
+    [Fact]
+    public void TypeParameter_Equality_IgnoresVariance()
+    {
+        var a = new TypeParameter("T", variance: Variance.Covariant);
+        var b = new TypeParameter("T", variance: Variance.Contravariant);
+
+        Assert.True(a.Equals(b));
+    }
+
+    [Fact]
+    public void TypeParameter_ToString_DoesNotIncludeVariance()
+    {
+        var covariant = new TypeParameter("T", variance: Variance.Covariant);
+        var invariant = new TypeParameter("T");
+
+        Assert.Equal("T", covariant.ToString());
+        Assert.Equal("T", invariant.ToString());
+    }
+
+    [Fact]
+    public void TypeParameter_WithVariance_PreservesOtherFields()
+    {
+        var original = new TypeParameter("T", Number, new LiteralType(42));
+        var updated = original.WithVariance(Variance.Covariant);
+
+        Assert.Equal(Variance.Covariant, updated.Variance);
+        Assert.Equal(original.Name, updated.Name);
+        Assert.Equal(original.Constraint, updated.Constraint);
+        Assert.Equal(original.DefaultType, updated.DefaultType);
     }
 
     [Fact]

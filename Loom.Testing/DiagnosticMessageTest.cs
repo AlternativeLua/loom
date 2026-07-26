@@ -6,7 +6,7 @@ namespace Loom.Testing;
 [Collection("Assembly")]
 public class DiagnosticMessageTest
 {
-    private static readonly SourceFile _testFile = new("test.loom", $"let x: number = 5;\nlet y = x + 10;\nprint(y);");
+    private static readonly SourceFile _testFile = new("test.loom", "let x: number = 5;\nlet y = x + 10;\nprint(y);");
 
     [Fact]
     public void ToString_ErrorDiagnostic_FormatsCorrectly()
