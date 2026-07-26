@@ -30,6 +30,7 @@
 - **Result pattern for errors** – Error handling uses the result pattern from Rust, no more `pcall`s. See [example](#result-pattern).
 - **Events** – Built-in user events with shorthand syntax. See [example](#events).
 - **Traits** – Define reusable behavior that interfaces can implement, enabling shared APIs and generic constraints that reflect behavior
+- **Named imports/exports** - See [example](#exports)
 - **Indices starting at one** – Same as Luau for familiarity
 - **Zero-cost abstractions** – Transpiles to idiomatic Luau with minimal overhead
 - **Batteries included** - Comes with a set of built-in compile-time macros included with data types such as [Array.join()](#arrayjoin)
@@ -37,10 +38,10 @@
 
 ## Upcoming Features
 
-- `x in collection`
-- `defer` statements
-- Full module system (imports/exports)
+- Destructuring
+- Tuple types
 - Standard libraries (math, string, buffer, etc.)
+- `defer` statements
 
 ---
 
@@ -951,8 +952,6 @@ handler_conn:Disconnect();
 
 ## Exports
 
-Expose `let` and `fn` with `export`
-
 ```rs
 export let pi = 3.14;
 
@@ -973,6 +972,22 @@ return { pi = pi, square = square }
 ```
 
 `double` is still emitted, but only the exported members (`pi`, `square`) appear in the returned table, so only they are visible to other modules.
+
+## `in` operator
+
+Check if a key/index exists within a collection
+
+```rs
+interface Object { field: number? }
+let object = new Object { field: 69 };
+print("field" in object)
+```
+
+```luau
+type Object = { field: number? }
+const object = { field = 69 }
+print(object.field ~= nil)
+```
 
 ---
 
