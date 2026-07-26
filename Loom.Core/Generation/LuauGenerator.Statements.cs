@@ -36,7 +36,9 @@ public sealed partial class LuauGenerator
         statements.AddRange(_moduleGenerator.GenerateExportedTypeAliases());
 
         var valueExports = _semanticModel.Exports.FindAll(export => export.EmitsRuntimeBinding);
-        if (valueExports.Count > 0)
+        if (valueExports.Count <= 0)
+            return new LuauTree(statements);
+
         {
             var initializers = valueExports.ConvertAll(TableInitializer (export) => new PropertyTableInitializer(export.Name, _moduleGenerator.GenerateExportedValue(export)));
 

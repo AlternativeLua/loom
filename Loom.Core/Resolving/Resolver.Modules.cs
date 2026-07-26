@@ -1,16 +1,10 @@
-using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
-using Loom.Core.Parsing;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
-using Loom.Core.TypeChecking;
 using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
-using Attribute = Loom.Core.Parsing.AST.Attribute;
-using FunctionType = Loom.Core.Parsing.AST.FunctionType;
 using Type = Loom.Core.TypeChecking.Types.Type;
-using TypeParameter = Loom.Core.Parsing.AST.TypeParameter;
 
 namespace Loom.Core.Resolving;
 

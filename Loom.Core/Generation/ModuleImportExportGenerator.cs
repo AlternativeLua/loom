@@ -44,9 +44,8 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
             statements.Add(new ConstVariable(moduleName, null, LuauFactory.RequireCall(GetRequirePath(module, specifier))));
 
             var bindings = semanticModel.ImportBindings.FindAll(binding => binding.Module == module);
-            statements.AddRange(bindings.FindAll(binding => binding.RequiresModuleAtRuntime).ConvertAll(binding => GenerateValueImport(binding, moduleName)));
-
-            statements.AddRange(bindings.FindAll(binding => binding.Symbol.IsTypeSymbol).ConvertAll(binding => GenerateTypeImport(binding, moduleName)));
+            statements.AddRange(bindings.Where(binding => binding.RequiresModuleAtRuntime).Select(binding => GenerateValueImport(binding, moduleName)));
+            statements.AddRange(bindings.Where(binding => binding.Symbol.IsTypeSymbol).Select(binding => GenerateTypeImport(binding, moduleName)));
         }
 
         return statements;
@@ -54,17 +53,22 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
 
     private List<(SourceFile Module, string Specifier, string? LocalName)> GetRequiredModules()
     {
-        var modules = new List<(SourceFile, string, string?)>();
         var seen = new HashSet<SourceFile>();
 
-        foreach (var binding in semanticModel.NamespaceImports.Where(binding => seen.Add(binding.Module)))
-            modules.Add((binding.Module, binding.ModulePath, binding.LocalName));
+        var modules = semanticModel.NamespaceImports
+            .Where(binding => seen.Add(binding.Module))
+            .Select((SourceFile, string, string?) (binding) => (binding.Module, binding.ModulePath, binding.LocalName))
+            .ToList();
 
-        foreach (var binding in semanticModel.ImportBindings.Where(binding => seen.Add(binding.Module)))
-            modules.Add((binding.Module, binding.Import.ModulePath!, null));
+        modules.AddRange(
+            semanticModel.ImportBindings.Where(binding => seen.Add(binding.Module))
+                .Select((SourceFile, string, string?) (binding) => (binding.Module, binding.Import.ModulePath!, null))
+        );
 
-        foreach (var export in semanticModel.Exports.Where(export => export.Module != null && seen.Add(export.Module)))
-            modules.Add((export.Module!, export.ModulePath!, null));
+        modules.AddRange(
+            semanticModel.Exports.Where(export => export.Module != null && seen.Add(export.Module))
+                .Select((SourceFile, string, string?) (export) => (export.Module!, export.ModulePath!, null))
+        );
 
         return modules;
     }
@@ -85,10 +89,10 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
         return requirePath.Path;
     }
 
-    private static LuauStatement GenerateValueImport(ImportBinding binding, string moduleName) =>
-        new ConstVariable(binding.LocalName, null, new PropertyAccess(new Identifier(moduleName), [binding.ExportedName]));
+    private static ConstVariable GenerateValueImport(ImportBinding binding, string moduleName) =>
+        new(binding.LocalName, null, new PropertyAccess(new Identifier(moduleName), [binding.ExportedName]));
 
-    private static LuauStatement GenerateTypeImport(ImportBinding binding, string moduleName) =>
+    private static TypeAlias GenerateTypeImport(ImportBinding binding, string moduleName) =>
         GenerateTypeAlias(binding.LocalName, binding.ExportedName, binding.Symbol, moduleName, false);
 
     public LuauExpression GenerateExportedValue(ExportBinding export) =>
@@ -98,20 +102,20 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
 
     public void MarkListExportedTypes(List<LuauStatement> statements)
     {
-        foreach (var export in semanticModel.Exports)
-        {
-            if (export.IsReExport || !export.Symbol.IsTypeSymbol || export.Name != export.SourceName)
-                continue;
+        var typeAliasesByName = statements.OfType<TypeAlias>().ToDictionary(a => a.Name, a => a);
+        var unaliasedTypeExports = semanticModel.Exports.Where(export => export is { IsReExport: false, Symbol.IsTypeSymbol: true }
+            && export.Name == export.SourceName
+        );
 
-            if (statements.OfType<TypeAlias>().FirstOrDefault(alias => alias.Name == export.Name) is { } typeAlias)
+        foreach (var export in unaliasedTypeExports)
+            if (typeAliasesByName.TryGetValue(export.Name, out var typeAlias))
                 typeAlias.IsExported = true;
-        }
     }
 
-    public List<LuauStatement> GenerateExportedTypeAliases() =>
+    public IEnumerable<LuauStatement> GenerateExportedTypeAliases() =>
         semanticModel.Exports
-            .FindAll(export => export.Symbol.IsTypeSymbol && (export.IsReExport || export.Name != export.SourceName))
-            .ConvertAll(export => GenerateTypeAlias(
+            .Where(export => export.Symbol.IsTypeSymbol && (export.IsReExport || export.Name != export.SourceName))
+            .Select(export => GenerateTypeAlias(
                     export.Name,
                     export.SourceName,
                     export.Symbol,
@@ -120,7 +124,7 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
                 )
             );
 
-    private static LuauStatement GenerateTypeAlias(string name, string sourceName, Symbol symbol, string? moduleName, bool isExported)
+    private static TypeAlias GenerateTypeAlias(string name, string sourceName, Symbol symbol, string? moduleName, bool isExported)
     {
         var parameterNames = symbol.Declaration is GenericNamedDeclaration { TypeParameters: { } typeParameters }
             ? typeParameters.ParameterList.ConvertAll(parameter => parameter.Name.Text)

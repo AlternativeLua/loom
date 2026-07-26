@@ -13,6 +13,7 @@ public sealed class ModuleRequirePathResolver(LoomConfig config)
     private readonly Dictionary<SourceFile, IReadOnlyList<string>?> _instancePaths = [];
     private readonly RojoResolver? _rojoResolver = RojoResolver.FromProjectDirectory(config.ProjectDirectory);
 
+    /// <param name="module">The module file to resolve.</param>
     /// <param name="specifier">The specifier as written, used when Rojo cannot name the module.</param>
     public ModuleRequirePath Resolve(SourceFile module, string specifier)
     {

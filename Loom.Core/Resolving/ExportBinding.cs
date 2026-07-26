@@ -18,9 +18,7 @@ public sealed record ExportBinding(
 )
 {
     public bool IsReExport => Module != null;
-
     public bool EmitsRuntimeBinding => Symbol.EmitsRuntimeBinding;
-
     public string? ModulePath => Export?.ModulePath;
 
     public static ExportBinding OfDeclaration(Symbol symbol) => new(symbol.Name, symbol.Name, symbol);

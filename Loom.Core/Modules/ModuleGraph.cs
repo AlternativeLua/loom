@@ -18,6 +18,7 @@ public sealed class ModuleGraph
     
     private enum VisitState
     {
+        // ReSharper disable once UnusedMember.Local
         /// <summary>Must stay the default value: an absent file reads back as this from the state lookup.</summary>
         Unvisited,
         Visiting,

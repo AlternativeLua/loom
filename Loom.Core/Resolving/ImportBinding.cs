@@ -16,11 +16,8 @@ namespace Loom.Core.Resolving;
 public sealed record ImportBinding(ImportDeclaration Import, ImportSpecifier Specifier, Symbol Symbol, SourceFile Module)
 {
     public string LocalName => Specifier.LocalName.Text;
-
     public string ExportedName => Specifier.Name.Text;
-
     public bool IsTypeOnly => Import.IsTypeOnly;
-
     public bool RequiresModuleAtRuntime => !IsTypeOnly && Symbol.EmitsRuntimeBinding;
 
     public bool IsUsed { get; private set; }
