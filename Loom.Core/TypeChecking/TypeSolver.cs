@@ -114,8 +114,14 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         return variable;
     }
 
-    public void AddConstraint(Type actual, Type expected, Node node) => AddConstraint(actual, expected, node.LocationSpan);
-    public void AddConstraint(Type actual, Type expected, LocationSpan span) => _constraints.Add(new TypeConstraint(actual, expected, span));
+    public TypeConstraint AddConstraint(Type actual, Type expected, Node node) => AddConstraint(actual, expected, node.LocationSpan);
+
+    public TypeConstraint AddConstraint(Type actual, Type expected, LocationSpan span)
+    {
+        var constraint = new TypeConstraint(actual, expected, span);
+        _constraints.Add(constraint);
+        return constraint;
+    }
 
     public bool SolveConstraints()
     {
@@ -127,7 +133,7 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
             {
                 var resolvedA = Substitute(constraint.Actual);
                 var resolvedB = Substitute(constraint.Expected);
-                if (!TryUnify(resolvedA, resolvedB, constraint.Span, out var updated))
+                if (!TryUnify(resolvedA, resolvedB, constraint.Span, out var updated, constraint.Trace))
                     return false;
 
                 if (updated)
@@ -139,7 +145,7 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         return true;
     }
 
-    private bool TryUnify(Type a, Type b, LocationSpan span, out bool updated)
+    private bool TryUnify(Type a, Type b, LocationSpan span, out bool updated, TypeMismatchTrace? trace = null)
     {
         updated = false;
         var pair = (a, b);
@@ -162,7 +168,7 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
                 (TypeParameter p1, TypeParameter p2) => UnifyTypeParameters(p1, p2, span, out updated),
 
                 _ when a.IsAssignableTo(b) => true,
-                _ => ReportTypeMismatch(a, b, span)
+                _ => ReportTypeMismatch(a, b, span, trace: trace)
             };
         }
         finally
@@ -379,14 +385,13 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         return type;
     }
 
-    private bool ReportTypeMismatch(Type a, Type b, LocationSpan span, string? info = null)
+    private bool ReportTypeMismatch(Type a, Type b, LocationSpan span, string? info = null, TypeMismatchTrace? trace = null)
     {
-        Diagnostics.Error(
-            span,
-            InternalCodes.TypeMismatch,
-            $"Type '{a}' is not assignable to type '{b}'.{(info != null ? " " + info : "")}"
-        );
+        var message = $"Type '{a}' is not assignable to type '{b}'.{(info != null ? " " + info : "")}";
+        if (trace != null)
+            message = $"Type '{trace.Outer}' is not assignable to type '{trace.OuterExpected}'.\n    {message}";
 
+        Diagnostics.Error(span, InternalCodes.TypeMismatch, message);
         return false;
     }
 
@@ -398,7 +403,7 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
 
     private TypeVariable CreateTypeVariable() => new(Interlocked.Increment(ref _nextVariableId));
 
-    private sealed record TypeConstraint
+    public sealed record TypeConstraint
     {
         public TypeConstraint(Type actual, Type expected, LocationSpan span)
         {
@@ -412,5 +417,11 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         public Type Actual { get; }
         public Type Expected { get; }
         public LocationSpan Span { get; }
+
+        // Set after construction once the enclosing container (e.g. an array literal) finishes
+        // checking all its children, since the container's own actual type isn't known until then.
+        public TypeMismatchTrace? Trace { get; set; }
     }
+
+    public sealed record TypeMismatchTrace(Type Outer, Type OuterExpected);
 }

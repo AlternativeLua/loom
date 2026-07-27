@@ -5084,7 +5084,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5101,7 +5101,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5135,7 +5135,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5152,7 +5152,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5163,7 +5163,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5180,7 +5180,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5198,7 +5198,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5209,7 +5209,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5226,7 +5226,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5237,7 +5237,7 @@ public class TypeCheckerTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.TypeMismatch,
-            "Type '\"no\"' is not assignable to type 'number'."
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
         );
     }
 
@@ -5298,7 +5298,11 @@ public class TypeCheckerTest
             """
         );
 
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
+        );
     }
 
     [Fact]
@@ -5335,7 +5339,11 @@ public class TypeCheckerTest
             """
         );
 
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
+        );
     }
 
     [Fact]
@@ -5347,7 +5355,11 @@ public class TypeCheckerTest
             """
         );
 
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
+        );
     }
 
     [Fact]
@@ -5371,6 +5383,28 @@ public class TypeCheckerTest
             """
         );
 
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_AnnotatedArrayLiteral_AllElementsMismatch_TracesOuterArrayType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""let a: string[] = [1, 2, 3]""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'number[]' is not assignable to type 'string[]'.\n    Type '1' is not assignable to type 'string'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_UnnestedTypeMismatch_HasNoTrace()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""let x: number = "no";""");
         Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
     }
     #endregion Bidirectional

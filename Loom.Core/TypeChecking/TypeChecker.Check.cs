@@ -3,17 +3,22 @@ using Loom.Core.Parsing.AST;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
+using UnionType = Loom.Core.TypeChecking.Types.UnionType;
 
 namespace Loom.Core.TypeChecking;
 
 public sealed partial class TypeChecker
 {
-    private Type Check(Expression expression, Type expected) => Check(expression, expected, _flowState);
+    private Type Check(Expression expression, Type expected) => Check(expression, expected, _flowState, out _);
 
-    private Type Check(Expression expression, Type expected, FlowState state)
+    private Type Check(Expression expression, Type expected, FlowState state) => Check(expression, expected, state, out _);
+
+    private Type Check(Expression expression, Type expected, FlowState state, out TypeSolver.TypeConstraint? constraint)
     {
+        constraint = null;
+
         if (expression is Parenthesized parenthesized)
-            return BindType(parenthesized, Check(parenthesized.Expression, expected, state));
+            return BindType(parenthesized, Check(parenthesized.Expression, expected, state, out constraint));
 
         if (expression is ArrayLiteral arrayLiteral && expected is ArrayType arrayType)
             return CheckArrayLiteral(arrayLiteral, arrayType, state);
@@ -25,11 +30,15 @@ public sealed partial class TypeChecker
             return CheckTernaryOperator(ternaryOperator, expected, state);
 
         // Once more specific rules, add more, but for now it'll just be like that.
-        return CheckSubsumption(expression, expected, state);
+        return CheckSubsumption(expression, expected, state, out constraint);
     }
 
-    private Type CheckSubsumption(Expression expression, Type expected, FlowState state)
+    private Type CheckSubsumption(Expression expression, Type expected, FlowState state) =>
+        CheckSubsumption(expression, expected, state, out _);
+
+    private Type CheckSubsumption(Expression expression, Type expected, FlowState state, out TypeSolver.TypeConstraint? constraint)
     {
+        constraint = null;
         var actual = Visit(expression, state);
         if (TryInstantiateGenericFunctionArgument(expression, actual, expected, out var instantiated))
             actual = instantiated;
@@ -37,14 +46,29 @@ public sealed partial class TypeChecker
         if (actual.IsAssignableTo(expected))
             return actual;
 
-        _semanticModel.TypeSolver.AddConstraint(actual, expected, expression);
+        constraint = _semanticModel.TypeSolver.AddConstraint(actual, expected, expression);
         return actual;
     }
 
     private ArrayType CheckArrayLiteral(ArrayLiteral arrayLiteral, ArrayType expected, FlowState state)
     {
+        var elementTypes = new List<Type>(arrayLiteral.Expressions.Count);
+        var elementConstraints = new List<TypeSolver.TypeConstraint>();
         foreach (var element in arrayLiteral.Expressions)
-            Check(element, expected.ElementType, state);
+        {
+            elementTypes.Add(Check(element, expected.ElementType, state, out var constraint));
+            if (constraint != null)
+                elementConstraints.Add(constraint);
+        }
+
+        if (elementConstraints.Count > 0)
+        {
+            var actualElementType = TypeSimplifier.Simplify(new UnionType(elementTypes.ConvertAll(t => t.Widen())));
+            var actualArrayType = new ArrayType(actualElementType, expected.IsMutable);
+            var trace = new TypeSolver.TypeMismatchTrace(actualArrayType, expected);
+            foreach (var constraint in elementConstraints)
+                constraint.Trace = trace;
+        }
 
         return BindType(arrayLiteral, expected);
     }
