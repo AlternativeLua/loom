@@ -231,18 +231,45 @@ public class DiagnosticBagTest
     [Fact]
     public void Report_WithFailFastDisabled_StillRecordsErrorWithoutExiting()
     {
-        var originalFailFast = DiagnosticBag.FailFast;
-        try
-        {
-            DiagnosticBag.FailFast = false;
-            var bag = new DiagnosticBag();
-            bag.Error(_span, "e", "fail");
-            Assert.Single(bag.Set);
-        }
-        finally
-        {
-            DiagnosticBag.FailFast = originalFailFast;
-        }
+        var bag = new DiagnosticBag(options: new DiagnosticOptions { FailFast = false });
+        bag.Error(_span, "e", "fail");
+        Assert.Single(bag.Set);
+    }
+
+    [Fact]
+    public void Options_DefaultToNotFailingFast()
+    {
+        var bag = new DiagnosticBag();
+        Assert.Same(DiagnosticOptions.Default, bag.Options);
+        Assert.False(bag.Options.FailFast);
+    }
+
+    [Fact]
+    public void Concat_DefaultsToOptionsOfFirstBag()
+    {
+        var options = new DiagnosticOptions { FailFast = true };
+        var combined = DiagnosticBag.Concat([new DiagnosticBag(options: options), new DiagnosticBag()]);
+        Assert.Same(options, combined.Options);
+    }
+
+    [Fact]
+    public void Concat_EmptyBagList_UsesDefaultOptions() => Assert.Same(DiagnosticOptions.Default, DiagnosticBag.Concat([]).Options);
+
+    [Fact]
+    public void Concat_GivenOptions_OverridesTheOptionsOfTheBags()
+    {
+        var options = new DiagnosticOptions { FailFast = true };
+        var combined = DiagnosticBag.Concat([new DiagnosticBag()], options);
+        Assert.Same(options, combined.Options);
+    }
+
+    [Fact]
+    public void FilteringBags_KeepsOptions()
+    {
+        var options = new DiagnosticOptions { FailFast = true };
+        var bag = new DiagnosticBag(options: options);
+        Assert.Same(options, bag.Errors().Options);
+        Assert.Same(options, bag.WithoutInfo().Options);
     }
 
     [Fact]

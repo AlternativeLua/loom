@@ -8,7 +8,7 @@ namespace Loom.Core.Parsing;
 
 public sealed partial class Parser(LexerResult lexerResult)
 {
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics = new(options: lexerResult.Diagnostics.Options);
     private int _position;
 
     public ParserResult Parse()

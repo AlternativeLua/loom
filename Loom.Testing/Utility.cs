@@ -111,7 +111,8 @@ internal static class Utility
     public static void WithTempProject(
         IEnumerable<(string Path, string Source)> files,
         Action<CompilationUnit, CompilationResult> assert,
-        string? rojoProject = null)
+        string? rojoProject = null,
+        DiagnosticOptions? diagnosticOptions = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
         var sourceDirectory = Path.Combine(directory, "src");
@@ -137,7 +138,7 @@ internal static class Utility
             Assert.NotNull(config);
             config.NoEmit = true;
 
-            var compilationUnit = new CompilationUnit(config);
+            var compilationUnit = new CompilationUnit(config, diagnosticOptions);
             assert(compilationUnit, compilationUnit.Compile());
         }
         finally

@@ -40,7 +40,7 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     ///     referencing node without holding on to the node instances themselves.
     /// </summary>
     internal HashSet<NodeId> NonIntrinsicReferenceNodes { get; } = [];
-    internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag());
+    internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag(options: Diagnostics.Options));
     private SymbolLookup DeclarationsByName => field ??= Declarations.Values.SelectMany(s => s).GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.ToList());
 
     public List<NamespaceImportBinding> NamespaceImports { get; } = [];
@@ -67,6 +67,12 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
         NamespaceImports.Add(binding);
         ImportedSymbols.Add(binding.Symbol);
     }
+
+    /// <summary>
+    ///     A symbol standing in for an import whose module could not be resolved. It has no binding, since
+    ///     there is no module to bind it to, but it still names something declared elsewhere.
+    /// </summary>
+    internal void AddUnresolvedImport(Symbol symbol) => ImportedSymbols.Add(symbol);
 
     /// <summary>
     ///     Whether the symbol was declared by another module and brought in by an import. Its declaration

@@ -32,6 +32,17 @@ public class LuauGeneratorTest
     [InlineData("import type { Vector } from \"./vector\"")]
     public void Generates_Nothing(string source) => Assert.Empty(Utility.GetLuauAST(source).Statements);
 
+    /// <remarks>
+    ///     A node the parser or resolver could not make sense of generates something of the wrong kind. The
+    ///     error is already reported and the output is never written, so the generator stands in for the node
+    ///     and carries on rather than taking the whole file down with it.
+    /// </remarks>
+    [Theory]
+    [InlineData("let x = ;", "const x = nil")]
+    [InlineData("let v: Missing = 1;", "const v: unknown = 1")]
+    public void Generates_APlaceholder_ForANodeItCannotGenerate(string source, string expected) =>
+        Assert.Equal(expected, Utility.GetLuauAST(source).Render().Trim());
+
     [Theory]
     [InlineData("export type Alias = number;")]
     [InlineData("export interface Point { x: number }")]

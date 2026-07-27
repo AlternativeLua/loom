@@ -108,6 +108,131 @@ public class CompilationUnitTest
             }
         );
 
+    [Fact]
+    public void Compiles_ASingleFile_ReportingItsImportsAsUnresolvable()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+
+            var path = Path.Combine(directory, "src", "main.loom");
+            File.WriteAllText(path, "import { pi } from \"./math\"\nprint(pi);");
+
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            // the file is the whole unit, so nothing can satisfy the import — saying so beats binding it to
+            // nothing, which is what a compile without a module graph used to do
+            var compiled = new CompilationUnit(config).Compile(FileManager.LoadSingle(path));
+            Assert.NotNull(compiled);
+            Utility.AssertDiagnostic(compiled.Diagnostics, InternalCodes.ModuleNotFound, "Could not find module './math'.");
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    /// <remarks>
+    ///     Dropping the output directory after the unit has loaded its files makes every output path throw,
+    ///     which stands in for any stage failing: the unit has to report it rather than let the exception out.
+    /// </remarks>
+    [Fact]
+    public void Reports_FilesTheCompilerGaveUpOn_InsteadOfThrowing()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            File.WriteAllText(Path.Combine(directory, "src", "main.loom"), "let x = 1;");
+
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            var compilationUnit = new CompilationUnit(config);
+            config.Files.OutputDirectory = null!;
+
+            var result = compilationUnit.Compile();
+            Assert.Empty(result.Files);
+
+            var failure = Assert.Single(result.Failures);
+            Assert.Equal("main.loom", failure.File.Name);
+
+            var compilerError = failure.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+            Assert.NotNull(compilerError);
+            Assert.Contains(compilerError, result.Diagnostics.Set);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    /// <remarks>
+    ///     Emptying the source directory after the unit has loaded its files makes the module resolver throw
+    ///     while the graph is built, which is a failure of the unit rather than of any one file.
+    /// </remarks>
+    [Fact]
+    public void Reports_EveryFile_WhenTheModuleGraphCannotBeBuilt()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            File.WriteAllText(Path.Combine(directory, "src", "main.loom"), "import { helper } from \"./util\"\nprint(helper);");
+            File.WriteAllText(Path.Combine(directory, "src", "util.loom"), "export let helper = 1;");
+
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            var compilationUnit = new CompilationUnit(config);
+            config.Files.SourceDirectory = "";
+
+            var result = compilationUnit.Compile();
+            Assert.Empty(result.Files);
+            Assert.Equal(["main.loom", "util.loom"], result.Failures.Select(failure => failure.File.Name).Order());
+
+            // one error for the unit, not one per file
+            var compilerError = Assert.Single(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+            Assert.Contains("module graph", compilerError.Message);
+            Assert.All(result.Failures, failure => Assert.Contains(compilerError, failure.Diagnostics.Set));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void Compiles_WithTheUnitsDiagnosticOptions_IncludingModuleDiagnostics()
+    {
+        var options = new DiagnosticOptions();
+        Utility.WithTempProject(
+            [("main.loom", "import { square } from \"./missing\"")],
+            (unit, result) =>
+            {
+                Assert.Same(options, unit.DiagnosticOptions);
+                Assert.Same(options, result.Diagnostics.Options);
+
+                var file = Assert.Single(result.Files);
+                Assert.Same(options, file.Diagnostics.Options);
+
+                var moduleDiagnostics = unit.ModuleGraph?.GetDiagnostics(file.SourceFile);
+                Assert.NotNull(moduleDiagnostics);
+                Utility.AssertDiagnostic(moduleDiagnostics, InternalCodes.ModuleNotFound, "Could not find module './missing'.");
+                Assert.Same(options, moduleDiagnostics.Options);
+            },
+            diagnosticOptions: options
+        );
+    }
+
     private static LoomConfig GetConfig()
     {
         var config = ConfigReader.LocateFromDirectory(AssemblyFixture.Snapshots);

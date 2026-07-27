@@ -54,6 +54,7 @@ public class CompilerTest
         Assert.NotNull(parsedFile);
 
         var compiledFile = compiler.Analyze(parsedFile);
+        Assert.NotNull(compiledFile);
         Utility.AssertDiagnostic(compiledFile.Diagnostics, InternalCodes.EmptyImportClause, "Import declaration must name at least one member.");
         Assert.Same(parsedFile.Tree, compiledFile.Tree);
         Assert.Equal(parsedFile.LexerResult.Tokens, compiledFile.Tokens);
@@ -66,11 +67,51 @@ public class CompilerTest
         var compilationUnit = new CompilationUnit(new LoomConfig());
 
         var oneShot = new Compiler(compilationUnit, Utility.TestFile(source)).Compile();
+        Assert.NotNull(oneShot);
+
         var phased = new Compiler(compilationUnit, Utility.TestFile(source));
         var parsedFile = phased.Parse();
         Assert.NotNull(parsedFile);
 
-        Assert.Equal(oneShot.RenderedLuau, phased.Analyze(parsedFile).RenderedLuau);
+        var analyzed = phased.Analyze(parsedFile);
+        Assert.NotNull(analyzed);
+        Assert.Equal(oneShot.RenderedLuau, analyzed.RenderedLuau);
+    }
+
+    [Fact]
+    public void Compiles_WithTheUnitsDiagnosticOptions_AtEveryStage()
+    {
+        var options = new DiagnosticOptions();
+        var compilationUnit = new CompilationUnit(new LoomConfig(), options);
+        var compiler = new Compiler(compilationUnit, Utility.TestFile("let x = 1;"));
+
+        var parsedFile = compiler.Parse();
+        Assert.NotNull(parsedFile);
+        Assert.Same(options, parsedFile.LexerResult.Diagnostics.Options);
+        Assert.Same(options, parsedFile.ParserResult.Diagnostics.Options);
+
+        var compiledFile = compiler.Analyze(parsedFile);
+        Assert.NotNull(compiledFile);
+        Assert.Same(options, compiledFile.Diagnostics.Options);
+        Assert.Same(options, compiledFile.SemanticModel.Diagnostics.Options);
+    }
+
+    /// <remarks>
+    ///     A source directory of "" makes the output path of any file throw, which is a stage failing on
+    ///     something other than the file it was given — exactly what the compiler-error path is for.
+    /// </remarks>
+    [Fact]
+    public void Reports_AFailedPhase_AsACompilerError_InsteadOfThrowing()
+    {
+        var config = new LoomConfig { Files = new FilesConfig { SourceDirectory = "" } };
+        var compiler = new Compiler(new CompilationUnit(config), Utility.TestFile("let x = 1;"));
+
+        Assert.Null(compiler.Compile());
+
+        var compilerError = compiler.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+        Assert.NotNull(compilerError);
+        Assert.Contains("The compiler threw an exception!", compilerError.Message);
+        Assert.Equal("this is a compiler bug! please report an issue.", compilerError.Hint);
     }
 
     private static ParsedFile Parse(string source)
@@ -90,6 +131,7 @@ public class CompilerTest
         var compilationUnit = new CompilationUnit(new LoomConfig());
         var compiler = new Compiler(compilationUnit, Utility.TestFile(source));
         var file = compiler.Compile();
+        Assert.NotNull(file);
         Assert.False(file.SemanticModel.DisableRuntimeLibraryImport);
         Utility.AssertNoErrors(file.Diagnostics);
 

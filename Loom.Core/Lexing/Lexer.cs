@@ -3,12 +3,12 @@ using Loom.Core.Text;
 
 namespace Loom.Core.Lexing;
 
-public sealed class Lexer(SourceFile file)
+public sealed class Lexer(SourceFile file, DiagnosticOptions? diagnosticOptions = null)
 {
     private static readonly Dictionary<string, SyntaxKind>.AlternateLookup<ReadOnlySpan<char>> _keywordLookup = SyntaxFacts.KeywordMap
         .GetAlternateLookup<ReadOnlySpan<char>>();
 
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics = new(options: diagnosticOptions);
     private readonly Stack<InterpolationFrame> _interpolationStack = new();
     private readonly int _sourceLength = file.SourceText.Length;
     private int _position;

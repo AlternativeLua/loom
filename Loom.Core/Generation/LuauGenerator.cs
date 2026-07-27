@@ -23,7 +23,7 @@ namespace Loom.Core.Generation;
 public sealed partial class LuauGenerator
     : Visitor<LuauNode>
 {
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics;
     private readonly EventConnectionTracker _eventConnections = new();
     private readonly Lazy<HashSet<(EventTarget Target, Symbol Function)>> _localSafeConnections;
     private readonly MacroExpander _macroExpander;
@@ -37,6 +37,7 @@ public sealed partial class LuauGenerator
         : base(_ => new NoOpStatement())
     {
         _semanticModel = semanticModel;
+        _diagnostics = new DiagnosticBag(options: semanticModel.Diagnostics.Options);
         _runtimeImport = runtimeImport ?? RuntimeImport.Default;
         _moduleRequirePaths = moduleRequirePaths;
         _macroExpander = new MacroExpander(semanticModel, _state, _diagnostics);
@@ -164,7 +165,12 @@ public sealed partial class LuauGenerator
         return true;
     }
 
-    private LuauType Visit(TypeExpression node) => (LuauType)node.Accept(this);
-    private LuauExpression Visit(Expression node) => (LuauExpression)node.Accept(this);
-    private LuauStatement Visit(Statement node) => (LuauStatement)node.Accept(this);
+    // a node only generates something of the wrong kind where an earlier stage could not make sense of it
+    // and said so — a malformed expression, a name that resolves to nothing. Standing in for it keeps the
+    // rest of the file generating, since output is never written while the file has errors anyway.
+    private LuauType Visit(TypeExpression node) => node.Accept(this) as LuauType ?? UnknownType;
+    private LuauExpression Visit(Expression node) => node.Accept(this) as LuauExpression ?? new NilLiteral();
+    private LuauStatement Visit(Statement node) => node.Accept(this) as LuauStatement ?? new NoOpStatement();
+
+    private static LuauType UnknownType => new Luau.AST.TypeName("unknown");
 }

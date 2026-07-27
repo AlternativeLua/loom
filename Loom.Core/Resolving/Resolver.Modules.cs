@@ -1,9 +1,11 @@
+using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
 using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
+using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Resolving;
@@ -12,7 +14,7 @@ public sealed partial class Resolver
 {
     public override bool VisitExportDeclaration(ExportDeclaration export)
     {
-        if (_scopes.Count > 1)
+        if (!AtModuleScope())
         {
             _diagnostics.Error(
                 export,
@@ -47,7 +49,7 @@ public sealed partial class Resolver
 
     public override bool VisitExportList(ExportList export)
     {
-        if (_scopes.Count > 1)
+        if (!AtModuleScope())
         {
             _diagnostics.Error(
                 export,
@@ -67,12 +69,8 @@ public sealed partial class Resolver
             return true;
         }
 
-        var module = compilationUnit.ModuleGraph?.GetResolvedModule(export);
-        if (module == null)
-            return true; // an unresolvable specifier was already reported while building the module graph
-
-        if (!compilationUnit.AnalyzedModules.TryGetValue(module, out var moduleModel))
-            return true; // only reachable through a dependency cycle, which the module graph reported
+        if (!TryGetModule(export, out var module, out var moduleModel))
+            return true; // a re-export binds nothing locally, so there is nothing to stand in for
 
         foreach (var specifier in export.Specifiers)
             ResolveReExport(export, specifier, module, moduleModel);
@@ -82,7 +80,10 @@ public sealed partial class Resolver
 
     public override bool VisitNamespaceImport(NamespaceImport import)
     {
-        if (_scopes.Count > 1)
+        if (!_resolvedImports.Add(import))
+            return true; // already bound when the file's imports were resolved ahead of its statements
+
+        if (!AtModuleScope())
         {
             _diagnostics.Error(
                 import,
@@ -94,14 +95,10 @@ public sealed partial class Resolver
             return false;
         }
 
-        var module = compilationUnit.ModuleGraph?.GetResolvedModule(import);
-        if (module == null)
-            return true; // an unresolvable specifier was already reported while building the module graph
-
-        if (!compilationUnit.AnalyzedModules.TryGetValue(module, out var moduleModel))
-            return true; // only reachable through a dependency cycle, which the module graph reported
-
         var name = import.Name.Text;
+        if (!TryGetModule(import, out var module, out var moduleModel))
+            return DeclareUnresolvedSymbols(import, name, false);
+
         if (HasDuplicateSymbol(import, name, true, $"Variable '{name}' is already declared in this scope."))
             return true;
 
@@ -112,6 +109,61 @@ public sealed partial class Resolver
         _semanticModel.TypeSolver.SetType(import, GetNamespaceType(moduleModel));
 
         return true;
+    }
+
+    /// <summary>
+    ///     The module a specifier names, along with its analyzed form. False when the module graph could not
+    ///     resolve the specifier — which it has already reported — or when the module has not been analyzed,
+    ///     which only a dependency cycle can cause and the graph has reported that too.
+    /// </summary>
+    private bool TryGetModule(Node moduleReference, [NotNullWhen(true)] out SourceFile? module, [NotNullWhen(true)] out SemanticModel? moduleModel)
+    {
+        module = compilationUnit.ModuleGraph?.GetResolvedModule(moduleReference);
+        moduleModel = module == null ? null : compilationUnit.AnalyzedModules.GetValueOrDefault(module);
+
+        return module != null && moduleModel != null;
+    }
+
+    /// <summary>
+    ///     Binds the names an import was meant to bring in when its module could not be resolved, so the
+    ///     module error stands on its own. Left unbound they would be reported again at every use, and an
+    ///     unbound name in type position reaches the generator as a hole it cannot fill.
+    /// </summary>
+    private bool DeclareUnresolvedImport(ImportDeclaration import)
+    {
+        foreach (var specifier in import.Specifiers)
+            DeclareUnresolvedSymbols(specifier, specifier.LocalName.Text, import.IsTypeOnly);
+
+        return true;
+    }
+
+    /// <remarks>
+    ///     Nothing is known about what the module exported, so the name stands for a value and a type alike
+    ///     unless the import was type-only, and is typed <c>unknown</c> rather than inferred from a use.
+    ///     A name already declared here keeps its own declaration: the module error is the one worth
+    ///     reporting, not a duplicate the user cannot act on.
+    /// </remarks>
+    private bool DeclareUnresolvedSymbols(Node declaration, string name, bool isTypeOnly)
+    {
+        if (!isTypeOnly)
+            declareUnresolved(SymbolKind.Variable);
+
+        declareUnresolved(SymbolKind.Type);
+        return true;
+
+        void declareUnresolved(SymbolKind kind)
+        {
+            if (LookupSymbolCurrentScope(name, kind) != null)
+                return;
+
+            var symbol = new Symbol(declaration, kind, name);
+            DeclareSymbol(symbol);
+
+            // it names something declared elsewhere, so flow analysis must not read the import as the
+            // declaration of an uninitialized variable
+            _semanticModel.AddUnresolvedImport(symbol);
+            _semanticModel.TypeSolver.SetType(declaration, PrimitiveType.Unknown);
+        }
     }
 
     /// <summary>
@@ -200,7 +252,10 @@ public sealed partial class Resolver
 
     public override bool VisitImportDeclaration(ImportDeclaration import)
     {
-        if (_scopes.Count > 1)
+        if (!_resolvedImports.Add(import))
+            return true; // already bound when the file's imports were resolved ahead of its statements
+
+        if (!AtModuleScope())
         {
             _diagnostics.Error(
                 import,
@@ -212,12 +267,8 @@ public sealed partial class Resolver
             return false;
         }
 
-        var module = compilationUnit.ModuleGraph?.GetResolvedModule(import);
-        if (module == null)
-            return true; // an unresolvable specifier was already reported while building the module graph
-
-        if (!compilationUnit.AnalyzedModules.TryGetValue(module, out var moduleModel))
-            return true; // only reachable through a dependency cycle, which the module graph reported
+        if (!TryGetModule(import, out var module, out var moduleModel))
+            return DeclareUnresolvedImport(import);
 
         var localNames = new HashSet<string>();
         return import.Specifiers.All(specifier => ResolveImportSpecifier(import, specifier, module, moduleModel, localNames));

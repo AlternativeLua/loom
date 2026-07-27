@@ -13,8 +13,10 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
 {
     private readonly SymbolTable _allDeclarations = [];
     private readonly SymbolTable _allReferences = [];
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics = new(options: compilationUnit.DiagnosticOptions);
+    private readonly HashSet<Node> _resolvedImports = [];
     private readonly Stack<ResolverScope> _scopes = [];
+    private ResolverScope? _moduleScope;
     private ResolverContext _context = ResolverContext.None;
     private SemanticModel _semanticModel = null!;
 
@@ -26,11 +28,16 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
             EmitDebugDiagnostics = compilationUnit.Config.Debug
         };
 
+        // ambient names live in a scope of their own so that a module declaring 'Vector3' shadows the
+        // intrinsic rather than colliding with it — the file's own declarations are the ones it can see
         PushScope();
         DeclareIntrinsicSymbols();
         DeclareGlobalSymbols();
+
+        _moduleScope = PushScope();
         VisitTree(parserResult.Tree);
         ReportUnusedImports();
+        PopScope();
         PopScope();
 
         return _semanticModel;
@@ -38,7 +45,21 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
 
     protected override bool Visit(Node node) => node.Accept(this);
 
-    public override bool VisitTree(Tree tree) => ResolveStatements(tree.Statements);
+    /// <remarks>
+    ///     Imports are resolved before anything else in the file, so a name can be used above the import that
+    ///     brings it in — the generator emits every require at the top of the output regardless, so reading
+    ///     them in source order would reject code the output supports. An import that names no module is left
+    ///     for its turn in source order: what it binds is only a stand-in, which must not take a name the file
+    ///     goes on to declare for itself.
+    /// </remarks>
+    public override bool VisitTree(Tree tree)
+    {
+        foreach (var statement in tree.Statements)
+            if (statement is ImportDeclaration or NamespaceImport && TryGetModule(statement, out _, out _))
+                Visit(statement);
+
+        return ResolveStatements(tree.Statements);
+    }
 
     public override bool VisitBlock(Block block)
     {
@@ -115,7 +136,20 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
     private bool IsDeclarationFile() => parserResult.Tree.File.IsDeclaration;
     private ResolverScope CurrentScope() => _scopes.Peek();
     private void PopScope() => _scopes.Pop();
-    private void PushScope() => _scopes.Push(new ResolverScope());
+
+    private ResolverScope PushScope()
+    {
+        var scope = new ResolverScope();
+        _scopes.Push(scope);
+
+        return scope;
+    }
+
+    /// <summary>
+    ///     Whether resolution is at the top level of the file, where imports and exports belong. The ambient
+    ///     scope sits below it, so scope depth alone does not answer this.
+    /// </summary>
+    private bool AtModuleScope() => ReferenceEquals(CurrentScope(), _moduleScope);
 
     protected override bool CombineResults(ReadOnlySpan<bool> results)
     {

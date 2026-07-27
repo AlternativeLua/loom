@@ -13,10 +13,19 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
 {
     private readonly List<DiagnosticBag> _pipelineDiagnostics = [];
 
-    public CompiledFile Compile()
+    public SourceFile SourceFile { get; } = file;
+
+    /// <summary>
+    ///     Everything reported against the file so far. Unlike <see cref="CompiledFile.Diagnostics" /> this is
+    ///     readable after a phase failed, which is the only place the compiler error of that failure lives.
+    /// </summary>
+    public DiagnosticBag Diagnostics => DiagnosticBag.Concat(_pipelineDiagnostics, unit.DiagnosticOptions);
+
+    /// <summary>Null when a phase failed; <see cref="Diagnostics" /> says why.</summary>
+    public CompiledFile? Compile()
     {
         var parsedFile = Parse();
-        return parsedFile == null ? null! : Analyze(parsedFile);
+        return parsedFile == null ? null : Analyze(parsedFile);
     }
 
     /// <summary>
@@ -26,12 +35,12 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
     public ParsedFile? Parse() =>
         RunPhase(() =>
             {
-                var lexer = new Lexer(file);
+                var lexer = new Lexer(SourceFile, unit.DiagnosticOptions);
                 var lexerResult = TrackDiagnostics(lexer.Tokenize());
                 var parser = new Parser(lexerResult);
                 var parserResult = TrackDiagnostics(parser.Parse());
 
-                return new ParsedFile(file, lexerResult, parserResult);
+                return new ParsedFile(SourceFile, lexerResult, parserResult);
             }
         );
 
@@ -40,7 +49,8 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
     ///     are <paramref name="moduleDiagnostics" /> from building the unit's module graph, so the returned
     ///     file reports every diagnostic raised against it regardless of which phase found it.
     /// </summary>
-    public CompiledFile Analyze(ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics = null) =>
+    /// <returns>Null when the phase failed; <see cref="Diagnostics" /> says why.</returns>
+    public CompiledFile? Analyze(ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics = null) =>
         RunPhase(() =>
             {
                 if (moduleDiagnostics != null)
@@ -56,10 +66,10 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                 var generatorResult = TrackDiagnostics(generator.Generate());
                 var renderedLuau = generatorResult.LuauTree.Render();
 
-                return new CompiledFile(file)
+                return new CompiledFile(SourceFile)
                 {
-                    Path = FileManager.GetOutputPath(file, unit.Config),
-                    Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics),
+                    Path = FileManager.GetOutputPath(SourceFile, unit.Config),
+                    Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics, unit.DiagnosticOptions),
                     RenderedLuau = renderedLuau,
                     LuauTree = generatorResult.LuauTree,
                     ReturnType = typeCheckerResult.ReturnType,
@@ -68,8 +78,13 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                     Tokens = parsedFile.LexerResult.Tokens
                 };
             }
-        )!;
+        );
 
+    /// <remarks>
+    ///     The compiler error of a failed phase is tracked like any other stage's diagnostics rather than
+    ///     reported into a bag that goes nowhere, so it survives in <see cref="Diagnostics" /> for the caller
+    ///     to report. Nothing else can carry it: the phase has no result to attach it to.
+    /// </remarks>
     private T? RunPhase<T>(Func<T> phase)
         where T : class
     {
@@ -79,9 +94,9 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
         }
         catch (Exception e)
         {
-            var diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics);
-            DiagnosticBag.FailFast = true;
-            diagnostics.CompilerError(file, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
+            var diagnostics = new DiagnosticBag(options: unit.DiagnosticOptions);
+            _pipelineDiagnostics.Add(diagnostics);
+            diagnostics.CompilerError(SourceFile, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
             return null;
         }
     }

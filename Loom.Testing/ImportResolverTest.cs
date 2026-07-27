@@ -169,6 +169,116 @@ public class ImportResolverTest
         );
 
     [Fact]
+    public void Binds_TheNamesOfAnUnresolvableImport_SoOnlyTheModuleErrorIsReported() =>
+        Utility.WithTempProject(
+            [("main.loom", "import { pi } from \"./nope\"\nprint(pi);")],
+            (_, result) =>
+            {
+                var error = Assert.Single(result.Diagnostics.Errors().Set);
+                Assert.Equal(InternalCodes.ModuleNotFound, error.Code);
+            }
+        );
+
+    [Fact]
+    public void Binds_AnUnresolvableImport_InBothNamespaces() =>
+        Utility.WithTempProject(
+            [("main.loom", "import { Thing } from \"./nope\"\nlet v: Thing = 1;\nprint(v);")],
+            (_, result) =>
+            {
+                // the name resolves in type position too, so the module error is all that is left
+                var error = Assert.Single(result.Diagnostics.Errors().Set);
+                Assert.Equal(InternalCodes.ModuleNotFound, error.Code);
+                Assert.Contains("const v", Assert.Single(result.Files).RenderedLuau);
+            }
+        );
+
+    [Fact]
+    public void Binds_ATypeOnlyUnresolvableImport_InTheTypeNamespaceOnly() =>
+        Utility.WithTempProject(
+            [("main.loom", "import type { Thing } from \"./nope\"\nprint(Thing);")],
+            (_, result) =>
+            {
+                // the value namespace is left alone, so using it as a value is still an error
+                Assert.Contains(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.ModuleNotFound);
+                Assert.Contains(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.CannotFindName);
+            }
+        );
+
+    [Fact]
+    public void Binds_TheNameOfAnUnresolvableNamespaceImport() =>
+        Utility.WithTempProject(
+            [("main.loom", "import * as vec from \"./nope\"\nprint(vec);")],
+            (_, result) =>
+            {
+                var error = Assert.Single(result.Diagnostics.Errors().Set);
+                Assert.Equal(InternalCodes.ModuleNotFound, error.Code);
+            }
+        );
+
+    [Fact]
+    public void Reports_OnlyTheCycle_WhenAModuleImportsThroughOne() =>
+        Utility.WithTempProject(
+            [("a.loom", "import { b } from \"./b\"\nexport let a = 1;\nprint(b);"), ("b.loom", "import { a } from \"./a\"\nexport let b = 2;\nprint(a);")],
+            (_, result) =>
+            {
+                var error = Assert.Single(result.Diagnostics.Errors().Set);
+                Assert.Equal(InternalCodes.CircularModuleDependency, error.Code);
+            }
+        );
+
+    [Fact]
+    public void KeepsALocalDeclaration_WhenAnUnresolvableImport_SharesItsName() =>
+        Utility.WithTempProject(
+            [("main.loom", "let pi = 1;\nimport { pi } from \"./nope\"\nprint(pi);")],
+            (_, result) =>
+            {
+                // the module error is the actionable one; a duplicate-name error on top of it is not
+                var error = Assert.Single(result.Diagnostics.Errors().Set);
+                Assert.Equal(InternalCodes.ModuleNotFound, error.Code);
+                Assert.Contains("const pi = 1", Assert.Single(result.Files).RenderedLuau);
+            }
+        );
+
+    [Fact]
+    public void Binds_Imports_BeforeTheStatementsAboveThem() =>
+        WithImportingModule(
+            "print(square(2));\nimport { square } from \"./math\"",
+            (result, bindings) =>
+            {
+                Utility.AssertNoErrors(result);
+                Assert.True(Assert.Single(bindings).IsUsed);
+            }
+        );
+
+    [Fact]
+    public void Binds_NamespaceImports_BeforeTheStatementsAboveThem() =>
+        WithImportingModule("print(math.pi);\nimport * as math from \"./math\"", (result, _) => Utility.AssertNoErrors(result));
+
+    [Fact]
+    public void Reports_ASpecifierThatDiffersOnlyInCase_WithTheModuleItMeant() =>
+        WithImportingModule(
+            "import { pi } from \"./Math\"",
+            (result, _) => Utility.AssertDiagnostic(
+                result.Diagnostics,
+                InternalCodes.ModuleNotFound,
+                "Could not find module './Math'.",
+                "did you mean './math'? module paths are case-sensitive"
+            )
+        );
+
+    [Fact]
+    public void Reports_ADirectoryModuleThatDiffersOnlyInCase_ByItsDirectory() =>
+        Utility.WithTempProject(
+            [("main.loom", "import { helper } from \"./Util\"\nprint(helper);"), (Path.Combine("util", "init.loom"), "export let helper = 1;")],
+            (_, result) => Utility.AssertDiagnostic(
+                result.Diagnostics,
+                InternalCodes.ModuleNotFound,
+                "Could not find module './Util'.",
+                "did you mean './util'? module paths are case-sensitive"
+            )
+        );
+
+    [Fact]
     public void Reports_ImportOutsideModuleScope()
     {
         var diagnostics = Utility.GetSemanticModel("fn f() { import { x } from \"./math\" }").Diagnostics;

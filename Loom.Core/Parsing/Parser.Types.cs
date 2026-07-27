@@ -86,7 +86,21 @@ public sealed partial class Parser
             return new PrimitiveType(name);
 
         var typeArguments = ParseTypeArguments();
-        return new TypeName(name, typeArguments);
+        var typeName = new TypeName(name, typeArguments);
+
+        return PeekKind(0) == SyntaxKind.Dot ? SkipQualifiedTypeName(typeName) : typeName;
+    }
+    
+    private TypeExpression SkipQualifiedTypeName(TypeName typeName)
+    {
+        while (Match(out _, SyntaxKind.Dot))
+        {
+            ExpectIdentifier("type");
+            ParseTypeArguments();
+        }
+
+        _diagnostics.NotImplemented(typeName, "Qualified type names are not supported yet.", "import the type by name with 'import type { ... }'");
+        return new PrimitiveType(new Token(SyntaxKind.Identifier, typeName.LocationSpan, "unknown"));
     }
 
     private TypeExpression ParseFunctionType(Token fnKeyword)

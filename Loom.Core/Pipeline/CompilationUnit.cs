@@ -9,9 +9,16 @@ using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Pipeline;
 
-public sealed class CompilationUnit(LoomConfig config)
+public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
 {
     public LoomConfig Config { get; } = config;
+
+    /// <summary>
+    ///     Reporting behavior handed to every <see cref="DiagnosticBag" /> the unit's stages create. Defaults
+    ///     to <see cref="DiagnosticOptions.Default" />, so a unit only fails fast when its creator asks for it.
+    /// </summary>
+    public DiagnosticOptions DiagnosticOptions { get; } = diagnosticOptions ?? DiagnosticOptions.Default;
+
     public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
     public Dictionary<Symbol, Type> Globals { get; } = [];
     public RuntimeImport RuntimeImport { get; } = RuntimeImport.Resolve(config);
@@ -37,49 +44,112 @@ public sealed class CompilationUnit(LoomConfig config)
         Globals.Clear();
         AnalyzedModules.Clear();
 
+        var failures = new List<FailedFile>();
+
         // phase one: every file is lexed and parsed before any of them is analyzed, so module
         // dependencies can be read off the parsed trees and analyzed in the order they require
-        var parsedFiles = ParseAll();
+        var parsedFiles = ParseAll(failures);
         var compilers = new Dictionary<SourceFile, Compiler>();
         foreach (var (compiler, parsedFile) in parsedFiles)
             compilers.TryAdd(parsedFile.File, compiler);
 
-        ModuleGraph = ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config);
+        ModuleGraph = BuildModuleGraph(parsedFiles, failures);
+        if (ModuleGraph == null)
+            return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions)) { Failures = failures };
 
         // phase two: declaration files first — their top-level symbols become globals that every
         // other file resolves against. Both groups keep the graph's dependency order.
-        var compiledDeclarationFiles = ModuleGraph.Order.FindAll(parsedFile => parsedFile.File.IsDeclaration).ConvertAll(analyze);
+        var compiledDeclarationFiles = AnalyzeAll(parsedFile => parsedFile.File.IsDeclaration);
         PopulateGlobals(compiledDeclarationFiles);
 
-        var compiledConcreteFiles = ModuleGraph.Order.FindAll(parsedFile => !parsedFile.File.IsDeclaration).ConvertAll(analyze);
+        var compiledConcreteFiles = AnalyzeAll(parsedFile => !parsedFile.File.IsDeclaration);
         var compiledFiles = compiledDeclarationFiles.Concat(compiledConcreteFiles).ToList();
-        var diagnostics = DiagnosticBag.Concat(compiledFiles.ConvertAll(file => file.Diagnostics));
+        var diagnostics = DiagnosticBag.Concat(
+            [..compiledFiles.ConvertAll(file => file.Diagnostics), ..failures.ConvertAll(failure => failure.Diagnostics)],
+            DiagnosticOptions
+        );
+
         if (!diagnostics.ContainsErrors() && !Config.NoEmit)
             compiledFiles.ForEach(FileManager.WriteCompiledFile);
 
-        return new CompilationResult(compiledFiles, diagnostics);
+        return new CompilationResult(compiledFiles, diagnostics) { Failures = failures };
 
-        CompiledFile analyze(ParsedFile parsedFile)
+        List<CompiledFile> AnalyzeAll(Predicate<ParsedFile> predicate)
         {
-            var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
-            AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+            var compiledFiles = new List<CompiledFile>();
+            foreach (var parsedFile in ModuleGraph.Order.FindAll(predicate))
+            {
+                var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
+                if (compiledFile == null)
+                {
+                    // the file has no semantic model to hand its importers, so it stays out of the unit
+                    failures.Add(new FailedFile(parsedFile.File, compilers[parsedFile.File].Diagnostics));
+                    continue;
+                }
 
-            return compiledFile;
+                AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+                compiledFiles.Add(compiledFile);
+            }
+
+            return compiledFiles;
         }
     }
 
-    public CompiledFile Compile(SourceFile file) => new Compiler(this, file).Compile();
+    /// <summary>
+    ///     Compiles one file on its own. Its imports resolve against a graph holding only that file, so an
+    ///     import of anything else is reported as unresolvable — the file is the whole unit here, and saying
+    ///     nothing would leave the import silently bound to nothing.
+    /// </summary>
+    /// <returns>Null when the compiler gave up on <paramref name="file" />; see <see cref="Compiler.Diagnostics" />.</returns>
+    public CompiledFile? Compile(SourceFile file)
+    {
+        var compiler = new Compiler(this, file);
+        var parsedFile = compiler.Parse();
+        if (parsedFile == null)
+            return null;
+
+        ModuleGraph = BuildModuleGraph([(compiler, parsedFile)], []);
+
+        return compiler.Analyze(parsedFile, ModuleGraph?.GetDiagnostics(file));
+    }
+
+    /// <summary>
+    ///     The graph orders phase two, so a compiler bug while building it leaves no file analyzable. Every
+    ///     parsed file is failed with the one error describing why, on top of whatever its own parse reported.
+    /// </summary>
+    private ModuleGraph? BuildModuleGraph(List<(Compiler Compiler, ParsedFile ParsedFile)> parsedFiles, List<FailedFile> failures)
+    {
+        try
+        {
+            return ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config, DiagnosticOptions);
+        }
+        catch (Exception e)
+        {
+            // no file to blame: the graph is the unit's, not any one file's
+            var diagnostics = new DiagnosticBag(options: DiagnosticOptions);
+            diagnostics.CompilerError(SourceFile.Empty, $"The compiler threw an exception building the module graph!\n{e.Message}\n{e.StackTrace}");
+            failures.AddRange(
+                parsedFiles.ConvertAll(parsed =>
+                    new FailedFile(parsed.ParsedFile.File, DiagnosticBag.Concat([parsed.Compiler.Diagnostics, diagnostics], DiagnosticOptions))
+                )
+            );
+
+            return null;
+        }
+    }
 
     /// <summary>
     ///     The compiler for a file is kept alongside its parsed form so that phase two reports the
     ///     lexer and parser diagnostics phase one collected.
     /// </summary>
-    private List<(Compiler Compiler, ParsedFile ParsedFile)> ParseAll()
+    private List<(Compiler Compiler, ParsedFile ParsedFile)> ParseAll(List<FailedFile> failures)
     {
         var parsedFiles = new List<(Compiler, ParsedFile)>(SourceFiles.Count);
         foreach (var compiler in SourceFiles.Select(file => new Compiler(this, file)))
             if (compiler.Parse() is { } parsedFile)
                 parsedFiles.Add((compiler, parsedFile));
+            else
+                failures.Add(new FailedFile(compiler.SourceFile, compiler.Diagnostics));
 
         return parsedFiles;
     }

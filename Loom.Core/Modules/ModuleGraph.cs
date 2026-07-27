@@ -13,9 +13,9 @@ namespace Loom.Core.Modules;
 /// </summary>
 public sealed class ModuleGraph
 {
-    private readonly Dictionary<SourceFile, DiagnosticBag> _diagnostics;
+    private readonly ModuleDiagnostics _diagnostics;
     private readonly Dictionary<NodeId, SourceFile> _resolvedModules;
-    
+
     private enum VisitState
     {
         // ReSharper disable once UnusedMember.Local
@@ -27,10 +27,29 @@ public sealed class ModuleGraph
 
     private sealed record ModuleEdge(Node ModuleReference, ParsedFile Target);
 
+    /// <summary>
+    ///     The module diagnostics of a build, one bag per file, all reporting with the unit's
+    ///     <see cref="DiagnosticOptions" /> so they behave like the bags of every other stage.
+    /// </summary>
+    private sealed class ModuleDiagnostics(DiagnosticOptions options)
+    {
+        private readonly Dictionary<SourceFile, DiagnosticBag> _bags = [];
+
+        public DiagnosticBag? Get(SourceFile file) => _bags.GetValueOrDefault(file);
+
+        public DiagnosticBag Of(SourceFile file)
+        {
+            if (!_bags.TryGetValue(file, out var bag))
+                _bags[file] = bag = new DiagnosticBag(options: options);
+
+            return bag;
+        }
+    }
+
     private ModuleGraph(
         List<ParsedFile> order,
         Dictionary<NodeId, SourceFile> resolvedModules,
-        Dictionary<SourceFile, DiagnosticBag> diagnostics)
+        ModuleDiagnostics diagnostics)
     {
         Order = order;
         _resolvedModules = resolvedModules;
@@ -43,9 +62,9 @@ public sealed class ModuleGraph
     public SourceFile? GetResolvedModule(Node moduleReference) => _resolvedModules.GetValueOrDefault(moduleReference.Id);
 
     /// <summary>Module diagnostics belonging to <paramref name="file" />, reported at its import sites.</summary>
-    public DiagnosticBag? GetDiagnostics(SourceFile file) => _diagnostics.GetValueOrDefault(file);
+    public DiagnosticBag? GetDiagnostics(SourceFile file) => _diagnostics.Get(file);
 
-    public static ModuleGraph Build(List<ParsedFile> parsedFiles, LoomConfig config)
+    public static ModuleGraph Build(List<ParsedFile> parsedFiles, LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
     {
         var resolver = new ModuleResolver(parsedFiles.ConvertAll(parsedFile => parsedFile.File), config.Files.SourceDirectory);
         var parsedFilesByFile = new Dictionary<SourceFile, ParsedFile>();
@@ -53,7 +72,7 @@ public sealed class ModuleGraph
             parsedFilesByFile.TryAdd(parsedFile.File, parsedFile);
 
         var resolvedModules = new Dictionary<NodeId, SourceFile>();
-        var diagnostics = new Dictionary<SourceFile, DiagnosticBag>();
+        var diagnostics = new ModuleDiagnostics(diagnosticOptions ?? DiagnosticOptions.Default);
         var dependencies = new Dictionary<SourceFile, List<ModuleEdge>>();
         foreach (var parsedFile in parsedFiles)
         {
@@ -84,6 +103,19 @@ public sealed class ModuleGraph
         return new ModuleGraph(order, resolvedModules, diagnostics);
     }
 
+    /// <remarks>
+    ///     Specifiers are matched case-sensitively because Roblox requires are, so a module that differs only
+    ///     in case is the likeliest thing the author meant and is worth naming — the bare "could not find it"
+    ///     reads like a typo hunt on a file system that does not care about case.
+    /// </remarks>
+    private static string? NotFoundHint(SourceFile importingFile, string specifier, SourceFile? caseInsensitiveMatch)
+    {
+        if (caseInsensitiveMatch != null)
+            return $"did you mean '{ModuleResolver.SpecifierOf(importingFile, caseInsensitiveMatch)}'? module paths are case-sensitive";
+
+        return FileManager.IsLoomFile(specifier) ? $"drop the '{FileManager.LoomExtension}' extension from the path" : null;
+    }
+
     /// <summary>Every statement in the file that names another module: imports and re-exports alike.</summary>
     private static IEnumerable<(Node Node, Literal Specifier, string? Path)> ModuleReferencesOf(ParsedFile parsedFile)
     {
@@ -104,7 +136,7 @@ public sealed class ModuleGraph
         Literal moduleSpecifier,
         string? specifier,
         Dictionary<SourceFile, ParsedFile> parsedFilesByFile,
-        Dictionary<SourceFile, DiagnosticBag> diagnostics)
+        ModuleDiagnostics diagnostics)
     {
         if (parsedFile.File.IsDeclaration)
         {
@@ -171,9 +203,7 @@ public sealed class ModuleGraph
                     moduleSpecifier,
                     InternalCodes.ModuleNotFound,
                     $"Could not find module '{specifier}'.",
-                    FileManager.IsLoomFile(specifier)
-                        ? $"drop the '{FileManager.LoomExtension}' extension from the path"
-                        : null
+                    NotFoundHint(parsedFile.File, specifier, resolution.CaseInsensitiveMatch)
                 );
 
                 return null;
@@ -189,7 +219,7 @@ public sealed class ModuleGraph
         List<ParsedFile> parsedFiles,
         Dictionary<SourceFile, List<ModuleEdge>> dependencies,
         LoomConfig config,
-        Dictionary<SourceFile, DiagnosticBag> diagnostics)
+        ModuleDiagnostics diagnostics)
     {
         var order = new List<ParsedFile>(parsedFiles.Count);
         var states = new Dictionary<SourceFile, VisitState>();
@@ -240,16 +270,11 @@ public sealed class ModuleGraph
     }
 
     private static void Report(
-        Dictionary<SourceFile, DiagnosticBag> diagnostics,
+        ModuleDiagnostics diagnostics,
         SourceFile file,
         Node node,
         string code,
         string message,
-        string? hint = null)
-    {
-        if (!diagnostics.TryGetValue(file, out var bag))
-            diagnostics[file] = bag = new DiagnosticBag();
-
-        bag.Error(node, code, message, hint);
-    }
+        string? hint = null) =>
+        diagnostics.Of(file).Error(node, code, message, hint);
 }
