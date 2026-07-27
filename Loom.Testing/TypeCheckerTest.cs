@@ -248,6 +248,29 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("interface Foo { bar: string } let foo = new Foo { bar: \"abc\" }; \"bar\" in foo"));
 
     [Fact]
+    public void Narrows_PropertyType_FromInOperator() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics("interface Foo { bar: number? } let foo = new Foo { bar: 1 }; if \"bar\" in foo foo.bar + 5")
+        );
+
+    [Fact]
+    public void DoesNotNarrow_PropertyType_FromInOperator_WithNonLiteralKey()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { bar: number? }
+            let foo = new Foo { bar: 1 };
+            let key = "bar";
+            if key in foo {
+                foo.bar + 5
+            }
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
     public void ThrowsFor_NonGenericFunctionCall_ArgumentTypeMismatch()
     {
         const string source = """
