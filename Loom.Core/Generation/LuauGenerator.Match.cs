@@ -14,10 +14,22 @@ namespace Loom.Core.Generation;
 
 public sealed partial class LuauGenerator
 {
+    // Set only while compiling a match arm's Guard expression, so a guard that references the arm's
+    // own pattern-bound name (e.g. `n when n > 0`) resolves to the match subject instead of the not-yet-
+    // declared local - the binding itself is only introduced inside the arm body, after the guard passes.
+    private string? _guardSubstitutionName;
+    private LuauExpression? _guardSubstitutionValue;
+
     public override LuauNode VisitMatchExpression(MatchExpression matchExpression)
     {
         if (matchExpression.Arms.Count == 0)
             return new NilLiteral();
+
+        // A match with only a single, unguarded wildcard arm always takes that arm no matter what the
+        // scrutinee is, so the subject/local-match scaffolding - and evaluating the scrutinee at all -
+        // can be skipped entirely in favor of just the arm's body.
+        if (matchExpression.Arms is [{ Pattern: WildcardPattern, Guard: null } soleArm])
+            return Visit(soleArm.Body);
 
         var subject = _state.PushToVariable("_subject", Visit(matchExpression.Expression));
         var matchName = _state.Scope.AddIdentifier("_match");
@@ -34,13 +46,16 @@ public sealed partial class LuauGenerator
             if (elseBranch != null)
                 break;
 
-            if (arm.Guard != null)
-                _diagnostics.NotImplemented(arm.Guard, "Match arm guards are not yet supported in code generation.");
-
             var conditions = new List<LuauExpression>();
             var bindings = new List<LuauStatement>();
             if (!TryCompilePattern(arm.Pattern, subject, conditions, bindings, out var isIrrefutable))
                 continue;
+
+            if (arm.Guard != null)
+            {
+                conditions.Add(CompileGuard(arm, subject));
+                isIrrefutable = false;
+            }
 
             var armChunk = CompileMatchArmBody(arm, matchIdentifier, bindings);
             if (isIrrefutable)
@@ -72,6 +87,34 @@ public sealed partial class LuauGenerator
         }
 
         return matchIdentifier;
+    }
+
+    private LuauExpression CompileGuard(MatchArm arm, LuauExpression subject)
+    {
+        var substitutionName = arm.Pattern switch
+        {
+            IdentifierPattern identifierPattern => identifierPattern.Name.Text,
+            LetPattern letPattern => letPattern.Name.Text,
+            TypedPattern { ObjectPattern: null } typedPattern => typedPattern.Name.Text,
+            _ => null
+        };
+
+        if (substitutionName == null)
+            return (LuauExpression)Visit(arm.Guard!);
+
+        var previousName = _guardSubstitutionName;
+        var previousValue = _guardSubstitutionValue;
+        _guardSubstitutionName = substitutionName;
+        _guardSubstitutionValue = subject;
+        try
+        {
+            return (LuauExpression)Visit(arm.Guard!);
+        }
+        finally
+        {
+            _guardSubstitutionName = previousName;
+            _guardSubstitutionValue = previousValue;
+        }
     }
 
     private Chunk CompileMatchArmBody(MatchArm arm, Identifier matchIdentifier, List<LuauStatement> bindings)

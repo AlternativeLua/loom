@@ -1,0 +1,44 @@
+type Box = {
+  read value: number,
+}
+const function describe(x: number | string | Box): string
+  local _match
+  if x == 0 or x == 100 then
+    _match = "zero or one hundred"
+  elseif typeof(x) == "number" and x >= 1 and x <= 10 then
+    _match = "small range"
+  elseif typeof(x) == "number" then
+    const n = x
+    _match = "number"
+  elseif typeof(x) == "string" then
+    const s = x
+    _match = s
+  elseif typeof(x) == "table" then
+    const value = x.value
+    _match = "box value"
+  else
+    _match = "other"
+  end
+  return _match
+end
+const function describeGuarded(n: number): string
+  local _match_1
+  if n > 0 then
+    const m = n
+    _match_1 = "positive"
+  else
+    _match_1 = "non-positive"
+  end
+  return _match_1
+end
+const _subject = {1, 2, 3}
+local _match_2
+if typeof(_subject) == "table" then
+  const head = _subject[1]
+  const rest = {table.unpack(_subject, 2)}
+  _match_2 = head
+else
+  _match_2 = 0
+end
+const firstAndRest = _match_2
+const onlyWildcard = 42

@@ -3008,22 +3008,12 @@ public class LuauGeneratorTest
     }
 
     [Fact]
-    public void Generates_Match_SingleWildcardArm_NoIfStatementGenerated()
+    public void Generates_Match_SingleWildcardArm_JustEmitsBody()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { _ -> 42 }");
-        Assert.Equal(4, luauTree.Statements.Count);
-
-        Assert.IsType<ConstVariable>(luauTree.Statements[0]);
-        Assert.IsType<LocalVariable>(luauTree.Statements[1]);
-
-        var assignmentStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[2]);
-        var assignment = Assert.IsType<BinaryOperator>(assignmentStatement.Expression);
-        Assert.Equal("=", assignment.Operator);
-        Assert.Equal(42, Assert.IsType<NumberLiteral>(assignment.Right).Value);
-
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
         Assert.Equal("m", variable.Name);
-        Assert.Equal("_match", Assert.IsType<Identifier>(variable.Initializer).Name);
+        Assert.Equal(42, Assert.IsType<NumberLiteral>(variable.Initializer).Value);
     }
 
     [Fact]
@@ -3053,18 +3043,32 @@ public class LuauGeneratorTest
     }
 
     [Fact]
-    public void Generates_Match_GuardEmitsDiagnostic_ArmStillCompiles()
+    public void Generates_Match_Guard_CombinesWithPatternCondition()
     {
-        const string source = "let m = match 1 { 0 when true -> \"a\", _ -> \"b\" }";
-
-        var diagnostics = Utility.GetGeneratorDiagnostics(source);
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.NotImplemented, "Match arm guards are not yet supported in code generation.");
-
-        var luauTree = Utility.GetLuauAST(source);
+        var luauTree = Utility.GetLuauAST("let m = match 1 { 0 when true -> \"a\", _ -> \"b\" }");
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
         var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
-        Assert.Equal(0, Assert.IsType<NumberLiteral>(condition.Right).Value);
+        Assert.Equal("and", condition.Operator);
+
+        var patternCondition = Assert.IsType<BinaryOperator>(condition.Left);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(patternCondition.Right).Value);
+        Assert.IsType<BooleanLiteral>(condition.Right);
         Assert.NotNull(ifStatement.ElseBranch);
+    }
+
+    [Fact]
+    public void Generates_Match_GuardOnIdentifierPattern_SubstitutesSubjectInCondition_AndBindsInBody()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { n when n > 0 -> n, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal(">", condition.Operator);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(condition.Right).Value);
+
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("n", binding.Name);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(binding.Initializer).Name);
     }
 
     [Fact]
