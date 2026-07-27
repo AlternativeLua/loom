@@ -96,17 +96,17 @@ public class CompilerTest
         Assert.Same(options, compiledFile.SemanticModel.Diagnostics.Options);
     }
 
-    /// <remarks>See the note on the equivalent <see cref="CompilationUnitTest" /> case about the source used.</remarks>
+    /// <remarks>
+    ///     A source directory of "" makes the output path of any file throw, which is a stage failing on
+    ///     something other than the file it was given — exactly what the compiler-error path is for.
+    /// </remarks>
     [Fact]
     public void Reports_AFailedPhase_AsACompilerError_InsteadOfThrowing()
     {
-        var compilationUnit = new CompilationUnit(new LoomConfig());
-        var compiler = new Compiler(compilationUnit, Utility.TestFile("let v: Missing = 1;"));
+        var config = new LoomConfig { Files = new FilesConfig { SourceDirectory = "" } };
+        var compiler = new Compiler(new CompilationUnit(config), Utility.TestFile("let x = 1;"));
 
-        var compiledFile = compiler.Compile();
-        Assert.True(compiler.Diagnostics.ContainsErrors());
-        if (compiledFile != null)
-            return; // the phase stopped throwing, so there is no failure left to describe
+        Assert.Null(compiler.Compile());
 
         var compilerError = compiler.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
         Assert.NotNull(compilerError);

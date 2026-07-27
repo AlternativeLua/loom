@@ -39,7 +39,7 @@ public sealed partial class LuauGenerator
         if (symbol == null)
         {
             _diagnostics.Error(typeName, InternalCodes.CannotFindSymbol, $"Cannot find symbol for type '{typeName}'");
-            return new NilLiteral();
+            return UnknownType;
         }
 
         var typeArguments = typeName.TypeArguments?.ArgumentsList.ConvertAll(Visit);

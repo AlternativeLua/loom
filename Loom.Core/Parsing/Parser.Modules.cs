@@ -65,6 +65,9 @@ public sealed partial class Parser
         if (Current().Kind is SyntaxKind.LBrace || Current().Kind is SyntaxKind.TypeKeyword && PeekKind(1) is SyntaxKind.LBrace)
             return ParseExportList(exportKeyword);
 
+        if (Match(out _, SyntaxKind.Star))
+            return SkipExportAll(exportKeyword);
+
         if (Match(out var keyword, SyntaxFacts.IsExportableKeyword))
             return WrapExport(exportKeyword, StatementParsers[keyword.Kind](keyword));
 
@@ -74,6 +77,22 @@ public sealed partial class Parser
             $"Only 'fn', 'let', 'type', 'interface', 'enum', and 'trait' declarations can be exported, got {SafeTokenText(Current())}."
         );
 
+        return new NullStatement(exportKeyword);
+    }
+
+    /// <summary>
+    ///     <c>export * from "./m"</c> is not supported yet. The rest of the statement is consumed so that it
+    ///     reads as one error rather than as a stray '*' followed by whatever the remaining tokens look like.
+    /// </summary>
+    private Statement SkipExportAll(Token exportKeyword)
+    {
+        if (AtContextualKeyword("from"))
+        {
+            Advance();
+            Expect(SyntaxKind.StringLiteral, "module path");
+        }
+
+        _diagnostics.NotImplemented(exportKeyword, "Re-exporting everything from a module is not supported yet.", "name the exports with 'export { ... } from'");
         return new NullStatement(exportKeyword);
     }
 

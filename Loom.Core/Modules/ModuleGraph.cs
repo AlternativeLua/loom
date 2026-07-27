@@ -103,6 +103,19 @@ public sealed class ModuleGraph
         return new ModuleGraph(order, resolvedModules, diagnostics);
     }
 
+    /// <remarks>
+    ///     Specifiers are matched case-sensitively because Roblox requires are, so a module that differs only
+    ///     in case is the likeliest thing the author meant and is worth naming — the bare "could not find it"
+    ///     reads like a typo hunt on a file system that does not care about case.
+    /// </remarks>
+    private static string? NotFoundHint(SourceFile importingFile, string specifier, SourceFile? caseInsensitiveMatch)
+    {
+        if (caseInsensitiveMatch != null)
+            return $"did you mean '{ModuleResolver.SpecifierOf(importingFile, caseInsensitiveMatch)}'? module paths are case-sensitive";
+
+        return FileManager.IsLoomFile(specifier) ? $"drop the '{FileManager.LoomExtension}' extension from the path" : null;
+    }
+
     /// <summary>Every statement in the file that names another module: imports and re-exports alike.</summary>
     private static IEnumerable<(Node Node, Literal Specifier, string? Path)> ModuleReferencesOf(ParsedFile parsedFile)
     {
@@ -190,9 +203,7 @@ public sealed class ModuleGraph
                     moduleSpecifier,
                     InternalCodes.ModuleNotFound,
                     $"Could not find module '{specifier}'.",
-                    FileManager.IsLoomFile(specifier)
-                        ? $"drop the '{FileManager.LoomExtension}' extension from the path"
-                        : null
+                    NotFoundHint(parsedFile.File, specifier, resolution.CaseInsensitiveMatch)
                 );
 
                 return null;

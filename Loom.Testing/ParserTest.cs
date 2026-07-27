@@ -63,6 +63,18 @@ public class ParserTest
             "Only 'fn', 'let', 'type', 'interface', 'enum', and 'trait' declarations can be exported, got '123'.",
             null
         ),
+        new(
+            "export * from \"./math\"",
+            InternalCodes.NotImplemented,
+            "Re-exporting everything from a module is not supported yet.",
+            "name the exports with 'export { ... } from'"
+        ),
+        new(
+            "let v: math.Scalar = 1;",
+            InternalCodes.NotImplemented,
+            "Qualified type names are not supported yet.",
+            "import the type by name with 'import type { ... }'"
+        ),
         new("import from \"./math\"", InternalCodes.UnexpectedToken, "Expected '{' after 'import', got 'from'.", null),
         new("import { } from \"./math\"", InternalCodes.EmptyImportClause, "Import declaration must name at least one member.", null),
         new("import type { } from \"./math\"", InternalCodes.EmptyImportClause, "Import declaration must name at least one member.", null),

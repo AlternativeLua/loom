@@ -32,6 +32,40 @@ public class ResolverTest
         Utility.AssertDiagnostic(diagnostics, InternalCodes.DuplicateName, "Variable 'x' is already declared in this scope.");
     }
 
+    [Theory]
+    [InlineData("let Vector3 = 1;\nprint(Vector3);")]
+    [InlineData("type Vector3 = number;\nlet v: Vector3 = 1;\nprint(v);")]
+    [InlineData("fn Vector3(): number -> 1;\nprint(Vector3());")]
+    public void Allows_ADeclaration_ToShadowAnIntrinsic(string source) => Utility.AssertNoErrors(Utility.GetSemanticModel(source).Diagnostics);
+
+    [Fact]
+    public void Resolves_AnIntrinsic_ThatNothingShadows() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let v: Vector3 = Vector3.zero;\nprint(v.x);").Diagnostics);
+
+    [Fact]
+    public void Allows_AModuleDeclaration_ToShadowAnAmbientGlobal() =>
+        Utility.WithTempProject(
+            [("types.d.loom", "declare let thing: number;"), ("main.loom", "let thing = 1;\nprint(thing);")],
+            (_, result) => Utility.AssertNoErrors(result)
+        );
+
+    [Fact]
+    public void Exports_ADeclaration_NamedLikeAnAmbientGlobal() =>
+        Utility.WithTempProject(
+            [
+                ("types.d.loom", "declare let thing: number;"), ("m.loom", "export let thing = 1;"),
+                ("main.loom", "import { thing } from \"./m\"\nprint(thing);")
+            ],
+            (_, result) => Utility.AssertNoErrors(result)
+        );
+
+    [Fact]
+    public void Resolves_AnAmbientGlobal_ThatNothingShadows() =>
+        Utility.WithTempProject(
+            [("types.d.loom", "declare let thing: number;"), ("main.loom", "print(thing);")],
+            (_, result) => Utility.AssertNoErrors(result)
+        );
+
     [Fact]
     public void ThrowsFor_DuplicateFunction()
     {

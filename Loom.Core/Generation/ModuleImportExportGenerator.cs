@@ -36,6 +36,10 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
 
     public List<LuauStatement> GenerateImports()
     {
+        var bindingsByModule = semanticModel.ImportBindings
+            .GroupBy(binding => binding.Module)
+            .ToDictionary(bindings => bindings.Key, bindings => bindings.ToList());
+
         var statements = new List<LuauStatement>();
         foreach (var (module, specifier, localName) in GetRequiredModules())
         {
@@ -43,7 +47,7 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
             _moduleLocals[module] = moduleName;
             statements.Add(new ConstVariable(moduleName, null, LuauFactory.RequireCall(GetRequirePath(module, specifier))));
 
-            var bindings = semanticModel.ImportBindings.FindAll(binding => binding.Module == module);
+            var bindings = bindingsByModule.GetValueOrDefault(module, []);
             statements.AddRange(bindings.Where(binding => binding.RequiresModuleAtRuntime).Select(binding => GenerateValueImport(binding, moduleName)));
             statements.AddRange(bindings.Where(binding => binding.Symbol.IsTypeSymbol).Select(binding => GenerateTypeImport(binding, moduleName)));
         }

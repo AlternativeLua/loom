@@ -20,8 +20,15 @@ var debugInfo = result.Files
     .Where(f => !f.SourceFile.IsDeclaration)
     .Select(f => f.GetDebugInfo(false, debugDiagnostics: loomConfig.Debug));
 
-// files the compiler gave up on have no debug info of their own, and with fail-fast off nothing
-// else would report them
-var failureInfo = result.Failures.Select(failure => $"{failure.File.Name}:{Environment.NewLine}{failure.Diagnostics.WithoutInfo()}");
+// files the compiler gave up on have no debug info of their own, and with fail-fast off nothing else
+// would report them. Their diagnostics are merged rather than printed per file, since one failure of
+// the unit — the module graph, say — fails every file with the same error.
+var failureInfo = result.Failures.Count == 0
+    ? []
+    : new[]
+    {
+        $"Not compiled: {string.Join(", ", result.Failures.Select(failure => failure.File.Name))}",
+        DiagnosticBag.Concat(result.Failures.ConvertAll(failure => failure.Diagnostics)).WithoutInfo().ToString()
+    };
 
 Console.WriteLine(string.Join(Environment.NewLine, debugInfo.Concat(failureInfo)));

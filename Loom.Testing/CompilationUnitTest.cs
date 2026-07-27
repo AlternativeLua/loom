@@ -108,34 +108,107 @@ public class CompilationUnitTest
             }
         );
 
+    [Fact]
+    public void Compiles_ASingleFile_ReportingItsImportsAsUnresolvable()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+
+            var path = Path.Combine(directory, "src", "main.loom");
+            File.WriteAllText(path, "import { pi } from \"./math\"\nprint(pi);");
+
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            // the file is the whole unit, so nothing can satisfy the import — saying so beats binding it to
+            // nothing, which is what a compile without a module graph used to do
+            var compiled = new CompilationUnit(config).Compile(FileManager.LoadSingle(path));
+            Assert.NotNull(compiled);
+            Utility.AssertDiagnostic(compiled.Diagnostics, InternalCodes.ModuleNotFound, "Could not find module './math'.");
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
     /// <remarks>
-    ///     Uses a source that makes a stage throw today (an unresolved type reaches the generator). Should
-    ///     that stop throwing, the test still holds the contract that matters: a unit reports what happened
-    ///     instead of letting an exception escape, and accounts for every file it was given.
+    ///     Dropping the output directory after the unit has loaded its files makes every output path throw,
+    ///     which stands in for any stage failing: the unit has to report it rather than let the exception out.
     /// </remarks>
     [Fact]
-    public void Compiles_TheRestOfTheUnit_WhenAFileMakesTheCompilerThrow() =>
-        Utility.WithTempProject(
-            [("bad.loom", "let v: Missing = 1;\nprint(v);"), ("good.loom", "let x = 1;")],
-            (_, result) =>
-            {
-                Assert.True(result.Diagnostics.ContainsErrors());
+    public void Reports_FilesTheCompilerGaveUpOn_InsteadOfThrowing()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            File.WriteAllText(Path.Combine(directory, "src", "main.loom"), "let x = 1;");
 
-                var good = Assert.Single(result.Files, file => file.SourceFile.Name == "good.loom");
-                Assert.Contains("const x = 1", good.RenderedLuau);
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
 
-                // whichever way it went, bad.loom is accounted for and its diagnostics are in the result
-                Assert.Equal(2, result.Files.Count + result.Failures.Count);
-                foreach (var failure in result.Failures)
-                {
-                    Assert.Equal("bad.loom", failure.File.Name);
+            var compilationUnit = new CompilationUnit(config);
+            config.Files.OutputDirectory = null!;
 
-                    var compilerError = failure.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
-                    Assert.NotNull(compilerError);
-                    Assert.Contains(compilerError, result.Diagnostics.Set);
-                }
-            }
-        );
+            var result = compilationUnit.Compile();
+            Assert.Empty(result.Files);
+
+            var failure = Assert.Single(result.Failures);
+            Assert.Equal("main.loom", failure.File.Name);
+
+            var compilerError = failure.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+            Assert.NotNull(compilerError);
+            Assert.Contains(compilerError, result.Diagnostics.Set);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    /// <remarks>
+    ///     Emptying the source directory after the unit has loaded its files makes the module resolver throw
+    ///     while the graph is built, which is a failure of the unit rather than of any one file.
+    /// </remarks>
+    [Fact]
+    public void Reports_EveryFile_WhenTheModuleGraphCannotBeBuilt()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            File.WriteAllText(Path.Combine(directory, "src", "main.loom"), "import { helper } from \"./util\"\nprint(helper);");
+            File.WriteAllText(Path.Combine(directory, "src", "util.loom"), "export let helper = 1;");
+
+            var config = ConfigReader.LocateFromDirectory(directory);
+            Assert.NotNull(config);
+            config.NoEmit = true;
+
+            var compilationUnit = new CompilationUnit(config);
+            config.Files.SourceDirectory = "";
+
+            var result = compilationUnit.Compile();
+            Assert.Empty(result.Files);
+            Assert.Equal(["main.loom", "util.loom"], result.Failures.Select(failure => failure.File.Name).Order());
+
+            // one error for the unit, not one per file
+            var compilerError = Assert.Single(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+            Assert.Contains("module graph", compilerError.Message);
+            Assert.All(result.Failures, failure => Assert.Contains(compilerError, failure.Diagnostics.Set));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
 
     [Fact]
     public void Compiles_WithTheUnitsDiagnosticOptions_IncludingModuleDiagnostics()

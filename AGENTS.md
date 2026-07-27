@@ -77,6 +77,9 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 - Testing imports both plus `Type = Loom.TypeChecking.Types.Type` alias to dodge `System.Type` clash.
 - `DiagnosticOptions.FailFast` (per `CompilationUnit`, threaded into every stage's `DiagnosticBag`) prints the first error and exits the process. Off by
   default; only `Loom.CLI` opts in.
+- The resolver keeps ambient names (intrinsics + `.d.loom` globals) in a scope below the file's own, so a module declaration shadows them instead of
+  colliding. Scope depth is therefore not a test for "top level of a module" — use `AtModuleScope()`. Imports resolve ahead of the file's statements, so a name
+  may be used above the import that brings it in.
 - Output path derived by string-replacing source dir name with output dir name in the absolute path ([Compiler.cs:33](Loom.Core/Compiler.cs)) — fragile with
   nested same-named dirs.
 - `Loom.TypeGenerator` generates intrinsic types from the Roblox API that the test suite relies on to pass. The intrinsics are stored in

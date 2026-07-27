@@ -35,12 +35,12 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
     public ParsedFile? Parse() =>
         RunPhase(() =>
             {
-                var lexer = new Lexer(file, unit.DiagnosticOptions);
+                var lexer = new Lexer(SourceFile, unit.DiagnosticOptions);
                 var lexerResult = TrackDiagnostics(lexer.Tokenize());
                 var parser = new Parser(lexerResult);
                 var parserResult = TrackDiagnostics(parser.Parse());
 
-                return new ParsedFile(file, lexerResult, parserResult);
+                return new ParsedFile(SourceFile, lexerResult, parserResult);
             }
         );
 
@@ -66,9 +66,9 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                 var generatorResult = TrackDiagnostics(generator.Generate());
                 var renderedLuau = generatorResult.LuauTree.Render();
 
-                return new CompiledFile(file)
+                return new CompiledFile(SourceFile)
                 {
-                    Path = FileManager.GetOutputPath(file, unit.Config),
+                    Path = FileManager.GetOutputPath(SourceFile, unit.Config),
                     Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics, unit.DiagnosticOptions),
                     RenderedLuau = renderedLuau,
                     LuauTree = generatorResult.LuauTree,
@@ -96,7 +96,7 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
         {
             var diagnostics = new DiagnosticBag(options: unit.DiagnosticOptions);
             _pipelineDiagnostics.Add(diagnostics);
-            diagnostics.CompilerError(file, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
+            diagnostics.CompilerError(SourceFile, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
             return null;
         }
     }

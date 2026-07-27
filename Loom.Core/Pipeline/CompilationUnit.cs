@@ -53,7 +53,9 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         foreach (var (compiler, parsedFile) in parsedFiles)
             compilers.TryAdd(parsedFile.File, compiler);
 
-        ModuleGraph = ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config, DiagnosticOptions);
+        ModuleGraph = BuildModuleGraph(parsedFiles, failures);
+        if (ModuleGraph == null)
+            return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions)) { Failures = failures };
 
         // phase two: declaration files first — their top-level symbols become globals that every
         // other file resolves against. Both groups keep the graph's dependency order.
@@ -93,8 +95,48 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         }
     }
 
-    /// <summary>Null when the compiler gave up on <paramref name="file" />; see <see cref="Compiler.Diagnostics" />.</summary>
-    public CompiledFile? Compile(SourceFile file) => new Compiler(this, file).Compile();
+    /// <summary>
+    ///     Compiles one file on its own. Its imports resolve against a graph holding only that file, so an
+    ///     import of anything else is reported as unresolvable — the file is the whole unit here, and saying
+    ///     nothing would leave the import silently bound to nothing.
+    /// </summary>
+    /// <returns>Null when the compiler gave up on <paramref name="file" />; see <see cref="Compiler.Diagnostics" />.</returns>
+    public CompiledFile? Compile(SourceFile file)
+    {
+        var compiler = new Compiler(this, file);
+        var parsedFile = compiler.Parse();
+        if (parsedFile == null)
+            return null;
+
+        ModuleGraph = BuildModuleGraph([(compiler, parsedFile)], []);
+
+        return compiler.Analyze(parsedFile, ModuleGraph?.GetDiagnostics(file));
+    }
+
+    /// <summary>
+    ///     The graph orders phase two, so a compiler bug while building it leaves no file analyzable. Every
+    ///     parsed file is failed with the one error describing why, on top of whatever its own parse reported.
+    /// </summary>
+    private ModuleGraph? BuildModuleGraph(List<(Compiler Compiler, ParsedFile ParsedFile)> parsedFiles, List<FailedFile> failures)
+    {
+        try
+        {
+            return ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config, DiagnosticOptions);
+        }
+        catch (Exception e)
+        {
+            // no file to blame: the graph is the unit's, not any one file's
+            var diagnostics = new DiagnosticBag(options: DiagnosticOptions);
+            diagnostics.CompilerError(SourceFile.Empty, $"The compiler threw an exception building the module graph!\n{e.Message}\n{e.StackTrace}");
+            failures.AddRange(
+                parsedFiles.ConvertAll(parsed =>
+                    new FailedFile(parsed.ParsedFile.File, DiagnosticBag.Concat([parsed.Compiler.Diagnostics, diagnostics], DiagnosticOptions))
+                )
+            );
+
+            return null;
+        }
+    }
 
     /// <summary>
     ///     The compiler for a file is kept alongside its parsed form so that phase two reports the

@@ -69,6 +69,12 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     }
 
     /// <summary>
+    ///     A symbol standing in for an import whose module could not be resolved. It has no binding, since
+    ///     there is no module to bind it to, but it still names something declared elsewhere.
+    /// </summary>
+    internal void AddUnresolvedImport(Symbol symbol) => ImportedSymbols.Add(symbol);
+
+    /// <summary>
     ///     Whether the symbol was declared by another module and brought in by an import. Its declaration
     ///     belongs to a tree this model never walked, so anything reasoning about the declaration's position —
     ///     flow analysis in particular — has to treat it as coming from outside.
