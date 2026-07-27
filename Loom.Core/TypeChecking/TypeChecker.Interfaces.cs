@@ -1,5 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
 using Loom.Core.Diagnostics;
+using Loom.Core.FlowAnalysis;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking.Types;
@@ -115,7 +116,20 @@ public sealed partial class TypeChecker
         return BindType(interfaceDeclaration, publishedType);
     }
 
-    public override Type VisitInterfaceInvocation(InterfaceInvocation interfaceInvocation)
+    public override Type VisitInterfaceInvocation(InterfaceInvocation interfaceInvocation) =>
+        CheckOrVisitInterfaceInvocation(interfaceInvocation, null);
+
+    private Type CheckInterfaceInvocation(InterfaceInvocation interfaceInvocation, Type expected, FlowState state)
+    {
+        var lastState = _flowState;
+        _flowState = state;
+        var result = CheckOrVisitInterfaceInvocation(interfaceInvocation, expected);
+        _flowState = lastState;
+
+        return result;
+    }
+
+    private Type CheckOrVisitInterfaceInvocation(InterfaceInvocation interfaceInvocation, Type? expected)
     {
         var type = Visit(interfaceInvocation.Name);
         if (type.Equals(Intrinsics.Range))
@@ -138,7 +152,7 @@ public sealed partial class TypeChecker
             return BindType(interfaceInvocation, PrimitiveType.Never);
         }
 
-        if (!TrySubstituteGenericInterface(interfaceInvocation, generic, underlying, out var interfaceType))
+        if (!TrySubstituteGenericInterface(interfaceInvocation, generic, underlying, expected, out var interfaceType))
             return BindType(interfaceInvocation, PrimitiveType.Never);
 
         return BindInterfaceInvocation(interfaceInvocation, interfaceType, traitProperties);
@@ -158,12 +172,13 @@ public sealed partial class TypeChecker
         InterfaceInvocation node,
         GenericType generic,
         InterfaceType underlying,
+        Type? expected,
         [MaybeNullWhen(false)] out InterfaceType substituted)
     {
         substituted = null;
         var substitution = node.TypeArguments != null
             ? ResolveExplicitInterfaceTypeArguments(node, generic)
-            : _inferrer.InferInterfaceTypeArguments(node, generic, underlying);
+            : _inferrer.InferInterfaceTypeArguments(node, generic, underlying, expected);
 
         if (substitution == null)
             return false;
