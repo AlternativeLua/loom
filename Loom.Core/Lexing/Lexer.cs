@@ -62,10 +62,17 @@ public sealed class Lexer(SourceFile file)
                 continue;
             }
 
-            if (current is '"' or '\'')
+            switch (current)
             {
-                yield return LexString(start, current);
-                continue;
+                case '"' or '\'':
+                    yield return LexString(start, current);
+                    continue;
+                case '#' when Peek(1) is '#':
+                    yield return LexLineComment(start);
+                    continue;
+                case '#' when Peek(1) is ':':
+                    yield return LexBlockComment(start);
+                    continue;
             }
 
             if (AtNumber())
@@ -83,17 +90,31 @@ public sealed class Lexer(SourceFile file)
                 continue;
             }
 
-            if (TryLexRegexRule(start, out var regexToken))
-            {
-                yield return regexToken;
-                continue;
-            }
-
             RecoverUnexpectedCharacterDiagnostic(start);
             break;
         }
 
         yield return CreateToken(SyntaxKind.Eof, _position);
+    }
+
+    private Token LexBlockComment(int start)
+    {
+        Advance(2);
+        while (!IsEof() && !IsEof(1) && Current() is not ':' && Peek(1) is not '#')
+            Advance();
+
+        if (Current() is not ':' && (IsEof(1) || Peek(1) is not '#'))
+            _diagnostics.Error(GetSpan(start), InternalCodes.UnterminatedComment, "Unterminated block comment: expected closing ':#'.");
+        else
+            Advance(2);
+
+        return CreateToken(SyntaxKind.BlockComment, start);
+    }
+
+    private Token LexLineComment(int start)
+    {
+        AdvanceWhile(ch => ch is not '\n');
+        return CreateToken(SyntaxKind.Comment, start);
     }
 
     private void TrackInterpolationBraces(SyntaxKind operatorKind)
@@ -187,23 +208,6 @@ public sealed class Lexer(SourceFile file)
         }
 
         return CreateToken(SyntaxKind.StringLiteral, start);
-    }
-
-    private bool TryLexRegexRule(int start, out Token token)
-    {
-        if (LexerRules.RegexRulesByFirstCharacter.TryGetValue(Current(), out var candidates))
-            foreach (var (rule, regex) in candidates)
-            {
-                var match = regex.Match(file.SourceText, _position);
-                if (!match.Success || match.Index != _position || match.Length == 0) continue;
-
-                Advance(match.Length);
-                token = CreateToken(rule.Syntax, start);
-                return true;
-            }
-
-        token = null!;
-        return false;
     }
 
     private Token LexWhitespace(int start)
@@ -397,33 +401,9 @@ public sealed class Lexer(SourceFile file)
 
     private void RecoverUnexpectedCharacterDiagnostic(int start)
     {
-        if (TryDiagnosticRule(start, LexerRules.Diagnostic)) return;
-
         var character = Current();
         var display = char.IsControl(character) ? $"U+{(int)character:X4}" : $"'{character}'";
         _diagnostics.Error(GetSpan(start), InternalCodes.UnexpectedCharacter, $"Unexpected character {display}.");
-    }
-
-    private bool TryDiagnosticRule(int start, IReadOnlyList<LexerDiagnosticRule> rules)
-    {
-        foreach (var rule in rules)
-        {
-            var match = rule.Pattern.Match(file.SourceText, _position);
-            if (!match.Success || match.Index != _position) continue;
-
-            Advance(match.Length);
-            _diagnostics.Report(
-                GetSpan(start),
-                rule.Severity,
-                rule.DiagnosticCode,
-                rule.MessageFactory(match.Value),
-                rule.Hint
-            );
-
-            return true;
-        }
-
-        return false;
     }
 
     private void Match(char c)
@@ -445,7 +425,7 @@ public sealed class Lexer(SourceFile file)
     }
 
     private Token CreateToken(SyntaxKind kind, int start) => new(kind, file, new TextSpan(start, _position - start));
-    private void Advance(int offset = 1) => _position += offset;
+    private void Advance(int length = 1) => _position += length;
     private char Current() => Peek(0);
     private char Peek(int offset) => file.SourceText[_position + offset];
     private bool IsEof(int offset = 0) => _position + offset >= _sourceLength;
