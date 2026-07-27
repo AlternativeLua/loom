@@ -149,6 +149,13 @@ public sealed partial class TypeChecker
     private void CheckTypedPattern(TypedPattern pattern, Type inputType)
     {
         var patternType = Visit(pattern.Type);
+        if (!IsPatternCompatible(patternType, inputType))
+            _diagnostics.Error(
+                pattern,
+                InternalCodes.TypeMismatch,
+                $"Pattern of type '{patternType}' cannot match value of type '{inputType}'."
+            );
+
         var matchedType = NarrowToType(inputType, patternType);
         BindType(pattern, matchedType);
         if (pattern.ObjectPattern != null)
@@ -158,6 +165,13 @@ public sealed partial class TypeChecker
     private void CheckTypePattern(TypePattern pattern, Type inputType)
     {
         var patternType = Visit(pattern.Type);
+        if (!IsPatternCompatible(patternType, inputType))
+            _diagnostics.Error(
+                pattern,
+                InternalCodes.TypeMismatch,
+                $"Pattern of type '{patternType}' cannot match value of type '{inputType}'."
+            );
+
         var matchedType = NarrowToType(inputType, patternType);
         BindType(pattern, matchedType);
         if (pattern.ObjectPattern != null)

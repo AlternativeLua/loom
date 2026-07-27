@@ -5948,5 +5948,37 @@ public class TypeCheckerTest
         var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { 0 -> "zero", 1 | _ -> "other" }""");
         Utility.AssertNoErrors(diagnostics);
     }
+
+    [Fact]
+    public void ThrowsFor_Match_TypedPattern_ImpossibleOverlap()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 123 { s when string -> 123, _ -> 0 }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Pattern of type 'string' cannot match value of type '123'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_TypePattern_ImpossibleOverlap()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { x: number }
+            match 123 { Foo {} -> 0, _ -> 0 }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Pattern of type 'Foo' cannot match value of type '123'."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_TypedPattern_PossibleOverlap_OnWidenedType() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("""let value: number = 1; match value { n when number -> n, _ -> 0 }"""));
     #endregion Match
 }
