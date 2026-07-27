@@ -5407,7 +5407,150 @@ public class TypeCheckerTest
         var diagnostics = Utility.GetTypeCheckerDiagnostics("""let x: number = "no";""");
         Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
     }
+    [Fact]
+    public void Allows_NullCoalesce_EmptyArrayFallback_AgainstAnnotatedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let a: number[]? = [1, 2, 3];
+            let xs: number[] = a ?? [];
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_NullCoalesce_FallbackMismatch_AgainstAnnotatedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let a: number? = 1;
+            let x: number = a ?? "no";
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_NullCoalesce_FallbackArrayElementMismatch_AgainstAnnotatedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let a: number[]? = [1, 2, 3];
+            let xs: number[] = a ?? [1, "no"];
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '(number | string)[]' is not assignable to type 'number[]'.\n    Type '\"no\"' is not assignable to type 'number'."
+        );
+    }
+
+    [Fact]
+    public void Allows_InterfaceInvocation_EmptyArrayProperty_AgainstAnnotatedGenericType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Box<T> { value: T[] }
+            let b: Box<number> = new Box { value: [] };
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_InterfaceInvocation_PropertyMismatch_AgainstAnnotatedGenericType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Box<T> { value: T }
+            let b: Box<number> = new Box { value: "no" };
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void Infers_InterfaceInvocation_GenericTypeParameter_FromAnnotatedContext()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Box<T> { value: T[] }
+            let b: Box<number> = new Box { value: [] };
+            b
+            """
+        );
+
+        var interfaceType = Assert.IsType<InterfaceType>(type);
+        var property = interfaceType.GetProperty("value");
+        Assert.NotNull(property);
+        var array = Assert.IsType<ArrayType>(property.ValueType);
+        Assert.Equal(PrimitiveType.Number, array.ElementType);
+    }
     #endregion Bidirectional
+
+    #region ErrorTraces
+    [Fact]
+    public void ThrowsFor_WholeArrayVariableAssignment_TracesOuterArrayType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let a: number[] = [1, 2, 3];
+            let b: string[] = a;
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'number[]' is not assignable to type 'string[]'.\n    Type 'number' is not assignable to type 'string'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_InterfaceVariableAssignment_TracesInterfaceNamesAndBadProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { x: number }
+            interface B { x: string }
+            declare fn take(value: A): void;
+            declare let b: B;
+            take(b);
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'B' is not assignable to type 'A'.\n    Type '{ x: string }' is not assignable to type '{ x: number }'.\n        Type 'string' is not assignable to type 'number'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_GenericInterfaceVariableAssignment_TracesOuterGenericType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            declare interface Box<T> { value: T }
+            declare let a: Box<number>;
+            let b: Box<string> = a;
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'Box<number>' is not assignable to type 'Box<string>'.\n    Type '{ value: number }' is not assignable to type '{ value: string }'.\n        Type 'number' is not assignable to type 'string'."
+        );
+    }
+    #endregion ErrorTraces
 
     #region Events
     [Fact]
