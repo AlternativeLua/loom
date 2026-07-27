@@ -13,7 +13,7 @@ namespace Loom.Core.TypeChecking;
 
 public sealed class TypeInferrer(Func<Node, Type> getType)
 {
-    public TypeParameterSubstitution InferInterfaceTypeArguments(InterfaceInvocation node, GenericType generic, InterfaceType underlying)
+    public TypeParameterSubstitution InferInterfaceTypeArguments(InterfaceInvocation node, GenericType generic, InterfaceType underlying, Type? expected = null)
     {
         var objectType = underlying.ObjectType;
         var pairs = new List<(Type parameterType, Type argumentType)>();
@@ -49,6 +49,15 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
 
         var inferred = new TypeParameterSubstitution();
         var visited = new HashSet<(Type, Type)>();
+
+        // Seed from the surrounding expected type (e.g. `let b: Box<number> = new Box { value: [] }`)
+        // before the bottom-up pass below, so an initializer value that's contextually ambiguous on its
+        // own (like an empty array literal) doesn't lock a type parameter to a useless inferred type
+        // (e.g. `never`) that the bottom-up pass would otherwise refuse to overwrite once bound.
+        if (expected is InstantiatedType instantiatedExpected && instantiatedExpected.GenericType.Equals(generic))
+            for (var i = 0; i < generic.Parameters.Count && i < instantiatedExpected.Arguments.Count; i++)
+                inferred[generic.Parameters[i]] = instantiatedExpected.Arguments[i];
+
         foreach (var (parameterType, argumentType) in pairs)
             TryInferTypes(parameterType, argumentType, inferred, visited);
 

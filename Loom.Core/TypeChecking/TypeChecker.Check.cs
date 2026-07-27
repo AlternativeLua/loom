@@ -1,5 +1,7 @@
+using Loom.Core.Diagnostics;
 using Loom.Core.FlowAnalysis;
 using Loom.Core.Parsing.AST;
+using Loom.Core.Text;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -28,6 +30,12 @@ public sealed partial class TypeChecker
 
         if (expression is TernaryOperator ternaryOperator)
             return CheckTernaryOperator(ternaryOperator, expected, state);
+
+        if (expression is BinaryOperator { Operator.Kind: SyntaxKind.QuestionQuestion or SyntaxKind.QuestionQuestionEquals } nullCoalesce)
+            return CheckNullCoalesce(nullCoalesce, expected, state);
+
+        if (expression is InterfaceInvocation interfaceInvocation)
+            return CheckInterfaceInvocation(interfaceInvocation, expected, state);
 
         // Once more specific rules, add more, but for now it'll just be like that.
         return CheckSubsumption(expression, expected, state, out constraint);
@@ -99,5 +107,16 @@ public sealed partial class TypeChecker
         Check(ternaryOperator.ElseBranch, expected, falseState);
 
         return BindType(ternaryOperator, expected);
+    }
+
+    private Type CheckNullCoalesce(BinaryOperator nullCoalesce, Type expected, FlowState state)
+    {
+        var leftType = Visit(nullCoalesce.Left, state);
+        var rightType = Check(nullCoalesce.Right, expected, state);
+
+        if (!Type.IsOptional(leftType))
+            _diagnostics.Warn(nullCoalesce, InternalCodes.RedundantCode, $"Null coalescing has no effect since '{leftType}' is not optional.");
+
+        return BindType(nullCoalesce, TypeSimplifier.Simplify(new UnionType([leftType, rightType]).NonNullable()));
     }
 }
