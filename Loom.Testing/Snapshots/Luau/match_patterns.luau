@@ -35,7 +35,7 @@ const _subject = {1, 2, 3}
 local _match_2
 if typeof(_subject) == "table" then
   const head = _subject[1]
-  const rest = {table.unpack(_subject, 2)}
+  const rest = table.move(_subject, 2, #_subject, 1, {})
   _match_2 = head
 else
   _match_2 = 0

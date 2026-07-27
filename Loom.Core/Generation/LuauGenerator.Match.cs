@@ -294,12 +294,15 @@ public sealed partial class LuauGenerator
     }
 
     // Rest-array codegen shape is a judgment call (upstream issue #82 leaves it undecided): slice the
-    // remaining elements into a fresh table via `table.unpack`, since Luau expands a trailing unpack
-    // call's multiple returns into positional table entries.
+    // remaining elements into a fresh table via `table.move(subject, N + 1, #subject, 1, {})`, which
+    // copies subject[N+1..#subject] into a new table starting at index 1.
     private static LuauExpression BuildArrayRestSlice(LuauExpression subject, int elementCount)
     {
-        var unpackCall = new Call(new Luau.AST.PropertyAccess(new Identifier("table"), ["unpack"]), [subject, new NumberLiteral(elementCount + 1)]);
-        return new Table([new TableInitializer(unpackCall)]);
+        var length = new Luau.AST.UnaryOperator("#", subject);
+        return new Call(
+            new Luau.AST.PropertyAccess(new Identifier("table"), ["move"]),
+            [subject, new NumberLiteral(elementCount + 1), length, new NumberLiteral(1), new Table([])]
+        );
     }
 
     private static void AddTypeofCondition(List<LuauExpression> conditions, Type type, LuauExpression subject)
