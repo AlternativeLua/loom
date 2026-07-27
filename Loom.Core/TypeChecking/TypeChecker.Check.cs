@@ -12,11 +12,17 @@ public sealed partial class TypeChecker
 
     private Type Check(Expression expression, Type expected, FlowState state)
     {
+        if (expression is Parenthesized parenthesized)
+            return BindType(parenthesized, Check(parenthesized.Expression, expected, state));
+
         if (expression is ArrayLiteral arrayLiteral && expected is ArrayType arrayType)
             return CheckArrayLiteral(arrayLiteral, arrayType, state);
 
         if (expression is MatchExpression matchExpression)
             return CheckMatchExpression(matchExpression, expected, state);
+
+        if (expression is TernaryOperator ternaryOperator)
+            return CheckTernaryOperator(ternaryOperator, expected, state);
 
         // Once more specific rules, add more, but for now it'll just be like that.
         return CheckSubsumption(expression, expected, state);
@@ -57,5 +63,17 @@ public sealed partial class TypeChecker
         _flowState = lastState;
 
         return BindType(matchExpression, expected);
+    }
+
+    private Type CheckTernaryOperator(TernaryOperator ternaryOperator, Type expected, FlowState state)
+    {
+        var conditionType = Visit(ternaryOperator.Condition, state);
+        _semanticModel.TypeSolver.AddConstraint(conditionType, PrimitiveType.Bool, ternaryOperator.Condition);
+
+        var (trueState, falseState) = _narrower.ComputeBranchStates(ternaryOperator.Condition, state);
+        Check(ternaryOperator.ThenBranch, expected, trueState);
+        Check(ternaryOperator.ElseBranch, expected, falseState);
+
+        return BindType(ternaryOperator, expected);
     }
 }

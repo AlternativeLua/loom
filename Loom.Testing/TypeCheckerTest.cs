@@ -5300,6 +5300,79 @@ public class TypeCheckerTest
 
         Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
     }
+
+    [Fact]
+    public void Allows_TernaryOperator_EmptyArrayLiteralBranch_AgainstAnnotatedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = true ? [1, 2] : [];
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_TernaryOperator_BothBranchesEmptyArrayLiteral_AsFunctionArgument()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            declare fn take(xs: number[]): void;
+            take(true ? [] : []);
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_TernaryOperator_ThenBranch_ArrayElementMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = true ? [1, "no"] : [];
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_TernaryOperator_ElseBranch_ArrayElementMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = true ? [] : [1, "no"];
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void Allows_ParenthesizedEmptyArrayLiteral_AgainstAnnotatedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = ([]);
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_ParenthesizedTernaryOperator_BranchArrayElementMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let xs: number[] = (true ? [1, "no"] : []);
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"no\"' is not assignable to type 'number'.");
+    }
     #endregion Bidirectional
 
     #region Events
