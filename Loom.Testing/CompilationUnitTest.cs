@@ -108,6 +108,35 @@ public class CompilationUnitTest
             }
         );
 
+    /// <remarks>
+    ///     Uses a source that makes a stage throw today (an unresolved type reaches the generator). Should
+    ///     that stop throwing, the test still holds the contract that matters: a unit reports what happened
+    ///     instead of letting an exception escape, and accounts for every file it was given.
+    /// </remarks>
+    [Fact]
+    public void Compiles_TheRestOfTheUnit_WhenAFileMakesTheCompilerThrow() =>
+        Utility.WithTempProject(
+            [("bad.loom", "let v: Missing = 1;\nprint(v);"), ("good.loom", "let x = 1;")],
+            (_, result) =>
+            {
+                Assert.True(result.Diagnostics.ContainsErrors());
+
+                var good = Assert.Single(result.Files, file => file.SourceFile.Name == "good.loom");
+                Assert.Contains("const x = 1", good.RenderedLuau);
+
+                // whichever way it went, bad.loom is accounted for and its diagnostics are in the result
+                Assert.Equal(2, result.Files.Count + result.Failures.Count);
+                foreach (var failure in result.Failures)
+                {
+                    Assert.Equal("bad.loom", failure.File.Name);
+
+                    var compilerError = failure.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+                    Assert.NotNull(compilerError);
+                    Assert.Contains(compilerError, result.Diagnostics.Set);
+                }
+            }
+        );
+
     [Fact]
     public void Compiles_WithTheUnitsDiagnosticOptions_IncludingModuleDiagnostics()
     {

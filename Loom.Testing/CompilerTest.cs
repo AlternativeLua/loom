@@ -54,6 +54,7 @@ public class CompilerTest
         Assert.NotNull(parsedFile);
 
         var compiledFile = compiler.Analyze(parsedFile);
+        Assert.NotNull(compiledFile);
         Utility.AssertDiagnostic(compiledFile.Diagnostics, InternalCodes.EmptyImportClause, "Import declaration must name at least one member.");
         Assert.Same(parsedFile.Tree, compiledFile.Tree);
         Assert.Equal(parsedFile.LexerResult.Tokens, compiledFile.Tokens);
@@ -66,11 +67,15 @@ public class CompilerTest
         var compilationUnit = new CompilationUnit(new LoomConfig());
 
         var oneShot = new Compiler(compilationUnit, Utility.TestFile(source)).Compile();
+        Assert.NotNull(oneShot);
+
         var phased = new Compiler(compilationUnit, Utility.TestFile(source));
         var parsedFile = phased.Parse();
         Assert.NotNull(parsedFile);
 
-        Assert.Equal(oneShot.RenderedLuau, phased.Analyze(parsedFile).RenderedLuau);
+        var analyzed = phased.Analyze(parsedFile);
+        Assert.NotNull(analyzed);
+        Assert.Equal(oneShot.RenderedLuau, analyzed.RenderedLuau);
     }
 
     [Fact]
@@ -86,8 +91,27 @@ public class CompilerTest
         Assert.Same(options, parsedFile.ParserResult.Diagnostics.Options);
 
         var compiledFile = compiler.Analyze(parsedFile);
+        Assert.NotNull(compiledFile);
         Assert.Same(options, compiledFile.Diagnostics.Options);
         Assert.Same(options, compiledFile.SemanticModel.Diagnostics.Options);
+    }
+
+    /// <remarks>See the note on the equivalent <see cref="CompilationUnitTest" /> case about the source used.</remarks>
+    [Fact]
+    public void Reports_AFailedPhase_AsACompilerError_InsteadOfThrowing()
+    {
+        var compilationUnit = new CompilationUnit(new LoomConfig());
+        var compiler = new Compiler(compilationUnit, Utility.TestFile("let v: Missing = 1;"));
+
+        var compiledFile = compiler.Compile();
+        Assert.True(compiler.Diagnostics.ContainsErrors());
+        if (compiledFile != null)
+            return; // the phase stopped throwing, so there is no failure left to describe
+
+        var compilerError = compiler.Diagnostics.Find(diagnostic => diagnostic.Code == InternalCodes.CompilerError);
+        Assert.NotNull(compilerError);
+        Assert.Contains("The compiler threw an exception!", compilerError.Message);
+        Assert.Equal("this is a compiler bug! please report an issue.", compilerError.Hint);
     }
 
     private static ParsedFile Parse(string source)
@@ -107,6 +131,7 @@ public class CompilerTest
         var compilationUnit = new CompilationUnit(new LoomConfig());
         var compiler = new Compiler(compilationUnit, Utility.TestFile(source));
         var file = compiler.Compile();
+        Assert.NotNull(file);
         Assert.False(file.SemanticModel.DisableRuntimeLibraryImport);
         Utility.AssertNoErrors(file.Diagnostics);
 

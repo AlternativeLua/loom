@@ -44,9 +44,11 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         Globals.Clear();
         AnalyzedModules.Clear();
 
+        var failures = new List<FailedFile>();
+
         // phase one: every file is lexed and parsed before any of them is analyzed, so module
         // dependencies can be read off the parsed trees and analyzed in the order they require
-        var parsedFiles = ParseAll();
+        var parsedFiles = ParseAll(failures);
         var compilers = new Dictionary<SourceFile, Compiler>();
         foreach (var (compiler, parsedFile) in parsedFiles)
             compilers.TryAdd(parsedFile.File, compiler);
@@ -55,38 +57,57 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
 
         // phase two: declaration files first — their top-level symbols become globals that every
         // other file resolves against. Both groups keep the graph's dependency order.
-        var compiledDeclarationFiles = ModuleGraph.Order.FindAll(parsedFile => parsedFile.File.IsDeclaration).ConvertAll(analyze);
+        var compiledDeclarationFiles = AnalyzeAll(parsedFile => parsedFile.File.IsDeclaration);
         PopulateGlobals(compiledDeclarationFiles);
 
-        var compiledConcreteFiles = ModuleGraph.Order.FindAll(parsedFile => !parsedFile.File.IsDeclaration).ConvertAll(analyze);
+        var compiledConcreteFiles = AnalyzeAll(parsedFile => !parsedFile.File.IsDeclaration);
         var compiledFiles = compiledDeclarationFiles.Concat(compiledConcreteFiles).ToList();
-        var diagnostics = DiagnosticBag.Concat(compiledFiles.ConvertAll(file => file.Diagnostics), DiagnosticOptions);
+        var diagnostics = DiagnosticBag.Concat(
+            [..compiledFiles.ConvertAll(file => file.Diagnostics), ..failures.ConvertAll(failure => failure.Diagnostics)],
+            DiagnosticOptions
+        );
+
         if (!diagnostics.ContainsErrors() && !Config.NoEmit)
             compiledFiles.ForEach(FileManager.WriteCompiledFile);
 
-        return new CompilationResult(compiledFiles, diagnostics);
+        return new CompilationResult(compiledFiles, diagnostics) { Failures = failures };
 
-        CompiledFile analyze(ParsedFile parsedFile)
+        List<CompiledFile> AnalyzeAll(Predicate<ParsedFile> predicate)
         {
-            var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
-            AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+            var compiledFiles = new List<CompiledFile>();
+            foreach (var parsedFile in ModuleGraph.Order.FindAll(predicate))
+            {
+                var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
+                if (compiledFile == null)
+                {
+                    // the file has no semantic model to hand its importers, so it stays out of the unit
+                    failures.Add(new FailedFile(parsedFile.File, compilers[parsedFile.File].Diagnostics));
+                    continue;
+                }
 
-            return compiledFile;
+                AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+                compiledFiles.Add(compiledFile);
+            }
+
+            return compiledFiles;
         }
     }
 
-    public CompiledFile Compile(SourceFile file) => new Compiler(this, file).Compile();
+    /// <summary>Null when the compiler gave up on <paramref name="file" />; see <see cref="Compiler.Diagnostics" />.</summary>
+    public CompiledFile? Compile(SourceFile file) => new Compiler(this, file).Compile();
 
     /// <summary>
     ///     The compiler for a file is kept alongside its parsed form so that phase two reports the
     ///     lexer and parser diagnostics phase one collected.
     /// </summary>
-    private List<(Compiler Compiler, ParsedFile ParsedFile)> ParseAll()
+    private List<(Compiler Compiler, ParsedFile ParsedFile)> ParseAll(List<FailedFile> failures)
     {
         var parsedFiles = new List<(Compiler, ParsedFile)>(SourceFiles.Count);
         foreach (var compiler in SourceFiles.Select(file => new Compiler(this, file)))
             if (compiler.Parse() is { } parsedFile)
                 parsedFiles.Add((compiler, parsedFile));
+            else
+                failures.Add(new FailedFile(compiler.SourceFile, compiler.Diagnostics));
 
         return parsedFiles;
     }
