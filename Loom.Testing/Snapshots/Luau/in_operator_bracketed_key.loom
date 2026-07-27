@@ -1,0 +1,4 @@
+interface Foo { [string]: string }
+let foo = new Foo { ["foo-bar"]: "abc" };
+print("foo-bar" in foo)
+print("end" in foo)
