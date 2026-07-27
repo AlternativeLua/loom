@@ -5971,5 +5971,165 @@ public class TypeCheckerTest
         var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 1 { 0 -> "zero", 1 | _ -> "other" }""");
         Utility.AssertNoErrors(diagnostics);
     }
+
+    [Fact]
+    public void ThrowsFor_Match_TypedPattern_ImpossibleOverlap()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("""match 123 { s when string -> 123, _ -> 0 }""");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Pattern of type 'string' cannot match value of type '123'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_TypePattern_ImpossibleOverlap()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { x: number }
+            match 123 { Foo {} -> 0, _ -> 0 }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Pattern of type 'Foo' cannot match value of type '123'."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_TypedPattern_PossibleOverlap_OnWidenedType() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("""let value: number = 1; match value { n when number -> n, _ -> 0 }"""));
+
+    [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByTypedPatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number = "hi";
+            match value {
+                text when string -> text,
+                n when number -> "num",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_UnionPartiallyCovered()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number | bool = "hi";
+            match value {
+                text when string -> text,
+                n when number -> "num",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByInterfaceTypedPatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                a when A -> a.tag,
+                b when B -> "count",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_UnionCoveredOnlyByLiterals()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number = "hi";
+            match value {
+                "hi" -> "greeting",
+                1 -> "one",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_AndPattern_TypedPatternWithGuard()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number | string = 5;
+            match value {
+                n when number & n > 0 -> "positive",
+                _ -> "other",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_AndPattern_GuardNotBool()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            match 5 {
+                n when number & 1 + 1 -> "a",
+                _ -> "b",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'number' is not assignable to type 'bool'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_AndPatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number | string = 5;
+            match value {
+                n when number & n > 0 -> "positive",
+                s when string -> s,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
     #endregion Match
 }

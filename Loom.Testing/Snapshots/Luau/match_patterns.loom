@@ -1,0 +1,30 @@
+interface Box { value: number }
+
+fn describe(x: number | string | Box): string -> match x {
+    0 | 100 -> "zero or one hundred",
+    1..10 -> "small range",
+    n when number -> "number",
+    s when string -> s,
+    { value } -> "box value",
+    _ -> "other",
+};
+
+fn describeGuarded(n: number): string -> match n {
+    m when m > 0 -> "positive",
+    _ -> "non-positive",
+};
+
+fn describeAndPattern(x: number | string): string -> match x {
+    n when number & n > 0 -> "positive number",
+    n when number -> "non-positive number",
+    _ -> "string",
+};
+
+let firstAndRest = match [1, 2, 3] {
+    [head, ..rest] -> head,
+    _ -> 0,
+};
+
+let onlyWildcard = match 1 {
+    _ -> 42,
+};

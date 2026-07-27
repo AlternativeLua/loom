@@ -29,6 +29,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitIdentifierPattern(IdentifierPattern identifierPattern) => DefaultValue(identifierPattern);
     public virtual T VisitLiteralPattern(LiteralPattern literalPattern) => DefaultValue(literalPattern);
     public virtual T VisitOrPattern(OrPattern orPattern) => VisitList(orPattern.Patterns);
+    public virtual T VisitAndPattern(AndPattern andPattern) => CombineResults([Visit(andPattern.Pattern), Visit(andPattern.Guard)]);
 
     public virtual T VisitRangePattern(RangePattern rangePattern) => CombineResults([Visit(rangePattern.Minimum), Visit(rangePattern.Maximum)]);
 
