@@ -36,7 +36,19 @@ public sealed partial class Parser
         return new MatchArm(pattern, when, guard, arrow, body);
     }
 
+    // `&` binds looser than `|`, so `1 | 2 & guard` reads as "match (1 or 2), and also require guard" -
+    // a single guard attached to the whole alternation rather than to just the nearest alternative.
     private Pattern ParsePattern()
+    {
+        var pattern = ParseOrPattern();
+        if (!Match(out var ampersand, SyntaxKind.Ampersand))
+            return pattern;
+
+        var guard = ParseExpression();
+        return new AndPattern(pattern, ampersand, guard);
+    }
+
+    private Pattern ParseOrPattern()
     {
         var pattern = ParsePrimaryPattern();
         if (!Match(out var firstPipe, SyntaxKind.Pipe))
@@ -76,7 +88,18 @@ public sealed partial class Parser
             {
                 var whenPosition = _position;
                 Match(out var when, SyntaxKind.WhenKeyword);
+                var typeStart = _position;
                 var type = ParseType();
+                if (!AtTypedPatternFollower() && type is IntersectionType)
+                {
+                    // `&` after a pattern's type is ambiguous with intersection-type syntax, and
+                    // ParseType() greedily consumes it as one - retry with just the first operand, so
+                    // `n when number & n > 0` reads as an and-pattern guard, not a (near-certainly
+                    // unintended) intersection type that swallows `n` from `n > 0` as another operand.
+                    _position = typeStart;
+                    type = ParsePostfixType();
+                }
+
                 if (AtTypedPatternFollower())
                 {
                     ObjectPattern? objectPattern = null;
@@ -152,6 +175,7 @@ public sealed partial class Parser
                        or SyntaxKind.RBrace
                        or SyntaxKind.RBracket
                        or SyntaxKind.Pipe
+                       or SyntaxKind.Ampersand
                        or SyntaxKind.LBrace
                        or SyntaxKind.WhenKeyword
                        or SyntaxKind.Eof;

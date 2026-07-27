@@ -14,6 +14,12 @@ fn describeGuarded(n: number): string -> match n {
     _ -> "non-positive",
 };
 
+fn describeAndPattern(x: number | string): string -> match x {
+    n when number & n > 0 -> "positive number",
+    n when number -> "non-positive number",
+    _ -> "string",
+};
+
 let firstAndRest = match [1, 2, 3] {
     [head, ..rest] -> head,
     _ -> 0,

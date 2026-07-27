@@ -6056,5 +6056,57 @@ public class TypeCheckerTest
             "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
         );
     }
+
+    [Fact]
+    public void Allows_Match_AndPattern_TypedPatternWithGuard()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number | string = 5;
+            match value {
+                n when number & n > 0 -> "positive",
+                _ -> "other",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_AndPattern_GuardNotBool()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            match 5 {
+                n when number & 1 + 1 -> "a",
+                _ -> "b",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'number' is not assignable to type 'bool'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_AndPatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number | string = 5;
+            match value {
+                n when number & n > 0 -> "positive",
+                s when string -> s,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
     #endregion Match
 }

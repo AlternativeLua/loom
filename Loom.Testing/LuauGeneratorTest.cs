@@ -3160,6 +3160,26 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_AndPattern_CombinesTypeofWithGuard_SubstitutingSubject()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { n when number & n > 0 -> n, _ -> 0 }", true);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("and", condition.Operator);
+
+        var typeofCondition = Assert.IsType<BinaryOperator>(condition.Left);
+        var typeofCall = Assert.IsType<Call>(typeofCondition.Left);
+        Assert.Equal("typeof", Assert.IsType<Identifier>(typeofCall.Callee).Name);
+
+        var guardCondition = Assert.IsType<BinaryOperator>(condition.Right);
+        Assert.Equal(">", guardCondition.Operator);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(guardCondition.Left).Name);
+
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("n", binding.Name);
+    }
+
+    [Fact]
     public void Generates_FunctionParameter_WithDefaultValue_WrapsTypeAsOptional()
     {
         var luauTree = Utility.GetLuauAST("fn greet(name: string = \"world\") { return name }");

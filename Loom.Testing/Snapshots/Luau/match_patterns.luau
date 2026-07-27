@@ -31,14 +31,27 @@ const function describeGuarded(n: number): string
   end
   return _match_1
 end
+const function describeAndPattern(x: number | string): string
+  local _match_2
+  if typeof(x) == "number" and x > 0 then
+    const n = x
+    _match_2 = "positive number"
+  elseif typeof(x) == "number" then
+    const n = x
+    _match_2 = "non-positive number"
+  else
+    _match_2 = "string"
+  end
+  return _match_2
+end
 const _subject = {1, 2, 3}
-local _match_2
+local _match_3
 if typeof(_subject) == "table" then
   const head = _subject[1]
   const rest = table.move(_subject, 2, #_subject, 1, {})
-  _match_2 = head
+  _match_3 = head
 else
-  _match_2 = 0
+  _match_3 = 0
 end
-const firstAndRest = _match_2
+const firstAndRest = _match_3
 const onlyWildcard = 42

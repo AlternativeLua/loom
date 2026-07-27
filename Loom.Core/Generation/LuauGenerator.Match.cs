@@ -53,7 +53,7 @@ public sealed partial class LuauGenerator
 
             if (arm.Guard != null)
             {
-                conditions.Add(CompileGuard(arm, subject));
+                conditions.Add(CompileGuard(arm.Pattern, arm.Guard, subject));
                 isIrrefutable = false;
             }
 
@@ -89,9 +89,9 @@ public sealed partial class LuauGenerator
         return matchIdentifier;
     }
 
-    private LuauExpression CompileGuard(MatchArm arm, LuauExpression subject)
+    private LuauExpression CompileGuard(Pattern pattern, Expression guard, LuauExpression subject)
     {
-        var substitutionName = arm.Pattern switch
+        var substitutionName = pattern switch
         {
             IdentifierPattern identifierPattern => identifierPattern.Name.Text,
             LetPattern letPattern => letPattern.Name.Text,
@@ -100,7 +100,7 @@ public sealed partial class LuauGenerator
         };
 
         if (substitutionName == null)
-            return (LuauExpression)Visit(arm.Guard!);
+            return (LuauExpression)Visit(guard);
 
         var previousName = _guardSubstitutionName;
         var previousValue = _guardSubstitutionValue;
@@ -108,7 +108,7 @@ public sealed partial class LuauGenerator
         _guardSubstitutionValue = subject;
         try
         {
-            return (LuauExpression)Visit(arm.Guard!);
+            return (LuauExpression)Visit(guard);
         }
         finally
         {
@@ -270,6 +270,19 @@ public sealed partial class LuauGenerator
                 }
 
                 conditions.Add(CombineWith(alternativeConditions, "or"));
+                isIrrefutable = false;
+                return true;
+            }
+
+            case AndPattern andPattern:
+            {
+                if (!TryCompilePattern(andPattern.Pattern, subject, conditions, bindings, out _))
+                {
+                    isIrrefutable = false;
+                    return false;
+                }
+
+                conditions.Add(CompileGuard(andPattern.Pattern, andPattern.Guard, subject));
                 isIrrefutable = false;
                 return true;
             }

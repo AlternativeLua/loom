@@ -50,6 +50,8 @@ public sealed partial class Resolver
         return true;
     }
 
+    public override bool VisitAndPattern(AndPattern andPattern) => Visit(andPattern.Pattern) && Visit(andPattern.Guard);
+
     public override bool VisitWildcardPattern(WildcardPattern wildcardPattern) => true;
 
     public override bool VisitLiteralPattern(LiteralPattern literalPattern) => true;
