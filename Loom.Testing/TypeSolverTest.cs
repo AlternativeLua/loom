@@ -95,7 +95,137 @@ public class TypeSolverTest
 
         solver.AddConstraint(functionOne, functionTwo, Utility.Span);
         Assert.False(solver.SolveConstraints());
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'T: number' is not assignable to type 'U: string'.");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'fn<T: number>(T: number): bool' is not assignable to type 'fn<U: string>(U: string): bool'.\n    Type 'T: number' is not assignable to type 'U: string'."
+        );
+    }
+
+    [Fact]
+    public void Unify_ObjectTypes_PropertyMismatch_TracesOuterObjectType()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var objectA = new ObjectType(null, [new ObjectProperty(false, "x", PrimitiveType.Number)]);
+        var objectB = new ObjectType(null, [new ObjectProperty(false, "x", PrimitiveType.String)]);
+
+        solver.AddConstraint(objectA, objectB, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '{ x: number }' is not assignable to type '{ x: string }'.\n    Type 'number' is not assignable to type 'string'."
+        );
+    }
+
+    [Fact]
+    public void Unify_InstantiatedTypes_ArgumentMismatch_TracesOuterGenericType()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var declaration = new TypeAlias(null!, Utility.IdentifierToken("Box"), null, null!);
+        var typeParameter = new TypeParameter("T");
+        var generic = new GenericType(declaration, [typeParameter], typeParameter);
+        var instantiatedNumber = new InstantiatedType(generic, [PrimitiveType.Number]);
+        var instantiatedString = new InstantiatedType(generic, [PrimitiveType.String]);
+
+        solver.AddConstraint(instantiatedNumber, instantiatedString, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'Box<number>' is not assignable to type 'Box<string>'.\n    Type 'number' is not assignable to type 'string'."
+        );
+    }
+
+    [Fact]
+    public void Unify_InterfaceTypes_PropertyMismatch_TracesInterfaceNamesAndStructuralShape()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var objectA = new ObjectType(null, [new ObjectProperty(false, "x", PrimitiveType.Number)]);
+        var objectB = new ObjectType(null, [new ObjectProperty(false, "x", PrimitiveType.String)]);
+        var interfaceA = new InterfaceType("A", [], objectA);
+        var interfaceB = new InterfaceType("B", [], objectB);
+
+        solver.AddConstraint(interfaceA, interfaceB, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'A' is not assignable to type 'B'.\n    Type '{ x: number }' is not assignable to type '{ x: string }'.\n        Type 'number' is not assignable to type 'string'."
+        );
+    }
+
+    [Fact]
+    public void Unify_ArrayTypes_ElementMismatch_TracesOuterArrayType()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var numberArray = new ArrayType(PrimitiveType.Number, false);
+        var stringArray = new ArrayType(PrimitiveType.String, false);
+
+        solver.AddConstraint(numberArray, stringArray, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'number[]' is not assignable to type 'string[]'.\n    Type 'number' is not assignable to type 'string'."
+        );
+    }
+
+    [Fact]
+    public void Unify_ArrayTypes_ImmutableSourceToMutableTarget_ReportsDescriptiveReason()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var immutableSource = new ArrayType(PrimitiveType.Number, false);
+        var mutableTarget = new ArrayType(PrimitiveType.Number, true);
+
+        solver.AddConstraint(immutableSource, mutableTarget, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'number[]' is not assignable to type 'number[mut]'. Cannot assign an immutable array to a mutable array type."
+        );
+    }
+
+    [Fact]
+    public void Unify_ArrayTypes_MutableInvariantElementMismatch_ReportsDescriptiveReason()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var sourceMutable = new ArrayType(PrimitiveType.Number, true);
+        var targetMutable = new ArrayType(PrimitiveType.String, true);
+
+        solver.AddConstraint(sourceMutable, targetMutable, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'number[mut]' is not assignable to type 'string[mut]'. Mutable arrays require identical element types, but source and target element types differ."
+        );
+    }
+
+    [Fact]
+    public void Unify_ArrayOfObjectTypes_PropertyMismatch_TracesThreeLevels()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var objectA = new ObjectType(null, [new ObjectProperty(false, "x", PrimitiveType.Number)]);
+        var objectB = new ObjectType(null, [new ObjectProperty(false, "x", PrimitiveType.String)]);
+        var arrayA = new ArrayType(objectA, false);
+        var arrayB = new ArrayType(objectB, false);
+
+        solver.AddConstraint(arrayA, arrayB, Utility.Span);
+        Assert.False(solver.SolveConstraints());
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type '{ x: number }[]' is not assignable to type '{ x: string }[]'.\n    Type '{ x: number }' is not assignable to type '{ x: string }'.\n        Type 'number' is not assignable to type 'string'."
+        );
     }
 
     [Fact]

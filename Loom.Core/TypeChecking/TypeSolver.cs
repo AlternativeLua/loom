@@ -133,7 +133,8 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
             {
                 var resolvedA = Substitute(constraint.Actual);
                 var resolvedB = Substitute(constraint.Expected);
-                if (!TryUnify(resolvedA, resolvedB, constraint.Span, out var updated, constraint.Trace))
+                var trace = TraceThroughExpansion(constraint.Actual, resolvedA, constraint.Expected, resolvedB, constraint.Trace);
+                if (!TryUnify(resolvedA, resolvedB, constraint.Span, out var updated, trace))
                     return false;
 
                 if (updated)
@@ -144,6 +145,14 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         ApplySubstitutions();
         return true;
     }
+
+    // Substitute() expands a fully-resolved InstantiatedType (e.g. Box<number>) into its underlying
+    // type before unification ever sees it, so UnifyInstantiatedPair's own trace frame never fires for
+    // that common case. Preserve the generic-level context here instead, before it's lost to expansion.
+    private static TypeMismatchTrace? TraceThroughExpansion(Type originalA, Type resolvedA, Type originalB, Type resolvedB, TypeMismatchTrace? trace) =>
+        originalA is InstantiatedType && originalB is InstantiatedType && resolvedA is not InstantiatedType && resolvedB is not InstantiatedType
+            ? new TypeMismatchTrace(originalA, originalB, trace)
+            : trace;
 
     private bool TryUnify(Type a, Type b, LocationSpan span, out bool updated, TypeMismatchTrace? trace = null)
     {
@@ -159,13 +168,14 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
                 (TypeVariable va, TypeVariable vb) => UnifyBothVariables(va, vb, out updated),
                 (TypeVariable v, _) => BindVariable(v, b, span, out updated),
                 (_, TypeVariable v) => BindVariable(v, a, span, out updated),
-                (InstantiatedType i1, InstantiatedType i2) => UnifyInstantiatedPair(i1, i2, span, out updated),
-                (FunctionType f1, FunctionType f2) => UnifyFunctionTypes(f1, f2, span, out updated),
-                (ObjectType o1, ObjectType o2) => UnifyObjectTypes(o1, o2, span, out updated),
-                (ObjectType o, InterfaceType i) => UnifyObjectWithInterface(o, i, span, out updated),
-                (InterfaceType i, ObjectType o) => UnifyObjectWithInterface(o, i, span, out updated),
-                (InterfaceType i1, InterfaceType i2) => UnifyInterfaceTypes(i1, i2, span, out updated),
-                (TypeParameter p1, TypeParameter p2) => UnifyTypeParameters(p1, p2, span, out updated),
+                (InstantiatedType i1, InstantiatedType i2) => UnifyInstantiatedPair(i1, i2, span, out updated, trace),
+                (FunctionType f1, FunctionType f2) => UnifyFunctionTypes(f1, f2, span, out updated, trace),
+                (ArrayType t1, ArrayType t2) => UnifyArrayTypes(t1, t2, span, out updated, trace),
+                (ObjectType o1, ObjectType o2) => UnifyObjectTypes(o1, o2, span, out updated, trace),
+                (ObjectType o, InterfaceType i) => UnifyObjectWithInterface(o, i, span, out updated, trace),
+                (InterfaceType i, ObjectType o) => UnifyObjectWithInterface(o, i, span, out updated, trace),
+                (InterfaceType i1, InterfaceType i2) => UnifyInterfaceTypes(i1, i2, span, out updated, trace),
+                (TypeParameter p1, TypeParameter p2) => UnifyTypeParameters(p1, p2, span, out updated, trace),
 
                 _ when a.IsAssignableTo(b) => true,
                 _ => ReportTypeMismatch(a, b, span, trace: trace)
@@ -177,16 +187,39 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         }
     }
 
-    private bool UnifyTypeParameters(TypeParameter p1, TypeParameter p2, LocationSpan span, out bool updated)
+    private bool UnifyTypeParameters(TypeParameter p1, TypeParameter p2, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
     {
         updated = false;
         if (p1.Constraint != null && p2.Constraint != null && !p1.Constraint.IsAssignableTo(p2.Constraint))
-            return ReportTypeMismatch(p1, p2, span);
+            return ReportTypeMismatch(p1, p2, span, trace: trace);
 
         if (p1.Constraint == null || p2.Constraint == null)
             return true;
 
-        return TryUnify(p1.Constraint, p2.Constraint, span, out updated);
+        return TryUnify(p1.Constraint, p2.Constraint, span, out updated, new TypeMismatchTrace(p1, p2, trace));
+    }
+
+    // Array element assignability is covariant against an immutable target and invariant against a
+    // mutable one (see ArrayType.IsAssignableTo) - mirrored here so the pass/fail outcome never changes,
+    // only the diagnostic gains a "why" trace into the element types on failure. Intrinsic array methods
+    // (push/pop/join/etc.) are deliberately NOT unified structurally here (unlike UnifyObjectTypes) since
+    // they redundantly re-derive the same element-type mismatch through several unrelated-looking paths.
+    private bool UnifyArrayTypes(ArrayType a, ArrayType b, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
+    {
+        updated = false;
+        if (a.IsAssignableTo(b))
+            return true;
+
+        if (b.IsMutable)
+        {
+            var reason = !a.IsMutable
+                ? "Cannot assign an immutable array to a mutable array type."
+                : "Mutable arrays require identical element types, but source and target element types differ.";
+
+            return ReportTypeMismatch(a, b, span, reason, trace);
+        }
+
+        return TryUnify(a.ElementType, b.ElementType, span, out updated, new TypeMismatchTrace(a, b, trace));
     }
 
     private bool UnifyBothVariables(TypeVariable va, TypeVariable vb, out bool updated)
@@ -213,38 +246,40 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         return true;
     }
 
-    private bool UnifyInstantiatedPair(InstantiatedType a, InstantiatedType b, LocationSpan span, out bool updated)
+    private bool UnifyInstantiatedPair(InstantiatedType a, InstantiatedType b, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
     {
         updated = false;
         if (!a.GenericType.Equals(b.GenericType) || a.Arguments.Count != b.Arguments.Count)
-            return ReportTypeMismatch(a, b, span);
+            return ReportTypeMismatch(a, b, span, trace: trace);
 
         var success = true;
+        var childTrace = new TypeMismatchTrace(a, b, trace);
         for (var i = 0; i < a.Arguments.Count; i++)
-            CombineUnify(a.Arguments[i], b.Arguments[i], span, ref success, ref updated);
+            CombineUnify(a.Arguments[i], b.Arguments[i], span, ref success, ref updated, childTrace);
 
         return success;
     }
 
-    private bool UnifyObjectTypes(ObjectType a, ObjectType b, LocationSpan span, out bool updated)
+    private bool UnifyObjectTypes(ObjectType a, ObjectType b, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
     {
         updated = false;
         var success = true;
+        var childTrace = new TypeMismatchTrace(a, b, trace);
 
         if (a.Indexer != null && b.Indexer != null)
         {
-            CombineUnify(a.Indexer.KeyType, b.Indexer.KeyType, span, ref success, ref updated);
-            CombineUnify(a.Indexer.ValueType, b.Indexer.ValueType, span, ref success, ref updated);
+            CombineUnify(a.Indexer.KeyType, b.Indexer.KeyType, span, ref success, ref updated, childTrace);
+            CombineUnify(a.Indexer.ValueType, b.Indexer.ValueType, span, ref success, ref updated, childTrace);
 
             if (a.Indexer.IsMutable != b.Indexer.IsMutable)
-                if (!ReportTypeMismatch(a, b, span, $"Indexer types match, but indexer mutability of type '{a}' does not match that of type '{b}'."))
+                if (!ReportTypeMismatch(a, b, span, $"Indexer types match, but indexer mutability of type '{a}' does not match that of type '{b}'.", trace))
                     success = false;
         }
         else if (a.Indexer == null && b.Indexer != null)
         {
             var noIndexerType = a.Indexer == null ? a : b;
             var indexerType = a.Indexer != null ? a : b;
-            if (!ReportTypeMismatch(a, b, span, $"Type '{noIndexerType}' is missing indexer from type '{indexerType}'"))
+            if (!ReportTypeMismatch(a, b, span, $"Type '{noIndexerType}' is missing indexer from type '{indexerType}'", trace))
                 success = false;
         }
 
@@ -255,47 +290,48 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         {
             if (!aProps.TryGetValue(name, out var propA) || !bProps.TryGetValue(name, out var propB)) continue;
 
-            CombineUnify(propA.ValueType, propB.ValueType, span, ref success, ref updated);
+            CombineUnify(propA.ValueType, propB.ValueType, span, ref success, ref updated, childTrace);
 
             if (propA.IsMutable == propB.IsMutable) continue;
-            if (!ReportTypeMismatch(a, b, span, $"Property types match, but mutability of property '{name}' does not match that of type '{b}'."))
+            if (!ReportTypeMismatch(a, b, span, $"Property types match, but mutability of property '{name}' does not match that of type '{b}'.", trace))
                 success = false;
         }
 
         return success;
     }
 
-    private void CombineUnify(Type a, Type b, LocationSpan span, ref bool success, ref bool updated)
+    private void CombineUnify(Type a, Type b, LocationSpan span, ref bool success, ref bool updated, TypeMismatchTrace? trace = null)
     {
-        if (!TryUnify(a, b, span, out var stepUpdated))
+        if (!TryUnify(a, b, span, out var stepUpdated, trace))
             success = false;
         else if (stepUpdated)
             updated = true;
     }
 
-    private bool UnifyObjectWithInterface(ObjectType objectType, InterfaceType interfaceType, LocationSpan span, out bool updated)
+    private bool UnifyObjectWithInterface(ObjectType objectType, InterfaceType interfaceType, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
     {
         updated = false;
-        return TryUnify(objectType, interfaceType.AssignabilityType, span, out updated);
+        return TryUnify(objectType, interfaceType.AssignabilityType, span, out updated, new TypeMismatchTrace(objectType, interfaceType, trace));
     }
 
-    private bool UnifyInterfaceTypes(InterfaceType a, InterfaceType b, LocationSpan span, out bool updated)
+    private bool UnifyInterfaceTypes(InterfaceType a, InterfaceType b, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
     {
         updated = false;
-        return TryUnify(a.AssignabilityType, b.AssignabilityType, span, out updated);
+        return TryUnify(a.AssignabilityType, b.AssignabilityType, span, out updated, new TypeMismatchTrace(a, b, trace));
     }
 
-    private bool UnifyFunctionTypes(FunctionType a, FunctionType b, LocationSpan span, out bool updated)
+    private bool UnifyFunctionTypes(FunctionType a, FunctionType b, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
     {
         updated = false;
         if (a.TypeParameters.Count != b.TypeParameters.Count
             || a.RequiredParameterTypes.Count < b.RequiredParameterTypes.Count
             || a.ParameterTypes.Count > b.ParameterTypes.Count)
-            return ReportTypeMismatch(a, b, span);
+            return ReportTypeMismatch(a, b, span, trace: trace);
 
         var success = true;
+        var childTrace = new TypeMismatchTrace(a, b, trace);
         for (var i = 0; i < a.TypeParameters.Count; i++)
-            CombineUnify(a.TypeParameters[i], b.TypeParameters[i], span, ref success, ref updated);
+            CombineUnify(a.TypeParameters[i], b.TypeParameters[i], span, ref success, ref updated, childTrace);
 
         var freshVars = a.TypeParameters.Select(_ => CreateTypeVariable()).ToList();
         var aMapping = a.TypeParameters.Zip(freshVars).ToDictionary(p => p.First, p => p.Second);
@@ -305,9 +341,9 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         var aReturnType = SubstituteTypeParameters(aMapping, a.ReturnType);
         var bReturnType = SubstituteTypeParameters(bMapping, b.ReturnType);
         for (var i = 0; i < aParamTypes.Count; i++)
-            CombineUnify(aParamTypes[i], bParamTypes[i], span, ref success, ref updated);
+            CombineUnify(aParamTypes[i], bParamTypes[i], span, ref success, ref updated, childTrace);
 
-        CombineUnify(aReturnType, bReturnType, span, ref success, ref updated);
+        CombineUnify(aReturnType, bReturnType, span, ref success, ref updated, childTrace);
 
         return success;
     }
@@ -387,10 +423,32 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
 
     private bool ReportTypeMismatch(Type a, Type b, LocationSpan span, string? info = null, TypeMismatchTrace? trace = null)
     {
-        var message = $"Type '{a}' is not assignable to type '{b}'.{(info != null ? " " + info : "")}";
-        if (trace != null)
-            message = $"Type '{trace.Outer}' is not assignable to type '{trace.OuterExpected}'.\n    {message}";
+        var frames = new List<string>();
+        for (var frame = trace; frame != null; frame = frame.Parent)
+        {
+            // Two different instantiations of the same generic (e.g. Box<number> vs Box<string>) can
+            // expand to types that render identically on both sides (both just "Box") - such a frame
+            // reads as a tautology and carries no information, so skip it in favor of a deeper frame.
+            var outerText = frame.Outer.ToString();
+            var expectedText = frame.OuterExpected.ToString();
+            if (outerText == expectedText)
+                continue;
 
+            frames.Add($"Type '{outerText}' is not assignable to type '{expectedText}'.");
+        }
+
+        frames.Reverse();
+
+        var lines = new List<string>();
+        foreach (var line in frames)
+            if (lines.Count == 0 || lines[^1] != line)
+                lines.Add(line);
+
+        var leaf = $"Type '{a}' is not assignable to type '{b}'.{(info != null ? " " + info : "")}";
+        if (lines.Count == 0 || lines[^1] != leaf)
+            lines.Add(leaf);
+
+        var message = string.Join('\n', lines.Select((line, depth) => new string(' ', depth * 4) + line));
         Diagnostics.Error(span, InternalCodes.TypeMismatch, message);
         return false;
     }
@@ -423,5 +481,7 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
         public TypeMismatchTrace? Trace { get; set; }
     }
 
-    public sealed record TypeMismatchTrace(Type Outer, Type OuterExpected);
+    // A chain of ancestor type-pairs, outermost reachable via repeated .Parent, that a mismatch was
+    // discovered underneath - rendered as an indented "why" trail above the leaf mismatch message.
+    public sealed record TypeMismatchTrace(Type Outer, Type OuterExpected, TypeMismatchTrace? Parent = null);
 }
