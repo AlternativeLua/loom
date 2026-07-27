@@ -240,12 +240,12 @@ internal sealed class ClassGenerator(
         return $"{parameter.Name}: {type}";
     }
 
-    private static string[] GetParameterNames(Parameter[] parameters)
+    internal static string[] GetParameterNames(Parameter[] parameters)
     {
         var parameterNames = parameters.Select(param => param.Name).ToArray();
         for (var i = 0; i < parameterNames.Length; i++)
         {
-            if (parameterNames.IndexOf(parameterNames[i]) != i + 1) continue;
+            if (parameterNames.IndexOf(parameterNames[i]) == i) continue;
 
             var n = 0;
             for (var j = i; j < parameters.Length; j++)

@@ -5,6 +5,7 @@ using Loom.Core.TypeChecking.Types;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
 using FunctionType = Loom.Core.TypeChecking.Types.FunctionType;
 using IntersectionType = Loom.Core.TypeChecking.Types.IntersectionType;
+using OptionalType = Loom.Core.TypeChecking.Types.OptionalType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using TypeParameter = Loom.Core.TypeChecking.Types.TypeParameter;
 using UnionType = Loom.Core.TypeChecking.Types.UnionType;
@@ -169,6 +170,19 @@ public class TypeSolverTest
         var solver = new TypeSolver(diagnostics);
         var fn1 = new FunctionType([], [PrimitiveType.Number], PrimitiveType.String);
         var fn2 = new FunctionType([], [PrimitiveType.Number, PrimitiveType.Bool], PrimitiveType.String);
+        solver.AddConstraint(fn1, fn2, Utility.Span);
+
+        Assert.False(solver.SolveConstraints());
+        Assert.NotEmpty(diagnostics.Errors().Set);
+    }
+
+    [Fact]
+    public void Unify_FunctionTypes_MoreParamsThanTarget_ReportsMismatchInsteadOfCrashing()
+    {
+        var diagnostics = CreateDiagnostics();
+        var solver = new TypeSolver(diagnostics);
+        var fn1 = new FunctionType([], [PrimitiveType.Number, new OptionalType(PrimitiveType.String)], PrimitiveType.Bool);
+        var fn2 = new FunctionType([], [PrimitiveType.Number], PrimitiveType.Bool);
         solver.AddConstraint(fn1, fn2, Utility.Span);
 
         Assert.False(solver.SolveConstraints());

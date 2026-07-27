@@ -42,10 +42,15 @@ public sealed partial class TypeChecker
 
         var match = candidates.Find(candidate =>
             {
-                var requiredCount = candidate.ParameterTypes.Count(Type.IsNotOptional);
+                var fixedCount = candidate.HasRestParameter ? candidate.ParameterTypes.Count - 1 : candidate.ParameterTypes.Count;
+                var requiredCount = candidate.ParameterTypes.Take(fixedCount).Count(Type.IsNotOptional);
+                var restElementType = GetRestElementType(candidate.ParameterTypes, candidate.HasRestParameter);
                 return argumentTypes.Count >= requiredCount
-                    && argumentTypes.Count <= candidate.ParameterTypes.Count
-                    && !argumentTypes.Where((argumentType, i) => !argumentType.IsAssignableTo(candidate.ParameterTypes[i])).Any();
+                    && (candidate.HasRestParameter || argumentTypes.Count <= fixedCount)
+                    && !argumentTypes.Where((argumentType, i) => i < fixedCount
+                        ? !argumentType.IsAssignableTo(candidate.ParameterTypes[i])
+                        : restElementType != null && !argumentType.IsAssignableTo(restElementType)
+                    ).Any();
             }
         );
 

@@ -25,7 +25,7 @@ public class CompilationUnitTest
         var path = config.Files.OutputDirectory;
         Directory.Delete(path, true);
         Directory.CreateDirectory(path);
-        File.Create(Path.Combine(path, ".gitkeep"));
+        File.Create(Path.Combine(path, ".gitkeep")).Dispose();
 
         var luauFiles = Directory.EnumerateFiles(path, "*.luau", SearchOption.TopDirectoryOnly);
         Assert.Empty(luauFiles);
@@ -54,6 +54,11 @@ public class CompilationUnitTest
         Assert.Equal("_", variable.Name);
         Assert.IsType<NumberLiteral>(binary.Left);
         Assert.IsType<NumberLiteral>(binary.Right);
+
+        var path = config.Files.OutputDirectory;
+        Directory.Delete(path, true);
+        Directory.CreateDirectory(path);
+        File.Create(Path.Combine(path, ".gitkeep")).Dispose();
     }
 
     [Fact]
