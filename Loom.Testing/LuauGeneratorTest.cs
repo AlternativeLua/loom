@@ -3067,47 +3067,92 @@ public class LuauGeneratorTest
         Assert.NotNull(ifStatement.ElseBranch);
     }
 
-    [Theory]
-    [InlineData("match 1 { n -> n, _ -> 0 }", "IdentifierPattern")]
-    [InlineData("match 1 { { x } -> 0, _ -> 0 }", "ObjectPattern")]
-    [InlineData("match 1 { [a, b] -> 0, _ -> 0 }", "ArrayPattern")]
-    [InlineData("match 1 { 0..5 -> 0, _ -> 0 }", "RangePattern")]
-    [InlineData("match 1 { 0 | 1 -> 0, _ -> 0 }", "OrPattern")]
-    [InlineData("match 1 { let a -> 0, _ -> 0 }", "LetPattern")]
-    public void Generates_Match_UnsupportedPattern_EmitsDiagnostic_AndSkipsArm(string source, string patternKindName)
+    [Fact]
+    public void Generates_Match_IdentifierPattern_BindsSubjectAndIsIrrefutable()
     {
-        var diagnostics = Utility.GetGeneratorDiagnostics(source);
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.NotImplemented,
-            $"Pattern kind '{patternKindName}' is not yet supported in code generation."
-        );
-
-        var luauTree = Utility.GetLuauAST(source);
+        var luauTree = Utility.GetLuauAST("let m = match 1 { n -> n }");
         Assert.DoesNotContain(luauTree.Statements, s => s is IfStatement);
 
-        var assignmentStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[2]);
-        var assignment = Assert.IsType<BinaryOperator>(assignmentStatement.Expression);
-        Assert.Equal(0, Assert.IsType<NumberLiteral>(assignment.Right).Value);
-
-        var lastStatement = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        Assert.Equal("_match", Assert.IsType<Identifier>(lastStatement.Initializer).Name);
+        var binding = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("n", binding.Name);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(binding.Initializer).Name);
     }
 
     [Fact]
-    public void Generates_Match_AllArmsUnsupported_NoIfStatementGenerated()
+    public void Generates_Match_LetPattern_BindsSubjectAndIsIrrefutable()
     {
-        var luauTree = Utility.GetLuauAST("let m = match 1 { n -> n }");
-        Assert.Equal(3, luauTree.Statements.Count);
+        var luauTree = Utility.GetLuauAST("let m = match 1 { let a -> a }");
+        Assert.DoesNotContain(luauTree.Statements, s => s is IfStatement);
 
-        Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        var binding = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("a", binding.Name);
+    }
 
-        var matchLocal = Assert.IsType<LocalVariable>(luauTree.Statements[1]);
-        Assert.Equal("_match", matchLocal.Name);
-        Assert.Null(matchLocal.Initializer);
+    [Fact]
+    public void Generates_Match_TypedPattern_ChecksTypeofAndBinds()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { n when number -> n, _ -> 0 }", true);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("==", condition.Operator);
+        var typeofCall = Assert.IsType<Call>(condition.Left);
+        Assert.Equal("typeof", Assert.IsType<Identifier>(typeofCall.Callee).Name);
+        Assert.Equal("number", Assert.IsType<StringLiteral>(condition.Right).Value);
 
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
-        Assert.Equal("_match", Assert.IsType<Identifier>(variable.Initializer).Name);
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("n", binding.Name);
+    }
+
+    [Fact]
+    public void Generates_Match_RangePattern_ChecksTypeofAndBounds()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { 0..5 -> 1, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("and", condition.Operator);
+    }
+
+    [Fact]
+    public void Generates_Match_ArrayPattern_ChecksTypeofAndElements()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match [1, 2] { [a, b] -> a, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        Assert.IsType<BinaryOperator>(ifStatement.Condition);
+
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("a", binding.Name);
+        var access = Assert.IsType<ElementAccess>(binding.Initializer);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(access.Index).Value);
+    }
+
+    [Fact]
+    public void Generates_Match_ObjectPattern_ChecksTypeofAndFields()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Box { value: number }
+            let box = new Box { value: 1 };
+            let m = match box { { value } -> value, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        Assert.IsType<BinaryOperator>(ifStatement.Condition);
+
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("value", binding.Name);
+        var access = Assert.IsType<PropertyAccess>(binding.Initializer);
+        Assert.Equal(["value"], access.Names);
+    }
+
+    [Fact]
+    public void Generates_Match_OrPattern_CombinesConditionsWithOr()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { 0 | 1 -> 0, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("or", condition.Operator);
     }
 
     [Fact]
