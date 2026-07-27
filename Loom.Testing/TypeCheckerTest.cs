@@ -5980,5 +5980,81 @@ public class TypeCheckerTest
     [Fact]
     public void Allows_Match_TypedPattern_PossibleOverlap_OnWidenedType() =>
         Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("""let value: number = 1; match value { n when number -> n, _ -> 0 }"""));
+
+    [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByTypedPatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number = "hi";
+            match value {
+                text when string -> text,
+                n when number -> "num",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_UnionPartiallyCovered()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number | bool = "hi";
+            match value {
+                text when string -> text,
+                n when number -> "num",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByInterfaceTypedPatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                a when A -> a.tag,
+                b when B -> "count",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_UnionCoveredOnlyByLiterals()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: string | number = "hi";
+            match value {
+                "hi" -> "greeting",
+                1 -> "one",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
     #endregion Match
 }

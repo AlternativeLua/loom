@@ -22,20 +22,36 @@ public sealed partial class TypeChecker
         foreach (var arm in matchExpression.Arms)
             armTypes.Add(CheckMatchArm(arm, scrutineeType, null));
 
-        CheckExhaustiveness(matchExpression);
+        CheckExhaustiveness(matchExpression, scrutineeType);
 
         return BindType(matchExpression, TypeSimplifier.Simplify(new UnionType(armTypes)));
     }
 
     /// <summary>
-    ///     Tier 0 exhaustiveness: a match must contain at least one irrefutable arm (a bare identifier,
-    ///     <c>let</c>, or wildcard pattern with no guard), otherwise the compiled match can fall through
-    ///     and leave its result nil at runtime.
+    ///     A match must either contain an irrefutable arm (a bare identifier, <c>let</c>, or wildcard
+    ///     pattern with no guard) or, when the scrutinee is a union, cover every member of that union
+    ///     across its arms - otherwise the compiled match can fall through and leave its result nil at
+    ///     runtime. Non-union scrutinees fall back to requiring an irrefutable arm outright, since a
+    ///     literal/typed pattern narrowing a single concrete type isn't the "exhaust a union" this
+    ///     tracks, and guessing at that would make the check either too permissive or too strict.
     /// </summary>
-    private void CheckExhaustiveness(MatchExpression matchExpression)
+    private void CheckExhaustiveness(MatchExpression matchExpression, Type scrutineeType)
     {
         if (matchExpression.Arms.Exists(IsIrrefutableArm))
             return;
+
+        if (scrutineeType is UnionType union)
+        {
+            Type remaining = union;
+            foreach (var arm in matchExpression.Arms)
+            {
+                if (arm.Guard != null) continue;
+
+                remaining = RemoveArmCoverage(remaining, arm.Pattern);
+                if (Type.IsNever(remaining))
+                    return;
+            }
+        }
 
         _diagnostics.Error(
             matchExpression,
@@ -43,6 +59,56 @@ public sealed partial class TypeChecker
             "Match expression is not exhaustive.",
             "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
         );
+    }
+
+    private Type RemoveArmCoverage(Type remaining, Pattern pattern)
+    {
+        switch (pattern)
+        {
+            case WildcardPattern or IdentifierPattern or LetPattern:
+                return PrimitiveType.Never;
+
+            case OrPattern orPattern:
+                foreach (var alternative in orPattern.Patterns)
+                {
+                    remaining = RemoveArmCoverage(remaining, alternative);
+                    if (Type.IsNever(remaining))
+                        break;
+                }
+
+                return remaining;
+
+            case LiteralPattern literalPattern:
+                return RemoveCoveredType(remaining, new LiteralType(literalPattern.Value));
+
+            // An attached object sub-pattern (e.g. `p when Point { x: 0 }`) only matches a subset of
+            // the type, so it can't be treated as covering the whole pattern type like a bare `p when Point` would.
+            case TypedPattern { ObjectPattern: null } typedPattern:
+                return RemoveCoveredType(remaining, _semanticModel.GetType(typedPattern.Type));
+
+            case TypePattern { ObjectPattern: null } typePattern:
+                return RemoveCoveredType(remaining, _semanticModel.GetType(typePattern.Type));
+
+            default:
+                return remaining;
+        }
+    }
+
+    private static Type RemoveCoveredType(Type remaining, Type covered)
+    {
+        if (covered.IsAssignableTo(remaining) && remaining.IsAssignableTo(covered))
+            return PrimitiveType.Never;
+
+        if (remaining is not UnionType union)
+            return remaining;
+
+        var left = union.Types.FindAll(member => !member.IsAssignableTo(covered));
+        return left.Count switch
+        {
+            0 => PrimitiveType.Never,
+            1 => left[0],
+            _ => TypeSimplifier.Simplify(new UnionType(left))
+        };
     }
 
     private static bool IsIrrefutableArm(MatchArm arm) => arm.Guard == null && IsIrrefutablePattern(arm.Pattern);
