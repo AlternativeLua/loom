@@ -26,7 +26,7 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
     public ParsedFile? Parse() =>
         RunPhase(() =>
             {
-                var lexer = new Lexer(file);
+                var lexer = new Lexer(file, unit.DiagnosticOptions);
                 var lexerResult = TrackDiagnostics(lexer.Tokenize());
                 var parser = new Parser(lexerResult);
                 var parserResult = TrackDiagnostics(parser.Parse());
@@ -59,7 +59,7 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                 return new CompiledFile(file)
                 {
                     Path = FileManager.GetOutputPath(file, unit.Config),
-                    Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics),
+                    Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics, unit.DiagnosticOptions),
                     RenderedLuau = renderedLuau,
                     LuauTree = generatorResult.LuauTree,
                     ReturnType = typeCheckerResult.ReturnType,
@@ -79,8 +79,7 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
         }
         catch (Exception e)
         {
-            var diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics);
-            DiagnosticBag.FailFast = true;
+            var diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics, unit.DiagnosticOptions);
             diagnostics.CompilerError(file, $"The compiler threw an exception!\n{e.Message}\n{e.StackTrace}");
             return null;
         }

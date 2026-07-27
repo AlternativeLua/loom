@@ -13,7 +13,7 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
 {
     private readonly SymbolTable _allDeclarations = [];
     private readonly SymbolTable _allReferences = [];
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics = new(options: compilationUnit.DiagnosticOptions);
     private readonly Stack<ResolverScope> _scopes = [];
     private ResolverContext _context = ResolverContext.None;
     private SemanticModel _semanticModel = null!;

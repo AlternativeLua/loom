@@ -1,4 +1,3 @@
-using Loom.Core.Diagnostics;
 using GC = System.GC;
 
 namespace Loom.Testing;
@@ -7,8 +6,6 @@ namespace Loom.Testing;
 public class AssemblyFixture : IDisposable
 {
     public static readonly string Snapshots = $"..{Path.DirectorySeparatorChar}..{Path.DirectorySeparatorChar}..{Path.DirectorySeparatorChar}Snapshots";
-
-    public AssemblyFixture() => DiagnosticBag.FailFast = false;
 
     public void Dispose() => GC.SuppressFinalize(this);
 }

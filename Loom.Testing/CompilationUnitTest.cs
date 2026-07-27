@@ -108,6 +108,29 @@ public class CompilationUnitTest
             }
         );
 
+    [Fact]
+    public void Compiles_WithTheUnitsDiagnosticOptions_IncludingModuleDiagnostics()
+    {
+        var options = new DiagnosticOptions();
+        Utility.WithTempProject(
+            [("main.loom", "import { square } from \"./missing\"")],
+            (unit, result) =>
+            {
+                Assert.Same(options, unit.DiagnosticOptions);
+                Assert.Same(options, result.Diagnostics.Options);
+
+                var file = Assert.Single(result.Files);
+                Assert.Same(options, file.Diagnostics.Options);
+
+                var moduleDiagnostics = unit.ModuleGraph?.GetDiagnostics(file.SourceFile);
+                Assert.NotNull(moduleDiagnostics);
+                Utility.AssertDiagnostic(moduleDiagnostics, InternalCodes.ModuleNotFound, "Could not find module './missing'.");
+                Assert.Same(options, moduleDiagnostics.Options);
+            },
+            diagnosticOptions: options
+        );
+    }
+
     private static LoomConfig GetConfig()
     {
         var config = ConfigReader.LocateFromDirectory(AssemblyFixture.Snapshots);

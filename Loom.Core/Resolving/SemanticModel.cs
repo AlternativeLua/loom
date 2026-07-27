@@ -40,7 +40,7 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     ///     referencing node without holding on to the node instances themselves.
     /// </summary>
     internal HashSet<NodeId> NonIntrinsicReferenceNodes { get; } = [];
-    internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag());
+    internal TypeSolver TypeSolver { get; } = new(new DiagnosticBag(options: Diagnostics.Options));
     private SymbolLookup DeclarationsByName => field ??= Declarations.Values.SelectMany(s => s).GroupBy(s => s.Name).ToDictionary(g => g.Key, g => g.ToList());
 
     public List<NamespaceImportBinding> NamespaceImports { get; } = [];

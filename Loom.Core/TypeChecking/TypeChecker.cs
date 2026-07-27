@@ -26,7 +26,7 @@ using Type = Types.Type;
 public sealed partial class TypeChecker
     : Visitor<Type>
 {
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics;
     private readonly Dictionary<Node, FlowState> _exitStates = [];
     private readonly FlowAnalyzer _flowAnalyzer;
     private readonly TypeInferrer _inferrer;
@@ -40,6 +40,7 @@ public sealed partial class TypeChecker
         : base(_ => Types.PrimitiveType.Never)
     {
         _semanticModel = semanticModel;
+        _diagnostics = new DiagnosticBag(options: semanticModel.Diagnostics.Options);
         _flowAnalyzer = flowAnalyzer;
         _inferrer = new TypeInferrer(Visit);
         _narrower = new TypeNarrower(semanticModel);

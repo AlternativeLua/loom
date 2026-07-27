@@ -23,7 +23,7 @@ namespace Loom.Core.Generation;
 public sealed partial class LuauGenerator
     : Visitor<LuauNode>
 {
-    private readonly DiagnosticBag _diagnostics = new();
+    private readonly DiagnosticBag _diagnostics;
     private readonly EventConnectionTracker _eventConnections = new();
     private readonly Lazy<HashSet<(EventTarget Target, Symbol Function)>> _localSafeConnections;
     private readonly MacroExpander _macroExpander;
@@ -37,6 +37,7 @@ public sealed partial class LuauGenerator
         : base(_ => new NoOpStatement())
     {
         _semanticModel = semanticModel;
+        _diagnostics = new DiagnosticBag(options: semanticModel.Diagnostics.Options);
         _runtimeImport = runtimeImport ?? RuntimeImport.Default;
         _moduleRequirePaths = moduleRequirePaths;
         _macroExpander = new MacroExpander(semanticModel, _state, _diagnostics);

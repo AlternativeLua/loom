@@ -9,9 +9,16 @@ using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Pipeline;
 
-public sealed class CompilationUnit(LoomConfig config)
+public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
 {
     public LoomConfig Config { get; } = config;
+
+    /// <summary>
+    ///     Reporting behavior handed to every <see cref="DiagnosticBag" /> the unit's stages create. Defaults
+    ///     to <see cref="DiagnosticOptions.Default" />, so a unit only fails fast when its creator asks for it.
+    /// </summary>
+    public DiagnosticOptions DiagnosticOptions { get; } = diagnosticOptions ?? DiagnosticOptions.Default;
+
     public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
     public Dictionary<Symbol, Type> Globals { get; } = [];
     public RuntimeImport RuntimeImport { get; } = RuntimeImport.Resolve(config);
@@ -44,7 +51,7 @@ public sealed class CompilationUnit(LoomConfig config)
         foreach (var (compiler, parsedFile) in parsedFiles)
             compilers.TryAdd(parsedFile.File, compiler);
 
-        ModuleGraph = ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config);
+        ModuleGraph = ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config, DiagnosticOptions);
 
         // phase two: declaration files first — their top-level symbols become globals that every
         // other file resolves against. Both groups keep the graph's dependency order.
@@ -53,7 +60,7 @@ public sealed class CompilationUnit(LoomConfig config)
 
         var compiledConcreteFiles = ModuleGraph.Order.FindAll(parsedFile => !parsedFile.File.IsDeclaration).ConvertAll(analyze);
         var compiledFiles = compiledDeclarationFiles.Concat(compiledConcreteFiles).ToList();
-        var diagnostics = DiagnosticBag.Concat(compiledFiles.ConvertAll(file => file.Diagnostics));
+        var diagnostics = DiagnosticBag.Concat(compiledFiles.ConvertAll(file => file.Diagnostics), DiagnosticOptions);
         if (!diagnostics.ContainsErrors() && !Config.NoEmit)
             compiledFiles.ForEach(FileManager.WriteCompiledFile);
 

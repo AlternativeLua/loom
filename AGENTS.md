@@ -75,7 +75,8 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 ## Gotchas
 
 - Testing imports both plus `Type = Loom.TypeChecking.Types.Type` alias to dodge `System.Type` clash.
-- `DiagnosticBag.FailFast` is a global static toggle used by CLI/compiler error paths.
+- `DiagnosticOptions.FailFast` (per `CompilationUnit`, threaded into every stage's `DiagnosticBag`) prints the first error and exits the process. Off by
+  default; only `Loom.CLI` opts in.
 - Output path derived by string-replacing source dir name with output dir name in the absolute path ([Compiler.cs:33](Loom.Core/Compiler.cs)) — fragile with
   nested same-named dirs.
 - `Loom.TypeGenerator` generates intrinsic types from the Roblox API that the test suite relies on to pass. The intrinsics are stored in

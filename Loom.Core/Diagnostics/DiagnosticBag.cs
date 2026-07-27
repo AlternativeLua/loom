@@ -3,12 +3,20 @@ using Loom.Core.Text;
 
 namespace Loom.Core.Diagnostics;
 
-public sealed class DiagnosticBag(HashSet<Diagnostic>? diagnostics = null)
+public sealed class DiagnosticBag(HashSet<Diagnostic>? diagnostics = null, DiagnosticOptions? options = null)
 {
-    public static bool FailFast { get; set; } = true;
-
     public HashSet<Diagnostic> Set { get; } = diagnostics ?? [];
-    public static DiagnosticBag Concat(List<DiagnosticBag> bags) => new(bags.SelectMany(bag => bag.Set).ToHashSet());
+
+    /// <summary>Reporting behavior of this bag; <see cref="DiagnosticOptions.Default" /> when unspecified.</summary>
+    public DiagnosticOptions Options { get; } = options ?? DiagnosticOptions.Default;
+
+    /// <summary>
+    ///     Merges the diagnostics of <paramref name="bags" /> into one bag. The merged bag reports with
+    ///     <paramref name="options" />, defaulting to the options of the first bag, since every bag of one
+    ///     compilation shares them.
+    /// </summary>
+    public static DiagnosticBag Concat(List<DiagnosticBag> bags, DiagnosticOptions? options = null) =>
+        new(bags.SelectMany(bag => bag.Set).ToHashSet(), options ?? bags.FirstOrDefault()?.Options);
 
     public void Debug(Node node, string message) => Debug(node.LocationSpan, message);
     public void Debug(LocationSpan span, string message) => Report(span, DiagnosticSeverity.Debug, null, message, null);
@@ -40,8 +48,8 @@ public sealed class DiagnosticBag(HashSet<Diagnostic>? diagnostics = null)
     }
 
     public Diagnostic? Find(Func<Diagnostic, bool> predicate) => Set.FirstOrDefault(predicate);
-    public DiagnosticBag WithoutInfo() => new(Set.Where(d => d.Severity > DiagnosticSeverity.Info).ToHashSet());
-    public DiagnosticBag Errors() => new(Set.Where(d => d.Severity == DiagnosticSeverity.Error).ToHashSet());
+    public DiagnosticBag WithoutInfo() => new(Set.Where(d => d.Severity > DiagnosticSeverity.Info).ToHashSet(), Options);
+    public DiagnosticBag Errors() => new(Set.Where(d => d.Severity == DiagnosticSeverity.Error).ToHashSet(), Options);
     public bool ContainsErrors() => Set.Any(d => d.Severity == DiagnosticSeverity.Error);
 
     public override string ToString() => string.Join('\n', Set);
@@ -52,7 +60,7 @@ public sealed class DiagnosticBag(HashSet<Diagnostic>? diagnostics = null)
     private void Report(Diagnostic diagnostic)
     {
         Set.Add(diagnostic);
-        if (!FailFast || diagnostic.Severity < DiagnosticSeverity.Error) return;
+        if (!Options.FailFast || diagnostic.Severity < DiagnosticSeverity.Error) return;
 
         Console.WriteLine(diagnostic.ToString());
         Environment.Exit(1);

@@ -73,6 +73,23 @@ public class CompilerTest
         Assert.Equal(oneShot.RenderedLuau, phased.Analyze(parsedFile).RenderedLuau);
     }
 
+    [Fact]
+    public void Compiles_WithTheUnitsDiagnosticOptions_AtEveryStage()
+    {
+        var options = new DiagnosticOptions();
+        var compilationUnit = new CompilationUnit(new LoomConfig(), options);
+        var compiler = new Compiler(compilationUnit, Utility.TestFile("let x = 1;"));
+
+        var parsedFile = compiler.Parse();
+        Assert.NotNull(parsedFile);
+        Assert.Same(options, parsedFile.LexerResult.Diagnostics.Options);
+        Assert.Same(options, parsedFile.ParserResult.Diagnostics.Options);
+
+        var compiledFile = compiler.Analyze(parsedFile);
+        Assert.Same(options, compiledFile.Diagnostics.Options);
+        Assert.Same(options, compiledFile.SemanticModel.Diagnostics.Options);
+    }
+
     private static ParsedFile Parse(string source)
     {
         var compilationUnit = new CompilationUnit(new LoomConfig());
