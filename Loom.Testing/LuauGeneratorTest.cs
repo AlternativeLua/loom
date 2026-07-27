@@ -2494,6 +2494,48 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_InOperator_IdentifierKey_AsDirectPropertyAccess()
+    {
+        var luauTree = Utility.GetLuauAST("interface Foo { bar: string } let foo = new Foo { bar: \"abc\" }; \"bar\" in foo", true);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binary = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.IsType<PropertyAccess>(binary.Left);
+        Assert.Equal("foo.bar ~= nil", binary.Render());
+    }
+
+    [Fact]
+    public void Generates_InOperator_NonIdentifierKey_AsBracketedAccess()
+    {
+        var luauTree = Utility.GetLuauAST("interface Foo { [string]: string } let foo = new Foo { [\"foo-bar\"]: \"abc\" }; \"foo-bar\" in foo", true);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binary = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.IsType<PropertyAccess>(binary.Left);
+        Assert.Equal("foo[\"foo-bar\"] ~= nil", binary.Render());
+    }
+
+    [Fact]
+    public void Generates_InOperator_KeywordKey_AsBracketedAccess()
+    {
+        var luauTree = Utility.GetLuauAST("interface Foo { [string]: string } let foo = new Foo { [\"end\"]: \"abc\" }; \"end\" in foo", true);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binary = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.Equal("foo[\"end\"] ~= nil", binary.Render());
+    }
+
+    [Fact]
+    public void Generates_InOperator_NonLiteralKey_AsElementAccess()
+    {
+        var luauTree = Utility.GetLuauAST("interface Foo { bar: string } let foo = new Foo { bar: \"abc\" }; let key = \"bar\"; key in foo", true);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binary = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.IsType<ElementAccess>(binary.Left);
+    }
+
+    [Fact]
     public void Generates_UnaryOperators()
     {
         var luauTree = Utility.GetLuauAST("!false");

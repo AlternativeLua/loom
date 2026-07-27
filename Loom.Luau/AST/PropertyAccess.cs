@@ -12,7 +12,7 @@ public class PropertyAccess(LuauExpression target, List<string> names) : LuauExp
         for (var i = 0; i < Names.Count; i++)
         {
             var name = Names[i];
-            if (LuauFactory.Keywords.Contains(name))
+            if (LuauFactory.Keywords.Contains(name) || !IsValidIdentifier(name))
             {
                 result += $"[{RenderState.StringDelimiter}{RenderState.Escape(name)}{RenderState.StringDelimiter}]";
                 continue;
@@ -23,4 +23,12 @@ public class PropertyAccess(LuauExpression target, List<string> names) : LuauExp
 
         return result;
     }
+
+    // Not every string that reaches a PropertyAccess (e.g. a string literal key rewritten from an
+    // ElementAccess or an `in` check) is a syntactically valid Luau identifier - "foo-bar" or "123"
+    // would otherwise render as invalid dotted syntax rather than falling back to bracket indexing.
+    private static bool IsValidIdentifier(string name) =>
+        name.Length > 0
+        && (char.IsAsciiLetter(name[0]) || name[0] == '_')
+        && name.Skip(1).All(c => char.IsAsciiLetterOrDigit(c) || c == '_');
 }

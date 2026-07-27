@@ -342,6 +342,58 @@ public class TypeNarrowerTest
     }
 
     [Fact]
+    public void ComputeBranchStates_InOperator_TrueNarrowsPropertyToNonNullable()
+    {
+        const string source = """
+            interface Obj { field: number? }
+            let obj = none as never as Obj;
+            if "field" in obj {
+                obj.field
+            }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var propertyAccess = model.Tree.GetDescendants<QualifiedName>().First();
+        var (trueState, falseState) = narrower.ComputeBranchStates(condition, current);
+
+        var narrowed = narrower.TryGetNarrowedType(propertyAccess, trueState, out var trueType);
+        Assert.True(narrowed);
+        var primitive = Assert.IsType<PrimitiveType>(trueType);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+
+        narrowed = narrower.TryGetNarrowedType(propertyAccess, falseState, out var falseType);
+        Assert.True(narrowed);
+        var none = Assert.IsType<PrimitiveType>(falseType);
+        Assert.Equal(PrimitiveTypeKind.None, none.Kind);
+    }
+
+    [Fact]
+    public void ComputeBranchStates_InOperator_NonLiteralKey_DoesNotNarrow()
+    {
+        const string source = """
+            interface Obj { field: number? }
+            let obj = none as never as Obj;
+            let key = "field";
+            if key in obj {
+                obj.field
+            }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var propertyAccess = model.Tree.GetDescendants<QualifiedName>().First();
+        var (trueState, _) = narrower.ComputeBranchStates(condition, current);
+
+        var narrowed = narrower.TryGetNarrowedType(propertyAccess, trueState, out _);
+        Assert.False(narrowed);
+    }
+
+    [Fact]
     public void ComputeBranchStates_ElementAccessEqualsLiteral_TrueNarrowsElement()
     {
         const string source = """

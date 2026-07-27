@@ -71,7 +71,10 @@ public sealed partial class LuauGenerator
         {
             var index = Visit(binaryOperator.Left);
             var target = Visit(binaryOperator.Right);
-            var access = new Luau.AST.ElementAccess(target, index);
+            LuauExpression access = index is StringLiteral literal
+                ? new Luau.AST.PropertyAccess(target, [literal.Value])
+                : new Luau.AST.ElementAccess(target, index);
+
             return new Luau.AST.BinaryOperator(access, "~=", new NilLiteral());
         }
 

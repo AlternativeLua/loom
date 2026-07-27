@@ -49,10 +49,38 @@ public sealed class TypeNarrower
             BinaryOperator { Operator.Kind: SyntaxKind.EqualsEquals or SyntaxKind.BangEquals } binary => NarrowEquality(binary, current),
             BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand or SyntaxKind.AmpersandAmpersandEquals } and => NarrowLogicalAnd(and, current),
             BinaryOperator { Operator.Kind: SyntaxKind.PipePipe or SyntaxKind.PipePipeEquals } or => NarrowLogicalOr(or, current),
+            BinaryOperator { Operator.Kind: SyntaxKind.InKeyword, Left: Literal { Value: string } } inOp => NarrowInOperator(inOp, current),
             UnaryOperator { Operator.Kind: SyntaxKind.Bang } not => NarrowLogicalNot(not, current),
             Parenthesized p => ComputeBranchStates(p.Expression, current),
             _ => NarrowBooleanCondition(condition, current)
         };
+
+    // Treats `"field" in object` the same as `object.field != none`, even though `object.field` never
+    // literally appears in the `in` expression's AST - narrowing keys off FlowAddress (not AST node
+    // identity), so a synthesized field address here is resolved identically by a later, real
+    // `object.field` PropertyAccess lookup via BuildFieldChain.
+    private BranchStates NarrowInOperator(BinaryOperator inOperator, FlowState current)
+    {
+        if (inOperator.Left is not Literal { Value: string fieldName })
+            return new BranchStates(current, current);
+
+        if (GetFlowAddress(inOperator.Right) is not { } baseAddress)
+            return new BranchStates(current, current);
+
+        if (GetBaseExpressionType(inOperator.Right, current) is not { } baseType)
+            return new BranchStates(current, current);
+
+        if (TypeSimplifier.GetMemberPropertyType(baseType, fieldName) is not { } propertyType)
+            return new BranchStates(current, current);
+
+        var fieldAddress = FlowAddress.Field(baseAddress, fieldName);
+        var trueBuilder = current.ToBuilder();
+        var falseBuilder = current.ToBuilder();
+        trueBuilder.NarrowedTypes[fieldAddress] = propertyType.NonNullable();
+        falseBuilder.NarrowedTypes[fieldAddress] = PrimitiveType.None;
+
+        return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
+    }
 
     private BranchStates NarrowBooleanCondition(Expression expression, FlowState current)
     {
