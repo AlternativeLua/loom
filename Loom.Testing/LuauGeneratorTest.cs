@@ -3291,6 +3291,47 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_InSiblingFunctionBodies_DoesNotSuffixAcrossUnrelatedScopes()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn fn1(): void { let m = match 1 { n when number -> n, _ -> 0 } }
+            fn fn2(): void { let m = match 1 { n when number -> n, _ -> 0 } }
+            """,
+            true
+        );
+
+        var fn1 = Assert.IsType<Function>(luauTree.Statements[0]);
+        var fn1Match = Assert.IsType<LocalVariable>(fn1.Body.Statements[1]);
+        Assert.Equal("_match", fn1Match.Name);
+
+        var fn2 = Assert.IsType<Function>(luauTree.Statements[1]);
+        var fn2Match = Assert.IsType<LocalVariable>(fn2.Body.Statements[1]);
+        Assert.Equal("_match", fn2Match.Name);
+    }
+
+    [Fact]
+    public void Generates_Match_TwiceInSameFunctionBody_StillSuffixesCollision()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn fn1(): void {
+                let a = match 1 { n when number -> n, _ -> 0 };
+                let b = match 2 { n when number -> n, _ -> 0 };
+            }
+            """,
+            true
+        );
+
+        var fn1 = Assert.IsType<Function>(luauTree.Statements[0]);
+        var firstMatch = Assert.IsType<LocalVariable>(fn1.Body.Statements[1]);
+        Assert.Equal("_match", firstMatch.Name);
+
+        var secondMatch = Assert.IsType<LocalVariable>(fn1.Body.Statements[5]);
+        Assert.Equal("_match_1", secondMatch.Name);
+    }
+
+    [Fact]
     public void Generates_Match_TypedPattern_ChecksTypeofAndBinds()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { n when number -> n, _ -> 0 }", true);
