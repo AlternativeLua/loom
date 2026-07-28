@@ -186,7 +186,7 @@ public sealed partial class LuauGenerator
 
             case TypedPattern typedPattern:
             {
-                AddTypeofCondition(conditions, _semanticModel.GetType(typedPattern.Type), subject);
+                AddTypeCondition(conditions, _semanticModel.GetType(typedPattern.Type), subject, typedPattern.ObjectPattern == null);
                 bindings.Add(new ConstVariable(typedPattern.Name.Text, null, subject));
                 if (typedPattern.ObjectPattern != null && !CompileObjectPatternFields(typedPattern.ObjectPattern, subject, conditions, bindings))
                 {
@@ -200,7 +200,7 @@ public sealed partial class LuauGenerator
 
             case TypePattern typePattern:
             {
-                AddTypeofCondition(conditions, _semanticModel.GetType(typePattern.Type), subject);
+                AddTypeCondition(conditions, _semanticModel.GetType(typePattern.Type), subject, typePattern.ObjectPattern == null);
                 if (typePattern.ObjectPattern != null && !CompileObjectPatternFields(typePattern.ObjectPattern, subject, conditions, bindings))
                 {
                     isIrrefutable = false;
@@ -335,6 +335,24 @@ public sealed partial class LuauGenerator
         var typeofString = GetLuauTypeofString(type);
         if (typeofString != null)
             conditions.Add(new BinaryOperator(TypeofCall(subject), "==", new StringLiteral(typeofString)));
+    }
+
+    // `n when Foo` needs more than `typeof(n) == "table"`: Luau has no runtime representation of an
+    // interface, so matching one structurally requires checking each of its required fields exists.
+    private static void AddTypeCondition(List<LuauExpression> conditions, Type type, LuauExpression subject, bool checkRequiredFields)
+    {
+        if (type is not InterfaceType interfaceType)
+        {
+            AddTypeofCondition(conditions, type, subject);
+            return;
+        }
+
+        conditions.Add(new BinaryOperator(TypeofCall(subject), "==", new StringLiteral("table")));
+        if (!checkRequiredFields)
+            return;
+
+        foreach (var property in interfaceType.Properties.Where(property => Type.IsNotOptional(property.ValueType)))
+            conditions.Add(new BinaryOperator(new Luau.AST.PropertyAccess(subject, [property.Name]), "~=", new NilLiteral()));
     }
 
     private static Call TypeofCall(LuauExpression subject) => new(new Identifier("typeof"), [subject]);

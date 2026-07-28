@@ -3306,6 +3306,33 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_TypedPattern_OnInterface_ChecksRequiredFieldsStructurally()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Foo { field: number }
+            let x = 1 as never;
+            let m = match x { f when Foo -> 1, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("and", condition.Operator);
+
+        var typeofCondition = Assert.IsType<BinaryOperator>(condition.Left);
+        Assert.Equal("==", typeofCondition.Operator);
+        Assert.Equal("table", Assert.IsType<StringLiteral>(typeofCondition.Right).Value);
+
+        var fieldCondition = Assert.IsType<BinaryOperator>(condition.Right);
+        Assert.Equal("~=", fieldCondition.Operator);
+        var fieldAccess = Assert.IsType<PropertyAccess>(fieldCondition.Left);
+        Assert.Equal(["field"], fieldAccess.Names);
+        Assert.IsType<NilLiteral>(fieldCondition.Right);
+    }
+
+    [Fact]
     public void Generates_Match_RangePattern_ChecksTypeofAndBounds()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { 0..5 -> 1, _ -> 0 }");
