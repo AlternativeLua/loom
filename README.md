@@ -16,6 +16,67 @@
 > - Breaking changes may occur at any time.
 > - Expect bugs.
 
+## Quick look
+
+```rs
+interface User { name: string, age: number }
+let user = new User { name: "Ada", age: 30 };
+let { name, age } = user;
+```
+
+```luau
+type User = {
+  read name: string,
+  read age: number,
+}
+const user = { name = "Ada", age = 30 }
+const name = user.name
+const age = user.age
+```
+
+More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
+
+## Table of Contents
+
+- [Features](#features)
+- [Upcoming Features](#upcoming-features)
+- [Examples](#working-examples)
+  - [Variables & Mutability](#variables--mutability)
+  - [Operators](#operators)
+  - [Generic Types](#generic-types)
+  - [Number Literals](#number-literals)
+  - [Reassignment & Chained Assignment](#reassignment--chained-assignment)
+  - [Functions](#functions)
+  - [Arrays](#arrays)
+  - [Destructuring](#destructuring)
+  - [Tuples](#tuples)
+  - [nameof](#nameof)
+  - [Ranges](#ranges)
+  - [Enums](#enums)
+  - [Control Flow](#control-flow)
+  - [Declare Statements & Casting](#declare-statements--casting)
+  - [Function Types](#function-types)
+  - [Interfaces](#interfaces)
+  - [While Loops](#while-loops)
+  - [Sealed & Declared Interfaces](#sealed--declared-interfaces)
+  - [`after` Statements](#after-statements)
+  - [For Loops](#for-loops)
+  - [Ternary Operator](#ternary-operator)
+  - [keyof](#keyof)
+  - [Result Pattern](#result-pattern)
+  - [Array.join()](#arrayjoin)
+  - [Range.clamp()](#rangeclamp)
+  - [string() & number()](#string--number)
+  - [Traits & implementations](#traits--implementations)
+  - [typeof](#typeof)
+  - [Events](#events)
+  - [Exports](#exports)
+  - [`in` operator](#in-operator)
+  - [Tuples](#tuples)
+  - [Destructuring](#destructuring)
+- [Contributing](#contributing)
+- [License](#license)
+
 ## Features
 
 - **Immutability by default** – Variables, fields, and arrays are immutable unless explicitly marked `mut`
@@ -35,19 +96,23 @@
 - **Zero-cost abstractions** – Transpiles to idiomatic Luau with minimal overhead
 - **Batteries included** - Comes with a set of built-in compile-time macros included with data types such as [Array.join()](#arrayjoin)
   or [Range.clamp()](#rangeclamp)
+- **Destructuring** – Bind array elements or object fields straight out of a value, including renaming a field on bind. See [example](#destructuring).
+- **Tuple types** – Fixed-arity, positional types with their own literal, indexing, destructuring, and `match` pattern syntax, plus a `Tuple` generic
+  constraint for variadic-tuple rest parameters. See [example](#tuples).
 
 ## Upcoming Features
 
-- Destructuring
-- Tuple types
 - Standard libraries (math, string, buffer, etc.)
 - `defer` statements
+- Explicit `self` receiver for trait implementations
 
 ---
 
 ## Working Examples
 
 Each example is separated by a line. Top code is written in Loom, bottom code is the Luau output.
+
+### Variables & Mutability
 
 ```rs
 let x: bool = false;
@@ -67,7 +132,7 @@ mut x = 1;
 local x = 1
 ```
 
-##
+### Operators
 
 ```rs
 let s = "abc" + "def";
@@ -87,7 +152,7 @@ let x = 1 & 2 & 3;
 local x = bit32.band(1, 2, 3)
 ```
 
-##
+### Generic Types
 
 ```rs
 type Union<A, B> = A | B;
@@ -99,7 +164,7 @@ type Union<A, B> = A | B
 const x: Union<boolean, string> = false
 ```
 
-##
+### Number Literals
 
 Loom supports extended number literals that let you do boilerplate math to convert to a specific unit instantaneously.
 
@@ -127,7 +192,7 @@ const binary = 25
 const octal = 256
 ```
 
-##
+### Reassignment & Chained Assignment
 
 ```rs
 mut x = 69;
@@ -155,7 +220,7 @@ x = y
 const z = x
 ```
 
-##
+### Functions
 
 Loom supports shorthand function bodies that return single expressions.
 
@@ -197,7 +262,7 @@ end
 id(69)
 ```
 
-##
+### Arrays
 
 ```rs
 let arr: number[] = [1, 2, 3];
@@ -234,6 +299,142 @@ const x = 69
 arr[1] = x
 ```
 
+## Destructuring
+
+Bind array elements or object fields directly out of a value.
+
+```rs
+let array = [1, 2, 3];
+let [first, second] = array;
+```
+
+```luau
+const array = {1, 2, 3}
+const first = array[1]
+const second = array[2]
+```
+
+##
+
+```rs
+interface User { name: string, age: number }
+let user = new User { name: "Ada", age: 30 };
+let { name, age } = user;
+```
+
+```luau
+type User = {
+  read name: string,
+  read age: number,
+}
+const user = { name = "Ada", age = 30 }
+const name = user.name
+const age = user.age
+```
+
+##
+
+A field can be bound under a different name.
+
+```rs
+let { age: userAge } = user;
+```
+
+```luau
+const userAge = user.age
+```
+
+## Tuples
+
+Tuples are a fixed-arity type with a positional type per element, distinct from arrays.
+
+```rs
+let my_tuple: (string, number) = ("abc", 420);
+print(my_tuple[1]);
+print(my_tuple[2]);
+```
+
+```luau
+const my_tuple: { string | number } = {"abc", 420}
+print(my_tuple[1])
+print(my_tuple[2])
+```
+
+##
+
+Returning a tuple literal directly returns the raw values - no table is ever built.
+
+```rs
+fn returns_tuple: (string, number) {
+    return ("abc", 420);
+}
+```
+
+```luau
+const function returns_tuple(): (string, number)
+	return "abc", 420
+end
+```
+
+##
+
+Returning a tuple-typed value that already lives in a table unpacks it instead.
+
+```rs
+fn returns_tuple: (string, number) {
+    let t = ("abc", 420);
+    return t;
+}
+
+let (one, two) = returns_tuple();
+```
+
+```luau
+const function returns_tuple(): (string, number)
+	const t = {"abc", 420}
+	return table.unpack(t)
+end
+const one, two = returns_tuple()
+```
+
+##
+
+Tuples can also be matched positionally.
+
+```rs
+let t: (string, number) = ("abc", 420);
+let result = match t {
+    (a, b) -> a,
+    _ -> "none",
+};
+```
+
+```luau
+const t: { string | number } = {"abc", 420}
+local _match
+if typeof(t) == "table" then
+	const a = t[1]
+	const b = t[2]
+	_match = a
+else
+	_match = "none"
+end
+const result = _match
+```
+
+##
+
+The `Tuple` generic constraint expands a rest parameter into positional arguments matching the tuple's arity.
+
+```rs
+declare fn something<T: Tuple>(..args: T): void;
+something::<(string, number)>("abc", 420);
+```
+
+```luau
+something("abc", 420)
+```
+
 ## nameof
 
 The `nameof` operator can be used to read the tokens of `Name` expressions as a string.
@@ -260,7 +461,7 @@ const range = { minimum = 1, maximum = 10 }
 const name = "range.minimum"
 ```
 
-##
+### Ranges
 
 Ranges are constructs that represent a minimum and a maximum number.
 
@@ -338,7 +539,7 @@ let min = (1..10).minimum;
 const min = ({ minimum = 1, maximum = 10 }).minimum
 ```
 
-##
+### Enums
 
 Enums are named compile-time constants.
 
@@ -373,7 +574,7 @@ type Tag = "lava" | "something"
 const tag = "lava"
 ```
 
-##
+### Control Flow
 
 ```rs
 if 69 == 420 {
@@ -391,7 +592,7 @@ elseif 69 == 69 then
 end
 ```
 
-##
+### Declare Statements & Casting
 
 Declare statements allow you to declare types for symbols that may not exist in your file but you know exist in your environment.
 
@@ -425,7 +626,7 @@ let unknown = 69 as unknown;
 const unknown = (69 :: unknown)
 ```
 
-##
+### Function Types
 
 ```rs
 type Callback = fn(): void
@@ -435,7 +636,7 @@ type Callback = fn(): void
 type Callback = () -> ()
 ```
 
-##
+### Interfaces
 
 ```ts
 interface HasName {
@@ -446,11 +647,7 @@ interface HasAge {
     age: number;
 }
 
-interface Person
-
-:
-HasName, HasAge
-{
+interface Person: HasName, HasAge {
     job: string;
 }
 ```
@@ -507,13 +704,7 @@ interface Person {
     age: number;
 }
 
-let runic = new Person
-{
-    name: "Runic", age
-:
-    21
-}
-;
+let runic = new Person { name: "Runic", age: 21 };
 runic.age = 69;
 ```
 
@@ -526,7 +717,7 @@ const runic = { name = "Runic", age = 21 }
 runic.age = 69
 ```
 
-##
+### While Loops
 
 ```rs
 mut i = 0;
@@ -544,7 +735,7 @@ end
 print(i)
 ```
 
-##
+### Sealed & Declared Interfaces
 
 In this example Foo is only a type and cannot be instantiated.
 
@@ -574,7 +765,7 @@ type Foo = {
 }
 ```
 
-##
+### `after` Statements
 
 After statements are a shorthand to `task.delay`. They **never yield**.
 
@@ -602,13 +793,11 @@ task.delay(0.25, function(): ()
 end)
 ```
 
-##
+### For Loops
 
 ```ts
 let collection = [1, 2, 3, 4];
-for v, i :
-collection
-{
+for v, i : collection {
     print(i);
     print(v);
 }
@@ -648,7 +837,7 @@ for n in 10, 1, -1 do
 end
 ```
 
-##
+### Ternary Operator
 
 ```ts
 let condition = true
@@ -660,7 +849,7 @@ const condition = true
 const value = if condition then 69 else nil
 ```
 
-##
+### keyof
 
 In this example `K` resolves to `number | "bar" | "baz"`.
 
@@ -751,7 +940,7 @@ print(table.find(arr, 2))
 print(table.find(arr, 2) ~= nil)
 ```
 
-##
+## Range.length
 
 ```rs
 print((1..10).length)
@@ -987,6 +1176,58 @@ print("field" in object)
 type Object = { field: number? }
 const object = { field = 69 }
 print(object.field ~= nil)
+```
+
+## Destructuring
+
+Bind names directly to elements of collections or fields of objects.
+
+```ts
+let [a, b, c] = [1, 2, 3];
+let (a, b, c) = (1, 2, 3);
+let { name, age } = person;
+```
+
+```luau
+const _destructure = {1, 2, 3}
+const a = _destructure[1]
+const b = _destructure[2]
+const c = _destructure[3]
+const a = 1
+const b = 2
+const c = 3
+const name = person.name
+const age = person.age
+```
+
+## Tuples
+
+Fixed-length collections that can be assigned to names or returned by functions directly and not create an intermediate table.
+
+```rs
+let t1 = ("a", 1);
+let (a, b) = (1, 2);
+
+declare fn sig<T: Tuple>(..params: T): void;
+sig::<(string, number)>("a", 1);
+
+fn returns_tuple: (string, number) {
+  let t = ("abc", 420);
+  return t;
+}
+let (one, two) = returns_tuple();
+```
+
+```luau
+const t1 = {"a", 1}
+const a = 1
+const b = 2
+sig("a", 1)
+const function returns_tuple(): (string, number)
+    const t = {"abc", 420}
+    return table.unpack(t)
+end
+const one, two = returns_tuple()
 ```
 
 ---
