@@ -85,6 +85,22 @@ public sealed partial class Resolver
         return true;
     }
 
+    public override bool VisitSelfExpression(SelfExpression selfExpression)
+    {
+        var implement = selfExpression.FirstAncestorOfType<Implement>();
+        if (implement == null)
+        {
+            _diagnostics.Error(selfExpression, InternalCodes.SelfOutsideImplementation, "'@' can only be used inside an implemented trait method.");
+            return false;
+        }
+
+        if (_semanticModel.GetSymbol(implement.InterfaceName) is not InterfaceSymbol interfaceSymbol)
+            return false;
+
+        AddReference(selfExpression, interfaceSymbol);
+        return true;
+    }
+
     public override bool VisitTraitDeclaration(TraitDeclaration traitDeclaration)
     {
         if (!DeclareTrait(traitDeclaration) || !ResolveTraitBody(traitDeclaration.Body, traitDeclaration.Name.Text))

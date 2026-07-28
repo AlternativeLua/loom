@@ -1,0 +1,6 @@
+implement GetValue<K, V> for WithIndexer {
+    fn get_value(key) { return @[key]; }
+}
+implement Display for Container {
+    fn display() { return print(@.value); }
+}

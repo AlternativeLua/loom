@@ -12,7 +12,6 @@ public class LexerTest
     public static readonly List<object[]> Keywords = SyntaxFacts.KeywordMap.Select(t => new object[] { t.Key, t.Value }).ToList();
 
     [Theory]
-    [InlineData("@")]
     [InlineData("$")]
     [InlineData("\\")]
     [InlineData("`")]

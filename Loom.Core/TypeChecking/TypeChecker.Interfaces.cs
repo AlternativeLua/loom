@@ -53,6 +53,14 @@ public sealed partial class TypeChecker
         return TypeSimplifier.Simplify(new IntersectionType([traitType, interfaceType]));
     }
 
+    public override Type VisitSelfExpression(SelfExpression selfExpression)
+    {
+        var implement = selfExpression.FirstAncestorOfType<Implement>();
+        return implement == null
+            ? BindType(selfExpression, PrimitiveType.Never)
+            : BindType(selfExpression, _semanticModel.GetType(implement.InterfaceName));
+    }
+
     public override Type VisitTraitDeclaration(TraitDeclaration traitDeclaration)
     {
         var name = traitDeclaration.Name.Text;

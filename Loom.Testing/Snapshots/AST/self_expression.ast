@@ -1,0 +1,126 @@
+﻿Implement(
+  TraitName: TypeName(
+    Name: Token(Identifier, "GetValue")
+    TypeArguments(
+      LeftArrow: Token(LArrow, "<")
+      RightArrow: Token(RArrow, ">")
+      ArgumentsList: [
+        TypeName(
+          Name: Token(Identifier, "K")
+          TypeArguments: null
+        )
+        TypeName(
+          Name: Token(Identifier, "V")
+          TypeArguments: null
+        )
+      ]
+    )
+  )
+  ForKeyword: Token(ForKeyword, "for")
+  InterfaceName: TypeName(
+    Name: Token(Identifier, "WithIndexer")
+    TypeArguments: null
+  )
+  Body: ImplementBody(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Implementations: [
+      FunctionDeclaration(
+        ReturnType: null
+        Body: Block(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Statements: [
+            Return(
+              Expression: ElementAccess(
+                LeftBracket: Token(LBracket, "[")
+                RightBracket: Token(RBracket, "]")
+                Expression: SelfExpression(
+                  AtToken: Token(At, "@")
+                )
+                IndexExpression: Identifier(
+                  Name: Token(Identifier, "key")
+                  Token(Identifier, "key")
+                )
+              )
+            )
+          ]
+        )
+        Parameters(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          ParameterList: [
+            Parameter(
+              DotDot: null
+              ColonTypeClause: null
+              EqualsValueClause: null
+              Name: Token(Identifier, "key")
+            )
+          ]
+        )
+        TypeParameters: null
+        Name: Token(Identifier, "get_value")
+      )
+    ]
+  )
+)
+Implement(
+  TraitName: TypeName(
+    Name: Token(Identifier, "Display")
+    TypeArguments: null
+  )
+  ForKeyword: Token(ForKeyword, "for")
+  InterfaceName: TypeName(
+    Name: Token(Identifier, "Container")
+    TypeArguments: null
+  )
+  Body: ImplementBody(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Implementations: [
+      FunctionDeclaration(
+        ReturnType: null
+        Body: Block(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Statements: [
+            Return(
+              Expression: Invocation(
+                Expression: Identifier(
+                  Name: Token(Identifier, "print")
+                  Token(Identifier, "print")
+                )
+                TypeArguments: null
+                Arguments(
+                  LeftParen: Token(LParen, "(")
+                  RightParen: Token(RParen, ")")
+                  ArgumentList: [
+                    PropertyAccess(
+                      Expression: SelfExpression(
+                        AtToken: Token(At, "@")
+                      )
+                      Names: [
+                        DotName(
+                          Dot: Token(Dot, ".")
+                          Name: Token(Identifier, "value")
+                          IsOptional: False
+                        )
+                      ]
+                    )
+                  ]
+                )
+              )
+            )
+          ]
+        )
+        Parameters(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          ParameterList: []
+        )
+        TypeParameters: null
+        Name: Token(Identifier, "display")
+      )
+    ]
+  )
+)

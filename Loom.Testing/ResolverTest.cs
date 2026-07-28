@@ -763,6 +763,44 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Resolves_SelfExpression_ToImplementedInterface()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface WithIndexer { [string]: number }
+
+                trait GetValue<K, V> {
+                    fn get_value(key: K): V
+                }
+
+                implement GetValue<string, number> for WithIndexer {
+                    fn get_value(key) -> @[key];
+                }
+                """
+            )
+        );
+
+        var iface = Assert.IsType<InterfaceDeclaration>(model.Tree.Statements[0]);
+        var interfaceSymbol = Assert.IsType<InterfaceSymbol>(model.GetDeclarationSymbol(iface, SymbolKind.Interface));
+
+        var implement = Assert.IsType<Implement>(model.Tree.Statements[2]);
+        var method = Assert.Single(implement.Body.Implementations);
+        var body = Assert.IsType<ExpressionBody>(method.Body);
+        var elementAccess = Assert.IsType<ElementAccess>(body.Expression);
+        var selfExpression = Assert.IsType<SelfExpression>(elementAccess.Expression);
+
+        Assert.Same(interfaceSymbol, model.GetSymbol(selfExpression));
+    }
+
+    [Fact]
+    public void ThrowsFor_SelfExpression_OutsideImplementation()
+    {
+        var diagnostics = Utility.GetSemanticModel("let x = @;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.SelfOutsideImplementation, "'@' can only be used inside an implemented trait method.");
+    }
+
+    [Fact]
     public void Resolves_PropertyPointsToInterface()
     {
         var model = Utility.AssertNoErrors(

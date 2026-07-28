@@ -767,6 +767,51 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_SelfExpression_AsElementAccessOnSelf()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface WithIndexer { [string]: number }
+            trait GetValue<K, V> { fn get_value(key: K): V }
+            implement GetValue<string, number> for WithIndexer {
+                fn get_value(key) -> @[key];
+            }
+            """,
+            true
+        );
+
+        var getValueFunction = Assert.IsType<Function>(luauTree.Statements[5]);
+        Assert.Equal("GetValue_string_number_for_WithIndexer.get_value", getValueFunction.Name);
+
+        var @return = Assert.IsType<Return>(Assert.Single(getValueFunction.Body.Statements));
+        var elementAccess = Assert.IsType<ElementAccess>(@return.Expression);
+        Assert.Equal("self", Assert.IsType<Identifier>(elementAccess.Target).Name);
+        Assert.Equal("key", Assert.IsType<Identifier>(elementAccess.Index).Name);
+    }
+
+    [Fact]
+    public void Generates_SelfExpression_AsPropertyAccessOnSelf()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display(): void }
+            implement Display for Container {
+                fn display() -> print(@.value);
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[5]);
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var selfAccess = Assert.IsType<PropertyAccess>(Assert.Single(printCall.Arguments));
+        Assert.Equal("self", Assert.IsType<Identifier>(selfAccess.Target).Name);
+        Assert.Equal("value", Assert.Single(selfAccess.Names));
+    }
+
+    [Fact]
     public void Generates_TraitDeclaration()
     {
         var luauTree = Utility.GetLuauAST("trait T { fn method(): number }", true);

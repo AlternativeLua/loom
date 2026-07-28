@@ -201,6 +201,8 @@ public sealed partial class LuauGenerator
                 : luauIdentifier;
     }
 
+    public override LuauNode VisitSelfExpression(SelfExpression selfExpression) => LuauFactory.Self;
+
     public override LuauNode VisitAs(As @as) => new TypeCast(Visit(@as.Expression), Visit(@as.Type));
     public override LuauNode VisitNameOf(NameOf nameOf) => new StringLiteral(((LiteralType)_semanticModel.GetType(nameOf)).Value!.ToString()!);
 

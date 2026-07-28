@@ -999,6 +999,46 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_SelfExpression_IndexerAccess_MatchesTraitReturnType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface WithIndexer { [string]: number }
+
+            trait GetValue<K, V> {
+                fn get_value(key: K): V
+            }
+
+            implement GetValue<string, number> for WithIndexer {
+                fn get_value(key) -> @[key];
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_SelfExpression_TypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            trait GetSelf {
+                fn get_self(): number
+            }
+
+            interface Foo;
+
+            implement GetSelf for Foo {
+                fn get_self() -> @;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'Foo' is not assignable to type 'number'.");
+    }
+
+    [Fact]
     public void ThrowsFor_Implement_DefaultValueWrongType()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
