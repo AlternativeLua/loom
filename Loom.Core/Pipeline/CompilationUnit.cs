@@ -59,10 +59,10 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
 
         // phase two: declaration files first — their top-level symbols become globals that every
         // other file resolves against. Both groups keep the graph's dependency order.
-        var compiledDeclarationFiles = AnalyzeAll(parsedFile => parsedFile.File.IsDeclaration);
+        var compiledDeclarationFiles = analyzeAll(parsedFile => parsedFile.File.IsDeclaration);
         PopulateGlobals(compiledDeclarationFiles);
 
-        var compiledConcreteFiles = AnalyzeAll(parsedFile => !parsedFile.File.IsDeclaration);
+        var compiledConcreteFiles = analyzeAll(parsedFile => !parsedFile.File.IsDeclaration);
         var compiledFiles = compiledDeclarationFiles.Concat(compiledConcreteFiles).ToList();
         var diagnostics = DiagnosticBag.Concat(
             [..compiledFiles.ConvertAll(file => file.Diagnostics), ..failures.ConvertAll(failure => failure.Diagnostics)],
@@ -74,9 +74,9 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
 
         return new CompilationResult(compiledFiles, diagnostics) { Failures = failures };
 
-        List<CompiledFile> AnalyzeAll(Predicate<ParsedFile> predicate)
+        List<CompiledFile> analyzeAll(Predicate<ParsedFile> predicate)
         {
-            var compiledFiles = new List<CompiledFile>();
+            var files = new List<CompiledFile>();
             foreach (var parsedFile in ModuleGraph.Order.FindAll(predicate))
             {
                 var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
@@ -88,10 +88,10 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
                 }
 
                 AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
-                compiledFiles.Add(compiledFile);
+                files.Add(compiledFile);
             }
 
-            return compiledFiles;
+            return files;
         }
     }
 
@@ -129,8 +129,10 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
             var diagnostics = new DiagnosticBag(options: DiagnosticOptions);
             diagnostics.CompilerError(SourceFile.Empty, $"The compiler threw an exception building the module graph!\n{e.Message}\n{e.StackTrace}");
             failures.AddRange(
-                parsedFiles.ConvertAll(parsed =>
-                    new FailedFile(parsed.ParsedFile.File, DiagnosticBag.Concat([parsed.Compiler.Diagnostics, diagnostics], DiagnosticOptions))
+                parsedFiles.ConvertAll(parsed => new FailedFile(
+                        parsed.ParsedFile.File,
+                        DiagnosticBag.Concat([parsed.Compiler.Diagnostics, diagnostics], DiagnosticOptions)
+                    )
                 )
             );
 

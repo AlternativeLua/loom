@@ -240,7 +240,7 @@ public sealed partial class TypeChecker
         (type is InstantiatedType instantiated ? instantiated.Expand() : type) switch
         {
             Types.TupleType => true,
-            Types.TypeParameter { Constraint: Types.TupleMarkerType } => true,
+            Types.TypeParameter { Constraint: TupleMarkerType } => true,
             _ => false
         };
 

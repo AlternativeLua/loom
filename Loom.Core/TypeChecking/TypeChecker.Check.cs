@@ -19,34 +19,24 @@ public sealed partial class TypeChecker
     {
         constraint = null;
 
-        if (expression is Parenthesized parenthesized)
-            return BindType(parenthesized, Check(parenthesized.Expression, expected, state, out constraint));
+        return expression switch
+        {
+            Parenthesized parenthesized => BindType(parenthesized, Check(parenthesized.Expression, expected, state, out constraint)),
+            ArrayLiteral arrayLiteral when expected is ArrayType arrayType => CheckArrayLiteral(arrayLiteral, arrayType, state),
+            TupleExpression tupleExpression when expected is Types.TupleType tupleType => CheckTupleExpression(tupleExpression, tupleType, state),
+            MatchExpression matchExpression => CheckMatchExpression(matchExpression, expected, state),
+            TernaryOperator ternaryOperator => CheckTernaryOperator(ternaryOperator, expected, state),
+            BinaryOperator { Operator.Kind: SyntaxKind.QuestionQuestion or SyntaxKind.QuestionQuestionEquals } nullCoalesce => CheckNullCoalesce(
+                nullCoalesce,
+                expected,
+                state
+            ),
+            InterfaceInvocation interfaceInvocation => CheckInterfaceInvocation(interfaceInvocation, expected, state),
+            _ => CheckSubsumption(expression, expected, state, out constraint)
+        };
 
-        if (expression is ArrayLiteral arrayLiteral && expected is ArrayType arrayType)
-            return CheckArrayLiteral(arrayLiteral, arrayType, state);
-
-        if (expression is TupleExpression tupleExpression && expected is Types.TupleType tupleType)
-            return CheckTupleExpression(tupleExpression, tupleType, state);
-
-        if (expression is MatchExpression matchExpression)
-            return CheckMatchExpression(matchExpression, expected, state);
-
-        if (expression is TernaryOperator ternaryOperator)
-            return CheckTernaryOperator(ternaryOperator, expected, state);
-
-        if (expression is BinaryOperator { Operator.Kind: SyntaxKind.QuestionQuestion or SyntaxKind.QuestionQuestionEquals } nullCoalesce)
-            return CheckNullCoalesce(nullCoalesce, expected, state);
-
-        if (expression is InterfaceInvocation interfaceInvocation)
-            return CheckInterfaceInvocation(interfaceInvocation, expected, state);
-
-        // Once more specific rules, add more, but for now it'll just be like that.
-        return CheckSubsumption(expression, expected, state, out constraint);
     }
-
-    private Type CheckSubsumption(Expression expression, Type expected, FlowState state) =>
-        CheckSubsumption(expression, expected, state, out _);
-
+    
     private Type CheckSubsumption(Expression expression, Type expected, FlowState state, out TypeSolver.TypeConstraint? constraint)
     {
         constraint = null;
@@ -72,14 +62,14 @@ public sealed partial class TypeChecker
                 elementConstraints.Add(constraint);
         }
 
-        if (elementConstraints.Count > 0)
-        {
-            var actualElementType = TypeSimplifier.Simplify(new UnionType(elementTypes.ConvertAll(t => t.Widen())));
-            var actualArrayType = new ArrayType(actualElementType, expected.IsMutable);
-            var trace = new TypeSolver.TypeMismatchTrace(actualArrayType, expected);
-            foreach (var constraint in elementConstraints)
-                constraint.Trace = trace;
-        }
+        if (elementConstraints.Count <= 0)
+            return BindType(arrayLiteral, expected);
+
+        var actualElementType = TypeSimplifier.Simplify(new UnionType(elementTypes.ConvertAll(t => t.Widen())));
+        var actualArrayType = new ArrayType(actualElementType, expected.IsMutable);
+        var trace = new TypeSolver.TypeMismatchTrace(actualArrayType, expected);
+        foreach (var constraint in elementConstraints)
+            constraint.Trace = trace;
 
         return BindType(arrayLiteral, expected);
     }

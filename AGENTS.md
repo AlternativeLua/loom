@@ -48,7 +48,7 @@ before claiming done.
 
 ## Pipeline
 
-`Lexer → Parser → Resolver → FlowAnalyzer → TypeChecker → LuauGenerator → LuauTree.Render()` (see [Compiler.cs](Loom.Core/Compiler.cs)). Every stage returns a
+`Lexer → Parser → Resolver → FlowAnalyzer → TypeChecker → LuauGenerator → LuauTree.Render()` (see [Compiler.cs](Loom.Core/Pipeline/Compiler.cs)). Every stage returns a
 result carrying a `DiagnosticBag`; stages after the parser walk the AST via the visitor pattern. New syntax means touching parser AND resolver AND type checker
 AND generator — not just parse + emit (see CONTRIBUTING.md).
 
@@ -80,7 +80,7 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 - The resolver keeps ambient names (intrinsics + `.d.loom` globals) in a scope below the file's own, so a module declaration shadows them instead of
   colliding. Scope depth is therefore not a test for "top level of a module" — use `AtModuleScope()`. Imports resolve ahead of the file's statements, so a name
   may be used above the import that brings it in.
-- Output path derived by string-replacing source dir name with output dir name in the absolute path ([Compiler.cs:33](Loom.Core/Compiler.cs)) — fragile with
+- Output path derived by string-replacing source dir name with output dir name in the absolute path ([Compiler.cs:33](Loom.Core/Pipeline/Compiler.cs)) — fragile with
   nested same-named dirs.
 - `Loom.TypeGenerator` generates intrinsic types from the Roblox API that the test suite relies on to pass. The intrinsics are stored in
   `Loom.Core/TypeChecking/Intrinsics`.

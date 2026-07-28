@@ -100,7 +100,7 @@ public sealed partial class LuauGenerator
         };
 
         if (substitutionName == null)
-            return (LuauExpression)Visit(guard);
+            return Visit(guard);
 
         var previousName = _guardSubstitutionName;
         var previousValue = _guardSubstitutionValue;
@@ -108,7 +108,7 @@ public sealed partial class LuauGenerator
         _guardSubstitutionValue = subject;
         try
         {
-            return (LuauExpression)Visit(guard);
+            return Visit(guard);
         }
         finally
         {
@@ -121,12 +121,13 @@ public sealed partial class LuauGenerator
     {
         var statements = new List<LuauStatement>();
         var (body, scope) = _state.Capture(() =>
-        {
-            foreach (var binding in bindings)
-                _state.Prereq(binding);
+            {
+                foreach (var binding in bindings)
+                    _state.Prereq(binding);
 
-            return Visit(arm.Body);
-        });
+                return Visit(arm.Body);
+            }
+        );
 
         ApplyPrereqAndPostreq(
             statements,
@@ -176,6 +177,7 @@ public sealed partial class LuauGenerator
                 AddTypeofCondition(conditions, PrimitiveType.Number, subject);
                 if (rangePattern.Minimum is LiteralPattern minimum)
                     conditions.Add(new BinaryOperator(subject, ">=", LiteralValueToExpression(minimum.Value)));
+
                 if (rangePattern.Maximum is LiteralPattern maximum)
                     conditions.Add(new BinaryOperator(subject, "<=", LiteralValueToExpression(maximum.Value)));
 
@@ -311,22 +313,15 @@ public sealed partial class LuauGenerator
         }
     }
 
-    private bool CompileObjectPatternFields(ObjectPattern objectPattern, LuauExpression subject, List<LuauExpression> conditions, List<LuauStatement> bindings)
-    {
-        foreach (var field in objectPattern.Fields)
-        {
-            var propertyAccess = new Luau.AST.PropertyAccess(subject, [field.Name.Text]);
-            if (!TryCompilePattern(field.Pattern, propertyAccess, conditions, bindings, out _))
-                return false;
-        }
+    private bool CompileObjectPatternFields(ObjectPattern objectPattern, LuauExpression subject, List<LuauExpression> conditions, List<LuauStatement> bindings) =>
+        !(
+            from field in objectPattern.Fields
+            let propertyAccess = new Luau.AST.PropertyAccess(subject, [field.Name.Text])
+            where !TryCompilePattern(field.Pattern, propertyAccess, conditions, bindings, out _)
+            select field
+        ).Any();
 
-        return true;
-    }
-
-    // Rest-array codegen shape is a judgment call (upstream issue #82 leaves it undecided): slice the
-    // remaining elements into a fresh table via `table.move(subject, N + 1, #subject, 1, {})`, which
-    // copies subject[N+1..#subject] into a new table starting at index 1.
-    private static LuauExpression BuildArrayRestSlice(LuauExpression subject, int elementCount)
+    private static Call BuildArrayRestSlice(LuauExpression subject, int elementCount)
     {
         var length = new Luau.AST.UnaryOperator("#", subject);
         return new Call(

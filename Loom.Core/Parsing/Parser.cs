@@ -132,29 +132,6 @@ public sealed partial class Parser(LexerResult lexerResult)
         return current;
     }
 
-    /// <summary>
-    ///     Skip tokens until a statement boundary so later syntax can still be parsed.
-    ///     Consumes ';' ; leaves '}' and statement keywords for the caller.
-    /// </summary>
-    private void Synchronize()
-    {
-        while (!IsEof())
-            switch (Current().Kind)
-            {
-                case SyntaxKind.Semicolon:
-                    Advance();
-                    return;
-                case SyntaxKind.RBrace:
-                    return;
-                default:
-                    if (AtStatementKeyword())
-                        return;
-
-                    Advance();
-                    break;
-            }
-    }
-
     private Token MissingToken(SyntaxKind kind)
     {
         var current = Current();
@@ -186,6 +163,7 @@ public sealed partial class Parser(LexerResult lexerResult)
                         return i;
 
                     break;
+
                 case SyntaxKind.Eof:
                     return null;
             }
