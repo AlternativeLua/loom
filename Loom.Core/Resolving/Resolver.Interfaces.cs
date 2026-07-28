@@ -76,8 +76,22 @@ public sealed partial class Resolver
         interfaceSymbol.Implementations.Add(implement);
         interfaceSymbol.Implements.Add(traitSymbol);
         traitSymbol.ImplementedBy.Add(interfaceSymbol);
-        if (interfaceSymbol.Properties
+        if (interfaceSymbol.FullProperties
             .Any(property => !DeclareVariable(implement, new InjectedPropertyVariableSymbol(implement, property.Name, interfaceSymbol, property.IsMutable))))
+        {
+            return false;
+        }
+
+        // A bare call to a method from another trait already implemented on this interface resolves the
+        // same way a bare call to one of THIS block's own methods already does (as an ordinary function
+        // symbol), so it compiles through the same self+colon-call codegen path without any changes there.
+        // Only traits implemented earlier in the file are visible here, matching the same source-order
+        // dependency '@.method()' already has for cross-trait access.
+        var otherMethods = interfaceSymbol.FullImplementations
+            .Where(other => other != implement)
+            .SelectMany(other => other.Body.Implementations);
+
+        if (otherMethods.Any(declaration => !DeclareVariable(declaration, new Symbol(declaration, SymbolKind.Function, declaration.Name.Text))))
             return false;
 
         Visit(implement.Body);

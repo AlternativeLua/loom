@@ -60,15 +60,11 @@ public sealed partial class TypeChecker
             return BindType(selfExpression, PrimitiveType.Never);
 
         var interfaceType = _semanticModel.GetType(implement.InterfaceName);
-
-        // '@' sees every method from every trait implemented on this interface - not just the trait
-        // being implemented by the enclosing block - so a fresh InterfaceType is built here rather than
-        // reusing the cached one, to avoid mutating a type shared with unrelated `new Foo {}` call sites.
         if (interfaceType is not InterfaceType nonGenericInterfaceType
             || _semanticModel.GetSymbol(implement.InterfaceName, SymbolKind.Interface) is not InterfaceSymbol interfaceSymbol)
             return BindType(selfExpression, interfaceType);
 
-        var traitProperties = interfaceSymbol.Implementations
+        var traitProperties = interfaceSymbol.FullImplementations
             .SelectMany(i => i.Body.Implementations)
             .Select(declaration => new ObjectProperty(false, declaration.Name.Text, _semanticModel.GetType(declaration)))
             .ToList();
