@@ -240,12 +240,74 @@ public sealed partial class Parser
         return new TypeAlias(keyword, name, typeParameters, equalsTypeClause);
     }
 
-    private VariableDeclaration ParseVariableDeclaration(Token keyword)
+    private Statement ParseVariableDeclaration(Token keyword)
     {
+        if (Current().Kind is SyntaxKind.LBracket or SyntaxKind.LBrace or SyntaxKind.LParen)
+            return ParseDestructuringDeclaration(keyword);
+
         var name = ExpectIdentifier();
         var colonTypeClause = ParseColonTypeClause();
         var equalsValueClause = ParseEqualsValueClause();
         return new VariableDeclaration(keyword, name, colonTypeClause, equalsValueClause);
+    }
+
+    private DestructuringDeclaration ParseDestructuringDeclaration(Token keyword)
+    {
+        var target = ParseDestructuringTarget();
+        var colonTypeClause = ParseColonTypeClause();
+        var equalsValueClause = ParseEqualsValueClause();
+        return new DestructuringDeclaration(keyword, target, colonTypeClause, equalsValueClause);
+    }
+
+    private DestructuringTarget ParseDestructuringTarget() =>
+        Current().Kind switch
+        {
+            SyntaxKind.LBrace => ParseObjectDestructuringTarget(),
+            SyntaxKind.LParen => ParseTupleDestructuringTarget(),
+            _ => ParseArrayDestructuringTarget()
+        };
+
+    private TupleDestructuringTarget ParseTupleDestructuringTarget()
+    {
+        var leftParen = Expect(SyntaxKind.LParen);
+        var elements = ParseDelimited(ParseDestructuringElement);
+        var rightParen = Expect(SyntaxKind.RParen);
+        return new TupleDestructuringTarget(leftParen, rightParen, elements);
+    }
+
+    private ArrayDestructuringTarget ParseArrayDestructuringTarget()
+    {
+        var leftBracket = Expect(SyntaxKind.LBracket);
+        var elements = ParseDelimited(ParseDestructuringElement);
+        var rightBracket = Expect(SyntaxKind.RBracket);
+        return new ArrayDestructuringTarget(leftBracket, rightBracket, elements);
+    }
+
+    private DestructuringElement ParseDestructuringElement()
+    {
+        if (Match(out var dotDot, SyntaxKind.DotDot))
+            _diagnostics.Error(dotDot, InternalCodes.InvalidDestructureTarget, "Destructuring targets do not support rest elements.");
+
+        return new DestructuringElement(ExpectIdentifier());
+    }
+
+    private ObjectDestructuringTarget ParseObjectDestructuringTarget()
+    {
+        var leftBrace = Expect(SyntaxKind.LBrace);
+        var fields = ParseDelimited(ParseObjectDestructuringField);
+        var rightBrace = Expect(SyntaxKind.RBrace);
+        return new ObjectDestructuringTarget(leftBrace, rightBrace, fields);
+    }
+
+    private ObjectDestructuringField ParseObjectDestructuringField()
+    {
+        if (Match(out var dotDot, SyntaxKind.DotDot))
+            _diagnostics.Error(dotDot, InternalCodes.InvalidDestructureTarget, "Destructuring targets do not support rest elements.");
+
+        var name = ExpectIdentifier();
+        var colon = Match(out var colonToken, SyntaxKind.Colon) ? colonToken : null;
+        var alias = colon != null ? ExpectIdentifier() : null;
+        return new ObjectDestructuringField(name, colon, alias);
     }
 
     private EnumDeclaration ParseEnumDeclaration(Token keyword)

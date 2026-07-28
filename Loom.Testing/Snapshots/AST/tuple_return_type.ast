@@ -1,0 +1,92 @@
+﻿FunctionDeclaration(
+  ReturnType: ColonTypeClause(
+    ColonToken: Token(Colon, ":")
+    Type: TupleType(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Commas: [
+        Token(
+          Kind: Comma
+          Text: ","
+        )
+      ]
+      Types: [
+        PrimitiveType(
+          Kind: String
+        )
+        PrimitiveType(
+          Kind: Number
+        )
+      ]
+    )
+  )
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: [
+      Return(
+        Expression: TupleExpression(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          Commas: [
+            Token(
+              Kind: Comma
+              Text: ","
+            )
+          ]
+          Expressions: [
+            Literal(
+              Token(StringLiteral, ""abc"")
+              Value: "abc"
+            )
+            Literal(
+              Token(NumberLiteral, "420")
+              Value: 420
+            )
+          ]
+        )
+      )
+    ]
+  )
+  Parameters: null
+  TypeParameters: null
+  Name: Token(Identifier, "returns_tuple")
+)
+VariableDeclaration(
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: Invocation(
+      Expression: Identifier(
+        Name: Token(Identifier, "returns_tuple")
+        Token(Identifier, "returns_tuple")
+      )
+      TypeArguments: null
+      Arguments(
+        LeftParen: Token(LParen, "(")
+        RightParen: Token(RParen, ")")
+        ArgumentList: []
+      )
+    )
+  )
+  ColonTypeClause: null
+  Name: Token(Identifier, "t")
+)
+ExpressionStatement(
+  Expression: Invocation(
+    Expression: Identifier(
+      Name: Token(Identifier, "print")
+      Token(Identifier, "print")
+    )
+    TypeArguments: null
+    Arguments(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ArgumentList: [
+        Identifier(
+          Name: Token(Identifier, "t")
+          Token(Identifier, "t")
+        )
+      ]
+    )
+  )
+)

@@ -1,0 +1,111 @@
+﻿InterfaceDeclaration(
+  SealedKeyword: null
+  ColonTypeListClause: null
+  Body: InterfaceBody(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Members: [
+      PropertyDeclaration(
+        MutKeyword: null
+        ColonTypeClause(
+          ColonToken: Token(Colon, ":")
+          Type: PrimitiveType(
+            Kind: String
+          )
+        )
+        Attributes: null
+        Name: Token(Identifier, "name")
+      )
+      PropertyDeclaration(
+        MutKeyword: null
+        ColonTypeClause(
+          ColonToken: Token(Colon, ":")
+          Type: PrimitiveType(
+            Kind: Number
+          )
+        )
+        Attributes: null
+        Name: Token(Identifier, "age")
+      )
+    ]
+  )
+  TypeParameters: null
+  Name: Token(Identifier, "User")
+)
+VariableDeclaration(
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: InterfaceInvocation(
+      Name: Identifier(
+        Name: Token(Identifier, "User")
+        Token(Identifier, "User")
+      )
+      TypeArguments: null
+      Body: InterfaceInvocationBody(
+        Initializers: [
+          PropertyInitializer(
+            Name: Token(Identifier, "name")
+            Colon: Token(Colon, ":")
+            Expression: Literal(
+              Token(StringLiteral, ""Ada"")
+              Value: "Ada"
+            )
+          )
+          PropertyInitializer(
+            Name: Token(Identifier, "age")
+            Colon: Token(Colon, ":")
+            Expression: Literal(
+              Token(NumberLiteral, "30")
+              Value: 30
+            )
+          )
+        ]
+        RightBrace: Token(RBrace, "}")
+        LeftBrace: Token(LBrace, "{")
+      )
+    )
+  )
+  ColonTypeClause: null
+  Name: Token(Identifier, "user")
+)
+DestructuringDeclaration(
+  Target: ObjectDestructuringTarget(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Fields: [
+      ObjectDestructuringField(
+        Name: Token(Identifier, "age")
+        Colon: Token(Colon, ":")
+        Alias: Token(Identifier, "userAge")
+        BindingName: Token(Identifier, "userAge")
+      )
+    ]
+  )
+  ColonTypeClause: null
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: Identifier(
+      Name: Token(Identifier, "user")
+      Token(Identifier, "user")
+    )
+  )
+)
+ExpressionStatement(
+  Expression: Invocation(
+    Expression: Identifier(
+      Name: Token(Identifier, "print")
+      Token(Identifier, "print")
+    )
+    TypeArguments: null
+    Arguments(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ArgumentList: [
+        Identifier(
+          Name: Token(Identifier, "userAge")
+          Token(Identifier, "userAge")
+        )
+      ]
+    )
+  )
+)

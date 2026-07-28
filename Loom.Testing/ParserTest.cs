@@ -876,4 +876,127 @@ public class ParserTest
         Assert.Null(functionDeclaration.Parameters!.ParameterList.Single().DotDot);
     }
     #endregion Rest Parameters
+
+    #region Destructuring
+    [Fact]
+    public void Parses_ArrayDestructuringTarget()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let [first, second] = array;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<ArrayDestructuringTarget>(destructuringDeclaration.Target);
+        Assert.Equal(["first", "second"], target.Elements.Select(e => e.Name.Text));
+    }
+
+    [Fact]
+    public void Parses_ObjectDestructuringTarget()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let { name, age } = user;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<ObjectDestructuringTarget>(destructuringDeclaration.Target);
+        Assert.Equal(["name", "age"], target.Fields.Select(f => f.Name.Text));
+        Assert.All(target.Fields, f => Assert.Null(f.Alias));
+    }
+
+    [Fact]
+    public void Parses_ObjectDestructuringTarget_WithFieldAlias()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let { age: userAge } = user;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<ObjectDestructuringTarget>(destructuringDeclaration.Target);
+        var field = Assert.Single(target.Fields);
+        Assert.Equal("age", field.Name.Text);
+        Assert.Equal("userAge", field.Alias!.Text);
+        Assert.Equal("userAge", field.BindingName.Text);
+    }
+
+    [Fact]
+    public void ThrowsFor_RestElement_InArrayDestructuringTarget()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("let [first, ..rest] = array;");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.InvalidDestructureTarget);
+        Assert.NotNull(diagnostic);
+    }
+
+    [Fact]
+    public void ThrowsFor_RestElement_InObjectDestructuringTarget()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("let { name, ..rest } = user;");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.InvalidDestructureTarget);
+        Assert.NotNull(diagnostic);
+    }
+
+    [Fact]
+    public void Parses_PlainVariableDeclaration_Unaffected()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x = 1;"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        Assert.Equal("x", variableDeclaration.Name.Text);
+    }
+    #endregion Destructuring
+
+    #region Tuples
+    [Fact]
+    public void Parses_TupleType()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: (string, number) = (\"a\", 1);"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var tupleType = Assert.IsType<TupleType>(variableDeclaration.ColonTypeClause!.Type);
+        Assert.Equal(2, tupleType.Types.Count);
+        Assert.IsType<PrimitiveType>(tupleType.Types[0]);
+        Assert.IsType<PrimitiveType>(tupleType.Types[1]);
+    }
+
+    [Fact]
+    public void Parses_TupleExpression()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x = (\"a\", 1);"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var tupleExpression = Assert.IsType<TupleExpression>(variableDeclaration.EqualsValueClause!.Value);
+        Assert.Equal(2, tupleExpression.Expressions.Count);
+    }
+
+    [Fact]
+    public void Parses_ParenthesizedExpression_WithoutComma_StaysGrouping()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x = (1);"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        Assert.IsType<Parenthesized>(variableDeclaration.EqualsValueClause!.Value);
+    }
+
+    [Fact]
+    public void Parses_ParenthesizedType_WithoutComma_StaysGrouping()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: (number) = 1;"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        Assert.IsType<ParenthesizedType>(variableDeclaration.ColonTypeClause!.Type);
+    }
+
+    [Fact]
+    public void Parses_TupleDestructuringTarget()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let (one, two) = t;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<TupleDestructuringTarget>(destructuringDeclaration.Target);
+        Assert.Equal(["one", "two"], target.Elements.Select(e => e.Name.Text));
+    }
+
+    [Fact]
+    public void Parses_TuplePattern_InMatch()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("match t { (a, b) -> a, _ -> \"none\" };"));
+        var matchExpression = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(result.Tree.Statements.Single()).Expression);
+        var tuplePattern = Assert.IsType<TuplePattern>(matchExpression.Arms[0].Pattern);
+        Assert.Equal(2, tuplePattern.Patterns.Count);
+        Assert.IsType<IdentifierPattern>(tuplePattern.Patterns[0]);
+        Assert.IsType<IdentifierPattern>(tuplePattern.Patterns[1]);
+    }
+
+    [Fact]
+    public void ThrowsFor_RestElement_InTuplePattern()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("match t { (a, ..b) -> a, _ -> \"none\" };");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.UnexpectedToken);
+        Assert.NotNull(diagnostic);
+    }
+    #endregion Tuples
 }

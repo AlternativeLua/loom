@@ -100,6 +100,12 @@ public static class InternalCodes
     public const string RestParameterNotLast = "L376";
     public const string MissingRestParameterType = "L377";
     public const string InvalidRestParameterType = "L378";
+    public const string TupleArityMismatch = "L379";
+    public const string TupleIndexOutOfRange = "L380";
+    public const string TupleRestArityMismatch = "L381";
+    public const string InvalidDestructureSource = "L382";
+    public const string UnknownDestructureProperty = "L383";
+    public const string InvalidDestructureTarget = "L384";
 
     public const string SimplifiableCode = "L400";
 }

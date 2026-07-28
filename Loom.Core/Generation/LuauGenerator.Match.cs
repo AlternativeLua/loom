@@ -247,6 +247,23 @@ public sealed partial class LuauGenerator
                 isIrrefutable = false;
                 return true;
 
+            case TuplePattern tuplePattern:
+            {
+                conditions.Add(new BinaryOperator(TypeofCall(subject), "==", new StringLiteral("table")));
+                for (var i = 0; i < tuplePattern.Patterns.Count; i++)
+                {
+                    var elementAccess = new Luau.AST.ElementAccess(subject, new NumberLiteral(i + 1));
+                    if (!TryCompilePattern(tuplePattern.Patterns[i], elementAccess, conditions, bindings, out _))
+                    {
+                        isIrrefutable = false;
+                        return false;
+                    }
+                }
+
+                isIrrefutable = false;
+                return true;
+            }
+
             case OrPattern orPattern:
             {
                 var alternativeConditions = new List<LuauExpression>();

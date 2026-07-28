@@ -29,6 +29,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         {
             Block block => AnalyzeBlock(block, state),
             VariableDeclaration variableDeclaration => AnalyzeVariableDeclaration(variableDeclaration, state),
+            DestructuringDeclaration destructuringDeclaration => AnalyzeDestructuringDeclaration(destructuringDeclaration, state),
             FunctionDeclaration functionDeclaration => AnalyzeFunctionDeclaration(functionDeclaration, state),
             EventDeclaration eventDeclaration => AnalyzeEventDeclaration(eventDeclaration, state),
             InterfaceDeclaration interfaceDeclaration => AnalyzeInterfaceDeclaration(interfaceDeclaration, state),
@@ -121,6 +122,8 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
                     .Concat(arrayPattern.Rest != null ? CollectPatternBindingSymbols(arrayPattern.Rest) : []),
             RestPattern restPattern =>
                 CollectPatternBindingSymbols(restPattern.Pattern),
+            TuplePattern tuplePattern =>
+                tuplePattern.Patterns.SelectMany(CollectPatternBindingSymbols),
             OrPattern orPattern =>
                 orPattern.Patterns.SelectMany(CollectPatternBindingSymbols),
             RangePattern rangePattern =>
@@ -207,6 +210,28 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         var symbol = semanticModel.GetDeclarationSymbol(variableDeclaration);
         return BindState(variableDeclaration, symbol == null ? result : result.WithInitialized(symbol));
     }
+
+    private FlowState AnalyzeDestructuringDeclaration(DestructuringDeclaration destructuringDeclaration, FlowState state)
+    {
+        if (destructuringDeclaration.EqualsValueClause == null)
+            return BindState(destructuringDeclaration, state);
+
+        var result = AnalyzeExpression(destructuringDeclaration.EqualsValueClause.Value, state);
+        var symbols = CollectDestructuringBindingSymbols(destructuringDeclaration.Target);
+        return BindState(destructuringDeclaration, result.WithInitialized(symbols));
+    }
+
+    private IEnumerable<Symbol> CollectDestructuringBindingSymbols(DestructuringTarget target) =>
+        target switch
+        {
+            ArrayDestructuringTarget arrayTarget =>
+                arrayTarget.Elements.Select(element => semanticModel.GetDeclarationSymbol(element)).OfType<Symbol>(),
+            ObjectDestructuringTarget objectTarget =>
+                objectTarget.Fields.Select(field => semanticModel.GetDeclarationSymbol(field)).OfType<Symbol>(),
+            TupleDestructuringTarget tupleTarget =>
+                tupleTarget.Elements.Select(element => semanticModel.GetDeclarationSymbol(element)).OfType<Symbol>(),
+            _ => []
+        };
 
     private FlowState AnalyzeIf(If @if, FlowState state)
     {

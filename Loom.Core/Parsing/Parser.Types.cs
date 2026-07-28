@@ -119,9 +119,27 @@ public sealed partial class Parser
         return new FunctionType(fnKeyword, typeParameters, parameters, returnType);
     }
 
-    private ParenthesizedType ParseParenthesizedType(Token leftParen)
+    private TypeExpression ParseParenthesizedType(Token leftParen)
     {
         var type = ParseType();
+        if (Current().Kind == SyntaxKind.Comma)
+        {
+            var types = new List<TypeExpression> { type };
+            var commas = new List<Token>();
+            while (Match(out var comma, SyntaxKind.Comma))
+            {
+                commas.Add(comma);
+                types.Add(ParseType());
+            }
+
+            var tupleRightParen = Expect(
+                SyntaxKind.RParen,
+                got => $"Expected ')' here to close '{leftParen.Text}' at character {leftParen.GetLocation().Start.Character}, got {SafeTokenText(got)}."
+            );
+
+            return new TupleType(leftParen, tupleRightParen, commas, types);
+        }
+
         var rightParen = Expect(
             SyntaxKind.RParen,
             got => $"Expected ')' here to close '{leftParen.Text}' at character {leftParen.GetLocation().Start.Character}, got {SafeTokenText(got)}."

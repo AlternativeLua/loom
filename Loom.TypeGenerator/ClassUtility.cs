@@ -63,7 +63,7 @@ internal static class ClassUtility
             <= 0 => null,
             null => "void",
             1 => typeNames[0],
-            > 1 => "unknown[]" // $"({string.Join(", ", typeNames)})" // undecided tuple syntax
+            > 1 => $"({string.Join(", ", typeNames)})"
         };
     }
 

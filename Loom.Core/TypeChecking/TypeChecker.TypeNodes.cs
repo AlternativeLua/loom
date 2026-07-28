@@ -82,6 +82,7 @@ public sealed partial class TypeChecker
     }
 
     public override Type VisitArrayType(ArrayType arrayType) => BindType(arrayType, new Types.ArrayType(Visit(arrayType.ElementType), arrayType.MutKeyword != null));
+    public override Type VisitTupleType(Parsing.AST.TupleType tupleType) => BindType(tupleType, new Types.TupleType(tupleType.Types.ConvertAll(Visit)));
     public override Type VisitOptionalType(OptionalType optionalType) => BindType(optionalType, new Types.OptionalType(Visit(optionalType.NonNullableType)));
     public override Type VisitPrimitiveType(PrimitiveType primitiveType) => BindType(primitiveType, new Types.PrimitiveType(primitiveType.Kind));
     public override Type VisitLiteralType(LiteralType literalType) => BindType(literalType, new Types.LiteralType(literalType.Value));
@@ -91,6 +92,9 @@ public sealed partial class TypeChecker
         var symbol = _semanticModel.GetSymbol(typeName);
         if (symbol != null)
         {
+            if (IsTupleMarkerSymbol(symbol))
+                return BindType(typeName, Intrinsics.TupleMarker);
+
             var declaredType = ResolveHoistedType(symbol);
             if (symbol is { Kind: SymbolKind.EnumType } && declaredType is ObjectType objectType)
                 return BindType(typeName, typeName.Parent is IndexedType or KeyOf ? objectType : objectType.PropertyUnion());
@@ -108,6 +112,8 @@ public sealed partial class TypeChecker
         _diagnostics.Error(typeName, InternalCodes.CannotFindSymbol, $"Cannot find symbol for declaration of type '{typeName.Name.Text}'.");
         return BindType(typeName, Types.PrimitiveType.Never);
     }
+
+    private static bool IsTupleMarkerSymbol(Symbol symbol) => symbol is { IsIntrinsic: true, Name: "Tuple" } && symbol.File.Name == "loom.loom";
 
     public override Types.TypeParameter VisitTypeParameter(TypeParameter typeParameter)
     {

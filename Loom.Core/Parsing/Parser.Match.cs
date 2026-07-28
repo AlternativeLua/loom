@@ -76,6 +76,9 @@ public sealed partial class Parser
         if (Match(out var leftBrace, SyntaxKind.LBrace))
             return ParseObjectPattern(leftBrace);
 
+        if (Match(out var leftParen, SyntaxKind.LParen))
+            return ParseTuplePattern(leftParen);
+
         if (Match(out var letKeyword, SyntaxKind.LetKeyword))
         {
             var letName = ExpectIdentifier("binding name");
@@ -212,6 +215,16 @@ public sealed partial class Parser
 
         rightBracket = Expect(SyntaxKind.RBracket);
         return new ArrayPattern(leftBracket, rightBracket, elements, rest);
+    }
+
+    private TuplePattern ParseTuplePattern(Token leftParen)
+    {
+        if (Match(out var immediateRightParen, SyntaxKind.RParen))
+            return new TuplePattern(leftParen, immediateRightParen, []);
+
+        var patterns = ParseDelimited(ParsePattern);
+        var rightParen = Expect(SyntaxKind.RParen);
+        return new TuplePattern(leftParen, rightParen, patterns);
     }
 
     private ObjectPattern ParseObjectPattern(Token leftBrace)

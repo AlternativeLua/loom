@@ -1,0 +1,116 @@
+﻿VariableDeclaration(
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: TupleExpression(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Commas: [
+        Token(
+          Kind: Comma
+          Text: ","
+        )
+      ]
+      Expressions: [
+        Literal(
+          Token(StringLiteral, ""abc"")
+          Value: "abc"
+        )
+        Literal(
+          Token(NumberLiteral, "420")
+          Value: 420
+        )
+      ]
+    )
+  )
+  ColonTypeClause(
+    ColonToken: Token(Colon, ":")
+    Type: TupleType(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Commas: [
+        Token(
+          Kind: Comma
+          Text: ","
+        )
+      ]
+      Types: [
+        PrimitiveType(
+          Kind: String
+        )
+        PrimitiveType(
+          Kind: Number
+        )
+      ]
+    )
+  )
+  Name: Token(Identifier, "t")
+)
+VariableDeclaration(
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: MatchExpression(
+      Expression: Identifier(
+        Name: Token(Identifier, "t")
+        Token(Identifier, "t")
+      )
+      LeftBrace: Token(LBrace, "{")
+      RightBrace: Token(RBrace, "}")
+      Arms: [
+        MatchArm(
+          Pattern: TuplePattern(
+            LeftParen: Token(LParen, "(")
+            RightParen: Token(RParen, ")")
+            Patterns: [
+              IdentifierPattern(
+                Name: Token(Identifier, "a")
+              )
+              IdentifierPattern(
+                Name: Token(Identifier, "b")
+              )
+            ]
+          )
+          When: null
+          Guard: null
+          Arrow: Token(Arrow, "->")
+          Body: Identifier(
+            Name: Token(Identifier, "a")
+            Token(Identifier, "a")
+          )
+        )
+        MatchArm(
+          Pattern: WildcardPattern(
+            Token(Identifier, "_")
+          )
+          When: null
+          Guard: null
+          Arrow: Token(Arrow, "->")
+          Body: Literal(
+            Token(StringLiteral, ""none"")
+            Value: "none"
+          )
+        )
+      ]
+    )
+  )
+  ColonTypeClause: null
+  Name: Token(Identifier, "result")
+)
+ExpressionStatement(
+  Expression: Invocation(
+    Expression: Identifier(
+      Name: Token(Identifier, "print")
+      Token(Identifier, "print")
+    )
+    TypeArguments: null
+    Arguments(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ArgumentList: [
+        Identifier(
+          Name: Token(Identifier, "result")
+          Token(Identifier, "result")
+        )
+      ]
+    )
+  )
+)

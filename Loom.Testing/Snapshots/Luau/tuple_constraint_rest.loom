@@ -1,0 +1,2 @@
+declare fn something<T: Tuple>(..args: T): void;
+something::<(string, number)>("abc", 420);

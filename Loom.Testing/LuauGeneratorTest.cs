@@ -3314,4 +3314,202 @@ public class LuauGeneratorTest
         Assert.Equal("-", unary.Operator);
         Assert.Equal("x", Assert.IsType<Identifier>(unary.Operand).Name);
     }
+
+    [Fact]
+    public void Generates_ArrayDestructuring_AsIndexedConsts()
+    {
+        var luauTree = Utility.GetLuauAST("let array = [1, 2]; let [first, second] = array;", true);
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        var first = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        Assert.Equal("first", first.Name);
+        var firstAccess = Assert.IsType<ElementAccess>(first.Initializer);
+        Assert.Equal("array", Assert.IsType<Identifier>(firstAccess.Target).Name);
+        Assert.Equal(1d, Assert.IsType<NumberLiteral>(firstAccess.Index).Value);
+
+        var second = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("second", second.Name);
+        var secondAccess = Assert.IsType<ElementAccess>(second.Initializer);
+        Assert.Equal(2d, Assert.IsType<NumberLiteral>(secondAccess.Index).Value);
+    }
+
+    [Fact]
+    public void Generates_ArrayDestructuring_FromNonTrivialInitializer_SpillsToTemp()
+    {
+        var luauTree = Utility.GetLuauAST("let [first, second] = [1, 2, 3];", true);
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        var temp = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_destructure", temp.Name);
+        Assert.IsType<Table>(temp.Initializer);
+
+        var first = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        var firstAccess = Assert.IsType<ElementAccess>(first.Initializer);
+        Assert.Equal("_destructure", Assert.IsType<Identifier>(firstAccess.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_ObjectDestructuring_AsPropertyConsts()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface User { name: string, age: number }
+            let user = new User { name: "Ada", age: 30 };
+            let { name, age } = user;
+            """,
+            true
+        );
+
+        var name = Assert.IsType<ConstVariable>(luauTree.Statements[^2]);
+        Assert.Equal("name", name.Name);
+        var nameAccess = Assert.IsType<PropertyAccess>(name.Initializer);
+        Assert.Equal("user", Assert.IsType<Identifier>(nameAccess.Target).Name);
+        Assert.Equal(["name"], nameAccess.Names);
+
+        var age = Assert.IsType<ConstVariable>(luauTree.Statements[^1]);
+        Assert.Equal("age", age.Name);
+        Assert.Equal(["age"], Assert.IsType<PropertyAccess>(age.Initializer).Names);
+    }
+
+    [Fact]
+    public void Generates_ObjectDestructuring_WithAlias_BindsUnderAliasName_ReadsOriginalProperty()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface User { age: number }
+            let user = new User { age: 30 };
+            let { age: userAge } = user;
+            """,
+            true
+        );
+
+        var userAge = Assert.IsType<ConstVariable>(luauTree.Statements[^1]);
+        Assert.Equal("userAge", userAge.Name);
+        var access = Assert.IsType<PropertyAccess>(userAge.Initializer);
+        Assert.Equal(["age"], access.Names);
+    }
+
+    [Fact]
+    public void Generates_Destructuring_NoRefutabilityGuards()
+    {
+        var rendered = Utility.GetLuauAST("let array = [1, 2]; let [first, second] = array;", true).Render();
+        Assert.DoesNotContain("typeof", rendered);
+        Assert.DoesNotContain("if ", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleLiteral_AsTable()
+    {
+        var luauTree = Utility.GetLuauAST("let t = (\"abc\", 420);", true);
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
+        var table = Assert.IsType<Table>(variable.Initializer);
+        Assert.Equal(2, table.Initializers.Count);
+    }
+
+    [Fact]
+    public void Generates_TupleReturnType_RendersLuauMultiReturnSyntax()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                return ("abc", 420);
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("(): (string, number)", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleVariableAnnotation_RendersTableUnionType()
+    {
+        var rendered = Utility.GetLuauAST("let t: (string, number) = (\"abc\", 420);", true).Render();
+        Assert.Contains("{ string | number }", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleReturn_OfLiteral_EmitsNoTableOrUnpack()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                return ("abc", 420);
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("return \"abc\", 420", rendered);
+        Assert.DoesNotContain("table.unpack", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleReturn_OfVariable_WrapsTableUnpack()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                let t = ("abc", 420);
+                return t;
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("return table.unpack(t)", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleDestructure_OfLiteral_EmitsNoTableOrMultiConst()
+    {
+        var rendered = Utility.GetLuauAST("let (one, two) = (\"abc\", 420);", true).Render();
+        Assert.Contains("const one = \"abc\"", rendered);
+        Assert.Contains("const two = 420", rendered);
+        Assert.DoesNotContain("table.unpack", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleDestructure_OfCall_EmitsMultiConstNoUnpack()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                return ("abc", 420);
+            }
+            let (one, two) = returns_tuple();
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("const one, two = returns_tuple()", rendered);
+        Assert.DoesNotContain("table.unpack", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleDestructure_OfValue_WrapsTableUnpack()
+    {
+        var rendered = Utility.GetLuauAST("let t: (string, number) = (\"abc\", 420); let (one, two) = t;", true).Render();
+        Assert.Contains("const one, two = table.unpack(t)", rendered);
+    }
+
+    [Fact]
+    public void Generates_MatchTuplePattern_AsIndexedAccess_NoTableMoveOrSlice()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            let t: (string, number) = ("abc", 420);
+            match t {
+                (a, b) -> a,
+                _ -> "none",
+            };
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("typeof(t) == \"table\"", rendered);
+        Assert.Contains("t[1]", rendered);
+        Assert.Contains("t[2]", rendered);
+        Assert.DoesNotContain("table.move", rendered);
+    }
 }

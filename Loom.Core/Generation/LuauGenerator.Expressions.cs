@@ -107,6 +107,9 @@ public sealed partial class LuauGenerator
 
     public override LuauNode VisitArrayLiteral(ArrayLiteral arrayLiteral) => new Table(arrayLiteral.Expressions.ConvertAll(e => new TableInitializer(Visit(e))));
 
+    public override LuauNode VisitTupleExpression(TupleExpression tupleExpression) =>
+        new Table(tupleExpression.Expressions.ConvertAll(e => new TableInitializer(Visit(e))));
+
     public override LuauNode VisitLiteral(Literal literal) =>
         literal.Value switch
         {

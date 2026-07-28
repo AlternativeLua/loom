@@ -1,0 +1,4 @@
+let t: (string, number) = ("abc", 420);
+let (one, two) = t;
+print(one);
+print(two);

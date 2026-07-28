@@ -1,0 +1,76 @@
+﻿DestructuringDeclaration(
+  Target: TupleDestructuringTarget(
+    LeftParen: Token(LParen, "(")
+    RightParen: Token(RParen, ")")
+    Elements: [
+      DestructuringElement(
+        Name: Token(Identifier, "one")
+      )
+      DestructuringElement(
+        Name: Token(Identifier, "two")
+      )
+    ]
+  )
+  ColonTypeClause: null
+  EqualsValueClause(
+    EqualsToken: Token(Equals, "=")
+    Value: TupleExpression(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      Commas: [
+        Token(
+          Kind: Comma
+          Text: ","
+        )
+      ]
+      Expressions: [
+        Literal(
+          Token(StringLiteral, ""abc"")
+          Value: "abc"
+        )
+        Literal(
+          Token(NumberLiteral, "420")
+          Value: 420
+        )
+      ]
+    )
+  )
+)
+ExpressionStatement(
+  Expression: Invocation(
+    Expression: Identifier(
+      Name: Token(Identifier, "print")
+      Token(Identifier, "print")
+    )
+    TypeArguments: null
+    Arguments(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ArgumentList: [
+        Identifier(
+          Name: Token(Identifier, "one")
+          Token(Identifier, "one")
+        )
+      ]
+    )
+  )
+)
+ExpressionStatement(
+  Expression: Invocation(
+    Expression: Identifier(
+      Name: Token(Identifier, "print")
+      Token(Identifier, "print")
+    )
+    TypeArguments: null
+    Arguments(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ArgumentList: [
+        Identifier(
+          Name: Token(Identifier, "two")
+          Token(Identifier, "two")
+        )
+      ]
+    )
+  )
+)

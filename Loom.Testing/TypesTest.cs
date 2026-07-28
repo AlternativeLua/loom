@@ -1820,4 +1820,66 @@ public class TypesTest
         Assert.Contains(property, derived.Properties);
         Assert.Same(property, derived.GetProperty("id"));
     }
+
+    [Fact]
+    public void TupleType_Equality_ByArityAndElements()
+    {
+        var tuple1 = new TupleType([String, Number]);
+        var tuple2 = new TupleType([String, Number]);
+        var tuple3 = new TupleType([Number, String]);
+        var tuple4 = new TupleType([String]);
+
+        Assert.True(tuple1.Equals(tuple2));
+        Assert.False(tuple1.Equals(tuple3));
+        Assert.False(tuple1.Equals(tuple4));
+        Assert.False(tuple1.Equals(new ArrayType(String, false)));
+    }
+
+    [Fact]
+    public void TupleType_AssignableToTuple_WhenArityAndElementsMatch()
+    {
+        var source = new TupleType([new LiteralType("abc"), new LiteralType(1L)]);
+        var target = new TupleType([String, Number]);
+        Assert.True(source.IsAssignableTo(target));
+        Assert.False(target.IsAssignableTo(source));
+    }
+
+    [Fact]
+    public void TupleType_NotAssignable_OnArityMismatch()
+    {
+        var source = new TupleType([String, Number]);
+        var target = new TupleType([String, Number, Bool]);
+        Assert.False(source.IsAssignableTo(target));
+    }
+
+    [Fact]
+    public void TupleType_AssignableToArray_WhenAllElementsAssignable()
+    {
+        var tuple = new TupleType([String, String]);
+        Assert.True(tuple.IsAssignableTo(new ArrayType(String, false)));
+        Assert.False(tuple.IsAssignableTo(new ArrayType(Number, false)));
+    }
+
+    [Fact]
+    public void TupleType_NotAssignableToMutableArray()
+    {
+        var tuple = new TupleType([String, String]);
+        Assert.False(tuple.IsAssignableTo(new ArrayType(String, true)));
+    }
+
+    [Fact]
+    public void TupleType_LengthProperty_IsLiteralArityType()
+    {
+        var tuple = new TupleType([String, Number, Bool]);
+        var length = tuple.GetProperty("length");
+        Assert.NotNull(length);
+        Assert.Equal(new LiteralType(3L), length.ValueType);
+    }
+
+    [Fact]
+    public void TupleType_ToString()
+    {
+        var tuple = new TupleType([String, Number]);
+        Assert.Equal("(string, number)", tuple.ToString());
+    }
 }

@@ -79,6 +79,110 @@ public sealed partial class TypeChecker
         return BindType(variableDeclaration, TypeSimplifier.Simplify(finalType));
     }
 
+    public override Type VisitDestructuringDeclaration(DestructuringDeclaration destructuringDeclaration)
+    {
+        Type? declaredType = null;
+        if (destructuringDeclaration.ColonTypeClause != null)
+            declaredType = Visit(destructuringDeclaration.ColonTypeClause);
+
+        var initializerType = destructuringDeclaration.EqualsValueClause != null
+            ? declaredType != null
+                ? Check(destructuringDeclaration.EqualsValueClause.Value, declaredType, _flowState)
+                : Visit(destructuringDeclaration.EqualsValueClause)
+            : null;
+
+        var subjectType = declaredType ?? initializerType ?? Types.PrimitiveType.Unknown;
+        switch (destructuringDeclaration.Target)
+        {
+            case ArrayDestructuringTarget arrayTarget:
+                CheckArrayDestructuringTarget(arrayTarget, subjectType);
+                break;
+            case ObjectDestructuringTarget objectTarget:
+                CheckObjectDestructuringTarget(objectTarget, subjectType);
+                break;
+            case TupleDestructuringTarget tupleTarget:
+                CheckTupleDestructuringTarget(tupleTarget, subjectType);
+                break;
+        }
+
+        return BindType(destructuringDeclaration, Types.PrimitiveType.Void);
+    }
+
+    private void CheckTupleDestructuringTarget(TupleDestructuringTarget target, Type subjectType)
+    {
+        if (subjectType is not Types.TupleType tupleType)
+        {
+            if (Type.IsNotUnknown(subjectType) && Type.IsNotNever(subjectType))
+                _diagnostics.Error(
+                    target,
+                    InternalCodes.InvalidDestructureSource,
+                    $"Cannot destructure value of type '{subjectType}' with a tuple pattern."
+                );
+
+            foreach (var element in target.Elements)
+                BindType(element, Types.PrimitiveType.Unknown);
+
+            return;
+        }
+
+        if (target.Elements.Count != tupleType.ElementTypes.Count)
+        {
+            _diagnostics.Error(
+                target,
+                InternalCodes.TupleArityMismatch,
+                $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {target.Elements.Count} were provided."
+            );
+
+            foreach (var element in target.Elements)
+                BindType(element, Types.PrimitiveType.Unknown);
+
+            return;
+        }
+
+        for (var i = 0; i < target.Elements.Count; i++)
+            BindType(target.Elements[i], tupleType.ElementTypes[i]);
+    }
+
+    private void CheckArrayDestructuringTarget(ArrayDestructuringTarget target, Type subjectType)
+    {
+        var elementType = GetArrayElementType(subjectType);
+        if (elementType == null)
+        {
+            if (Type.IsNotUnknown(subjectType) && Type.IsNotNever(subjectType))
+                _diagnostics.Error(
+                    target,
+                    InternalCodes.InvalidDestructureSource,
+                    $"Cannot destructure value of type '{subjectType}' with an array pattern."
+                );
+
+            elementType = Types.PrimitiveType.Unknown;
+        }
+
+        foreach (var element in target.Elements)
+            BindType(element, elementType);
+    }
+
+    private void CheckObjectDestructuringTarget(ObjectDestructuringTarget target, Type subjectType)
+    {
+        foreach (var field in target.Fields)
+        {
+            var propertyType = TypeSimplifier.GetMemberPropertyType(subjectType, field.Name.Text);
+            if (propertyType == null)
+            {
+                if (Type.IsNotUnknown(subjectType) && Type.IsNotNever(subjectType))
+                    _diagnostics.Error(
+                        field,
+                        InternalCodes.UnknownDestructureProperty,
+                        $"Property '{field.Name.Text}' does not exist on type '{subjectType}'."
+                    );
+
+                propertyType = Types.PrimitiveType.Unknown;
+            }
+
+            BindType(field, propertyType);
+        }
+    }
+
     /// <remarks>
     ///     Imported declarations are typed by the module that exports them, and the base implementation would
     ///     return the type of the module path string — which would become the file's type when a module ends
@@ -120,7 +224,7 @@ public sealed partial class TypeChecker
         if (declaredType != null && parameter.EqualsValueClause != null)
             _semanticModel.TypeSolver.AddConstraint(initializerType!, declaredType, parameter.EqualsValueClause.Value);
 
-        if (parameter.DotDot != null && declaredType != null && !IsArrayType(declaredType))
+        if (parameter.DotDot != null && declaredType != null && !IsArrayType(declaredType) && !IsTupleRestType(declaredType))
             _diagnostics.Error(
                 parameter,
                 InternalCodes.InvalidRestParameterType,
@@ -131,6 +235,14 @@ public sealed partial class TypeChecker
     }
 
     private static bool IsArrayType(Type type) => (type is InstantiatedType instantiated ? instantiated.Expand() : type) is Types.ArrayType;
+
+    private static bool IsTupleRestType(Type type) =>
+        (type is InstantiatedType instantiated ? instantiated.Expand() : type) switch
+        {
+            Types.TupleType => true,
+            Types.TypeParameter { Constraint: Types.TupleMarkerType } => true,
+            _ => false
+        };
 
     private Type GetReturnType(FunctionDeclaration functionDeclaration)
     {

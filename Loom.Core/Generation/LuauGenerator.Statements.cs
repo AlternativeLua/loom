@@ -11,6 +11,7 @@ using ExpressionStatement = Loom.Core.Parsing.AST.ExpressionStatement;
 using Identifier = Loom.Core.Parsing.AST.Identifier;
 using Return = Loom.Core.Parsing.AST.Return;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
+using TupleType = Loom.Core.TypeChecking.Types.TupleType;
 
 namespace Loom.Core.Generation;
 
@@ -55,7 +56,19 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitAfter(After after) =>
         new Luau.AST.ExpressionStatement(LuauFactory.TaskCall("delay", [Visit(after.Duration), ..UnwrapFunctionArgument(after.Body)]));
 
-    public override LuauNode VisitReturn(Return @return) => new Luau.AST.Return(MaybeVisit<LuauExpression>(@return.Expression));
+    public override LuauNode VisitReturn(Return @return)
+    {
+        if (@return.Expression == null)
+            return new Luau.AST.Return();
+
+        if (_semanticModel.GetType(@return.Expression) is not TupleType)
+            return new Luau.AST.Return(Visit(@return.Expression));
+
+        if (@return.Expression is TupleExpression tupleExpression)
+            return new MultiReturn(tupleExpression.Expressions.ConvertAll(Visit));
+
+        return new Luau.AST.Return(LuauFactory.TableCall("unpack", [Visit(@return.Expression)]));
+    }
     public override LuauNode VisitExpressionStatement(ExpressionStatement expressionStatement) => WrapExpressionAsStatement(Visit(expressionStatement.Expression));
 
     public override LuauNode VisitFor(For @for)

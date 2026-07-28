@@ -65,6 +65,11 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitIntersectionType(IntersectionType intersectionType) => new Luau.AST.IntersectionType(intersectionType.Types.ConvertAll(Visit));
     public override LuauNode VisitUnionType(UnionType unionType) => new Luau.AST.UnionType(unionType.Types.ConvertAll(Visit));
     public override LuauNode VisitArrayType(ArrayType arrayType) => TableType.Array(Visit(arrayType.ElementType));
+
+    public override LuauNode VisitTupleType(Parsing.AST.TupleType tupleType) =>
+        tupleType.Parent is ColonTypeClause { Parent: DeclareFunctionSignature or FunctionType }
+            ? new Luau.AST.TupleType(tupleType.Types.ConvertAll(Visit))
+            : TableType.Array(new Luau.AST.UnionType(tupleType.Types.ConvertAll(Visit)));
     public override LuauNode VisitOptionalType(OptionalType optionalType) => new Luau.AST.OptionalType(Visit(optionalType.NonNullableType));
     public override LuauNode VisitParenthesizedType(ParenthesizedType parenthesized) => new Luau.AST.ParenthesizedType(Visit(parenthesized.Type));
     public override LuauNode VisitKeyOf(KeyOf keyOf) => new Luau.AST.TypeName("keyof", [Visit(keyOf.Type)]);

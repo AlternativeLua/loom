@@ -204,9 +204,27 @@ public sealed partial class Parser
         return new Arguments(leftParen, rightParen, argumentList);
     }
 
-    private Parenthesized ParseParenthesized(Token leftParen)
+    private Expression ParseParenthesized(Token leftParen)
     {
         var expression = ParseExpression();
+        if (Current().Kind == SyntaxKind.Comma)
+        {
+            var expressions = new List<Expression> { expression };
+            var commas = new List<Token>();
+            while (Match(out var comma, SyntaxKind.Comma))
+            {
+                commas.Add(comma);
+                expressions.Add(ParseExpression());
+            }
+
+            var tupleRightParen = Expect(
+                SyntaxKind.RParen,
+                got => $"Expected ')' here to close '{leftParen.Text}' at character {leftParen.GetLocation().Start.Character}, got {SafeTokenText(got)}."
+            );
+
+            return new TupleExpression(leftParen, tupleRightParen, commas, expressions);
+        }
+
         var rightParen = Expect(
             SyntaxKind.RParen,
             got => $"Expected ')' here to close '{leftParen.Text}' at character {leftParen.GetLocation().Start.Character}, got {SafeTokenText(got)}."

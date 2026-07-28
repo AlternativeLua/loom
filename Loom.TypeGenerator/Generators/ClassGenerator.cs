@@ -144,7 +144,7 @@ internal sealed class ClassGenerator(
         Write($"event {snakeName}{parameterList};");
     }
 
-    private void GenerateFunction(Function function, Class rbxClass)
+    internal void GenerateFunction(Function function, Class rbxClass)
     {
         var returnType = ClassUtility.SafeReturnType(function.ReturnType);
         var parameterList = GenerateParameterList(function.Parameters);
@@ -161,11 +161,8 @@ internal sealed class ClassGenerator(
         Write($"{snakeName}: fn{parameterList}: {returnType};");
     }
 
-    private void GenerateCallback(Callback callback, Class rbxClass)
+    internal void GenerateCallback(Callback callback, Class rbxClass)
     {
-        if (callback.ReturnType is { Length: > 1 })
-            return; // skip for now cause no tuple types
-
         var (name, description) = GetMemberNameAndDescription(callback, rbxClass);
         var parameterList = GenerateParameterList(callback.Parameters);
         var returnType = ClassUtility.SafeReturnType(callback.ReturnType);
@@ -213,6 +210,12 @@ internal sealed class ClassGenerator(
 
     private string GenerateParameter(Parameter parameter)
     {
+        // The Roblox API dump has no dedicated variadic-parameter flag; a parameter typed "Tuple" is its
+        // only signal for an untyped variadic, so it becomes a rest parameter (with no per-element type
+        // info to draw on). Rest parameters must be last, which a "Tuple"-typed parameter always is here.
+        if (parameter.Type.Name == "Tuple")
+            return $"..{parameter.Name}: unknown[]";
+
         var type = ClassUtility.SafeValueType(parameter.Type);
         var isOptional = !string.IsNullOrEmpty(parameter.Default) || type == "any" || type.EndsWith('?');
         if (!string.IsNullOrEmpty(parameter.Name) && type == "Instance")
