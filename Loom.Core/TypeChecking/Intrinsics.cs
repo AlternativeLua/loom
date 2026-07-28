@@ -51,19 +51,35 @@ public static class Intrinsics
         };
 
         var compilationUnit = new CompilationUnit(loomConfig);
-        var compiledFiles = compilationUnit.SourceFiles
+        var projectType = injectInto.Config.ProjectType;
+        var sourceFiles = compilationUnit.SourceFiles
             .Where(file =>
                 {
                     file.IsIntrinsic = true;
-
-                    var projectType = injectInto.Config.ProjectType;
                     if (projectType != ProjectType.Plugin && file.Name == "PluginSecurity.loom")
                         return false;
 
                     return projectType != ProjectType.Plugin || file.Name != "None.loom";
                 }
             )
+            .ToList();
+
+        // loom.loom is compiled first, ahead of everything else, and its declarations (luau_name,
+        // luau_method, override) are shared with the other intrinsic files via the compilation unit's
+        // Globals - the same channel a regular project's .d.loom files use to reach every other file in
+        // the unit. This is the only channel intrinsic files have for referencing each other: ambient
+        // intrinsic injection (DeclareIntrinsicSymbols) stays off for the whole compile below, guarded by
+        // _compilingIntrinsic, to avoid recursing back into this same method.
+        var baseFile = sourceFiles.Find(file => file.Name == "loom.loom");
+        var baseCompiled = baseFile != null ? compilationUnit.Compile(baseFile) : null;
+        if (baseCompiled != null)
+            foreach (var symbol in baseCompiled.Tree.Statements.SelectMany(statement => baseCompiled.SemanticModel.GetDeclarationSymbols(statement)))
+                compilationUnit.Globals[symbol] = baseCompiled.SemanticModel.GetType(symbol.Declaration);
+
+        var compiledFiles = sourceFiles
+            .Where(file => file != baseFile)
             .Select(compilationUnit.Compile)
+            .Append(baseCompiled)
             .OfType<CompiledFile>()
             .ToArray();
 

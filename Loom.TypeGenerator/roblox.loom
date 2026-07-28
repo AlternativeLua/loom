@@ -1,13 +1,6 @@
 ## Handwritten Roblox types
-
-## Property attribute - renames the property to the specified name when used
-declare fn luau_name(name: string): void;
-
-## Property attribute - marks that a method will be called with the ':' operator
-declare fn luau_method: void;
-
-## Property attribute - allows overriding interface members
-declare fn override: void;
+## luau_name, luau_method, and override are declared in Loom.Core/TypeChecking/Intrinsic/loom.loom and
+## shared with this file ambiently at compile time - see Intrinsics.CompileIntrinsics.
 
 declare interface ConsumerEvent<
     T1 = none, 
