@@ -57,6 +57,7 @@ public enum SyntaxKind : ushort
     Comma,
     Dot,
     DotDot,
+    QuestionDot,
     ColonColonLArrow,
     Arrow,
     NumberLiteral,

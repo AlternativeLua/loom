@@ -7,4 +7,5 @@ public class DotName(Token dot, Token name)
     public Token Dot { get; } = dot;
     public Token Name { get; } = name;
     public List<Token> Tokens { get; } = [dot, name];
+    public bool IsOptional => Dot.Kind == SyntaxKind.QuestionDot;
 }

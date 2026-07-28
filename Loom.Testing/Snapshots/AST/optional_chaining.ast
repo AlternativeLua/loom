@@ -1,0 +1,79 @@
+﻿ExpressionStatement(
+  Expression: QualifiedName(
+    Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    Names: [
+      DotName(
+        Dot: Token(QuestionDot, "?.")
+        Name: Token(Identifier, "b")
+        IsOptional: True
+      )
+    ]
+    Token(Identifier, "a")
+  )
+)
+ExpressionStatement(
+  Expression: QualifiedName(
+    Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    Names: [
+      DotName(
+        Dot: Token(QuestionDot, "?.")
+        Name: Token(Identifier, "b")
+        IsOptional: True
+      )
+      DotName(
+        Dot: Token(QuestionDot, "?.")
+        Name: Token(Identifier, "c")
+        IsOptional: True
+      )
+    ]
+    Token(Identifier, "a")
+  )
+)
+ExpressionStatement(
+  Expression: QualifiedName(
+    Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    Names: [
+      DotName(
+        Dot: Token(QuestionDot, "?.")
+        Name: Token(Identifier, "b")
+        IsOptional: True
+      )
+      DotName(
+        Dot: Token(Dot, ".")
+        Name: Token(Identifier, "c")
+        IsOptional: False
+      )
+    ]
+    Token(Identifier, "a")
+  )
+)
+ExpressionStatement(
+  Expression: QualifiedName(
+    Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    Names: [
+      DotName(
+        Dot: Token(Dot, ".")
+        Name: Token(Identifier, "b")
+        IsOptional: False
+      )
+      DotName(
+        Dot: Token(QuestionDot, "?.")
+        Name: Token(Identifier, "c")
+        IsOptional: True
+      )
+    ]
+    Token(Identifier, "a")
+  )
+)

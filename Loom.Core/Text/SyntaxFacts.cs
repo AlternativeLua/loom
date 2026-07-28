@@ -92,6 +92,7 @@ public static class SyntaxFacts
             new KeyValuePair<string, SyntaxKind>(",", SyntaxKind.Comma),
             new KeyValuePair<string, SyntaxKind>(".", SyntaxKind.Dot),
             new KeyValuePair<string, SyntaxKind>("..", SyntaxKind.DotDot),
+            new KeyValuePair<string, SyntaxKind>("?.", SyntaxKind.QuestionDot),
             new KeyValuePair<string, SyntaxKind>("->", SyntaxKind.Arrow),
             new KeyValuePair<string, SyntaxKind>("::<", SyntaxKind.ColonColonLArrow),
             new KeyValuePair<string, SyntaxKind>(";", SyntaxKind.Semicolon)

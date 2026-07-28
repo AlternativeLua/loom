@@ -8,6 +8,7 @@
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "b")
+        IsOptional: False
       )
     ]
     Token(Identifier, "a")
@@ -23,10 +24,12 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "b")
+        IsOptional: False
       )
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "c")
+        IsOptional: False
       )
     ]
     Token(Identifier, "a")
@@ -42,14 +45,17 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "b")
+        IsOptional: False
       )
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "c")
+        IsOptional: False
       )
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "d")
+        IsOptional: False
       )
     ]
     Token(Identifier, "a")
@@ -67,6 +73,7 @@ ExpressionStatement(
           DotName(
             Dot: Token(Dot, ".")
             Name: Token(Identifier, "b")
+            IsOptional: False
           )
         ]
       )
@@ -93,6 +100,7 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "b")
+        IsOptional: False
       )
     ]
   )
@@ -115,6 +123,7 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "bar")
+        IsOptional: False
       )
     ]
   )
@@ -137,10 +146,12 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "bar")
+        IsOptional: False
       )
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "baz")
+        IsOptional: False
       )
     ]
   )
@@ -159,6 +170,7 @@ ExpressionStatement(
               DotName(
                 Dot: Token(Dot, ".")
                 Name: Token(Identifier, "b")
+                IsOptional: False
               )
             ]
             Token(Identifier, "a")
@@ -179,6 +191,7 @@ ExpressionStatement(
           DotName(
             Dot: Token(Dot, ".")
             Name: Token(Identifier, "d")
+            IsOptional: False
           )
         ]
       )
@@ -205,6 +218,7 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "c")
+        IsOptional: False
       )
     ]
   )
@@ -236,6 +250,7 @@ ExpressionStatement(
       DotName(
         Dot: Token(Dot, ".")
         Name: Token(Identifier, "bar")
+        IsOptional: False
       )
     ]
   )

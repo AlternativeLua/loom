@@ -1944,6 +1944,74 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_OptionalChain_SingleAccess()
+    {
+        var luauTree = Utility.GetLuauAST("a?.b");
+        Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.First());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+
+        var condition = Assert.IsType<BinaryOperator>(ifExpression.Condition);
+        var conditionTarget = Assert.IsType<Identifier>(condition.Left);
+        Assert.Equal("a", conditionTarget.Name);
+        Assert.Equal("~=", condition.Operator);
+        Assert.IsType<NilLiteral>(condition.Right);
+
+        var thenAccess = Assert.IsType<PropertyAccess>(ifExpression.ThenBranch);
+        Assert.Single(thenAccess.Names);
+        Assert.Equal("b", thenAccess.Names[0]);
+
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+    }
+
+    [Fact]
+    public void Generates_OptionalChain_Nested()
+    {
+        var luauTree = Utility.GetLuauAST("a?.b?.c");
+        Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.First());
+        var outerIf = Assert.IsType<IfExpression>(variable.Initializer);
+        var outerCondition = Assert.IsType<BinaryOperator>(outerIf.Condition);
+        var outerTarget = Assert.IsType<Identifier>(outerCondition.Left);
+        Assert.Equal("a", outerTarget.Name);
+        Assert.IsType<NilLiteral>(outerIf.ElseBranch);
+
+        var innerIf = Assert.IsType<IfExpression>(outerIf.ThenBranch);
+        var innerCondition = Assert.IsType<BinaryOperator>(innerIf.Condition);
+        var innerTarget = Assert.IsType<PropertyAccess>(innerCondition.Left);
+        Assert.Single(innerTarget.Names);
+        Assert.Equal("b", innerTarget.Names[0]);
+        Assert.IsType<NilLiteral>(innerIf.ElseBranch);
+
+        var finalAccess = Assert.IsType<PropertyAccess>(innerIf.ThenBranch);
+        Assert.Single(finalAccess.Names);
+        Assert.Equal("c", finalAccess.Names[0]);
+
+        var finalAccessTarget = Assert.IsType<PropertyAccess>(finalAccess.Target);
+        Assert.Single(finalAccessTarget.Names);
+        Assert.Equal("b", finalAccessTarget.Names[0]);
+    }
+
+    [Fact]
+    public void Generates_OptionalChain_MixedWithPlainAccess()
+    {
+        var luauTree = Utility.GetLuauAST("a?.b.c");
+        Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.First());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        var thenAccess = Assert.IsType<PropertyAccess>(ifExpression.ThenBranch);
+        Assert.Single(thenAccess.Names);
+        Assert.Equal("c", thenAccess.Names[0]);
+
+        var thenAccessTarget = Assert.IsType<PropertyAccess>(thenAccess.Target);
+        Assert.Single(thenAccessTarget.Names);
+        Assert.Equal("b", thenAccessTarget.Names[0]);
+    }
+
+    [Fact]
     public void Generates_PropertyAccess_OnRangeLiteral()
     {
         var luauTree = Utility.GetLuauAST("(1..10).minimum");

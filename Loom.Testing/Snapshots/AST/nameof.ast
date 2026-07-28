@@ -34,6 +34,7 @@ ExpressionStatement(
         DotName(
           Dot: Token(Dot, ".")
           Name: Token(Identifier, "bar")
+          IsOptional: False
         )
       ]
       Token(Identifier, "foo")
@@ -54,10 +55,12 @@ ExpressionStatement(
         DotName(
           Dot: Token(Dot, ".")
           Name: Token(Identifier, "b")
+          IsOptional: False
         )
         DotName(
           Dot: Token(Dot, ".")
           Name: Token(Identifier, "c")
+          IsOptional: False
         )
       ]
       Token(Identifier, "a")

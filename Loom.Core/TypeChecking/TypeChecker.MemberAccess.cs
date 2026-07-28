@@ -106,12 +106,23 @@ public sealed partial class TypeChecker
         if (TryGetNarrowedType(accessExpression, out var narrowedType))
             return BindType(accessExpression, narrowedType);
 
-        foreach (var indexType in names.Select(name => new Types.LiteralType(name.Name.Text)))
+        var isOptionalChain = false;
+        foreach (var name in names)
         {
+            if (name.IsOptional)
+            {
+                isOptionalChain = true;
+                type = type.NonNullable();
+            }
+
+            var indexType = new Types.LiteralType(name.Name.Text);
             type = IndexType(accessExpression, type, indexType, $"Cannot access property '{indexType.Value}' on type '{type}'.");
             if (Type.IsNever(type))
                 return type;
         }
+
+        if (isOptionalChain)
+            type = TypeSimplifier.Simplify(new Types.UnionType([type, Types.PrimitiveType.None]));
 
         var isMacroReference = CheckInvocationMacroReference(accessExpression);
         if (isMacroReference

@@ -32,6 +32,9 @@ public sealed partial class LuauGenerator
 
     public override LuauNode VisitQualifiedName(QualifiedName qualifiedName)
     {
+        if (qualifiedName.Names.Exists(n => n.IsOptional))
+            return GenerateOptionalChain(Visit(qualifiedName.Identifier), qualifiedName.Names, 0);
+
         var luauAccess = new Luau.AST.PropertyAccess(Visit(qualifiedName.Identifier), qualifiedName.Names.ConvertAll(dotName => dotName.Name.Text));
         if (_macroExpander.TryGetQualifiedNameMacro(qualifiedName, luauAccess, out var propertyReplacement))
             return propertyReplacement;
@@ -43,6 +46,9 @@ public sealed partial class LuauGenerator
 
     public override LuauNode VisitPropertyAccess(PropertyAccess propertyAccess)
     {
+        if (propertyAccess.Names.Exists(n => n.IsOptional))
+            return GenerateOptionalChain(Visit(propertyAccess.Expression), propertyAccess.Names, 0);
+
         var luauAccess = new Luau.AST.PropertyAccess(Visit(propertyAccess.Expression), propertyAccess.Names.ConvertAll(dotName => dotName.Name.Text));
         if (_macroExpander.TryGetPropertyAccessMacro(propertyAccess, luauAccess, out var propertyReplacement))
             return propertyReplacement;
@@ -50,6 +56,31 @@ public sealed partial class LuauGenerator
         return _macroExpander.TryGetInvocationMacroReference(propertyAccess, luauAccess, out var referenceReplacement)
             ? referenceReplacement
             : GenerateRenamedAccess(propertyAccess, luauAccess.Target, luauAccess.Names);
+    }
+
+    // a?.b?.c => if a ~= nil then if a.b ~= nil then a.b.c else nil else nil
+    private LuauExpression GenerateOptionalChain(LuauExpression target, List<DotName> names, int index)
+    {
+        if (index >= names.Count)
+            return target;
+
+        if (!names[index].IsOptional)
+        {
+            var plainNames = new List<string>();
+            var i = index;
+            while (i < names.Count && !names[i].IsOptional)
+            {
+                plainNames.Add(names[i].Name.Text);
+                i++;
+            }
+
+            return GenerateOptionalChain(new Luau.AST.PropertyAccess(target, plainNames), names, i);
+        }
+
+        var condition = new Luau.AST.BinaryOperator(target, "~=", new NilLiteral());
+        var nextTarget = new Luau.AST.PropertyAccess(target, [names[index].Name.Text]);
+        var thenBranch = GenerateOptionalChain(nextTarget, names, index + 1);
+        return new IfExpression(condition, thenBranch, [], new NilLiteral());
     }
 
     public override LuauNode VisitElementAccess(ElementAccess elementAccess)

@@ -1,0 +1,5 @@
+interface Inner { c: number }
+interface Outer { b: Inner? }
+
+let a: Outer? = none
+let x = a?.b?.c

@@ -3256,6 +3256,38 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_OptionalChaining_SingleAccess()
+    {
+        var type = Utility.GetLastStatementType("interface Foo { bar: number } let x: Foo? = none; x?.bar");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_OptionalChaining_Nested()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Inner { c: number }
+            interface Outer { b: Inner? }
+            let a: Outer? = none
+            a?.b?.c
+            """
+        );
+
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_OptionalChaining_OnNonOptionalTarget()
+    {
+        var type = Utility.GetLastStatementType("interface Foo { bar: number } let x: Foo = new Foo { bar: 1 }; x?.bar");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
     public void Checks_After_PropagatesBodyType()
     {
         var type = Utility.GetLastStatementType("after 1 { 42 }");

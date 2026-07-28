@@ -90,7 +90,7 @@ public sealed partial class Parser
                 expression = ParseInvocation(expression);
             else if (Match(out var leftBracket, SyntaxKind.LBracket))
                 expression = ParseElementAccess(leftBracket, expression);
-            else if (Match(out var dot, SyntaxKind.Dot))
+            else if (Match(out var dot, SyntaxKind.Dot, SyntaxKind.QuestionDot))
                 expression = ParseNamedAccess(dot, expression);
             else
                 break;
@@ -111,7 +111,7 @@ public sealed partial class Parser
     {
         var name = ExpectIdentifier();
         var names = new List<DotName> { new(dot, name) };
-        while (Match(out var nextDot, SyntaxKind.Dot))
+        while (Match(out var nextDot, SyntaxKind.Dot, SyntaxKind.QuestionDot))
             names.Add(new DotName(nextDot, ExpectIdentifier()));
 
         return expression is Identifier identifier
