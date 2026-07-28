@@ -165,6 +165,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitLiteral(Literal literal) => DefaultValue(literal);
     public virtual T VisitInterpolatedStringLiteral(InterpolatedStringLiteral interpolatedStringLiteral) => VisitList(interpolatedStringLiteral.Expressions);
     public virtual T VisitIdentifier(Identifier identifier) => DefaultValue(identifier);
+    public virtual T VisitSelfExpression(SelfExpression selfExpression) => DefaultValue(selfExpression);
     public virtual T VisitParenthesized(Parenthesized parenthesized) => Visit(parenthesized.Expression);
     public virtual T VisitTupleExpression(TupleExpression tupleExpression) => VisitList(tupleExpression.Expressions);
     public virtual T VisitNameOf(NameOf nameOf) => CombineResults([VisitWithDefault(nameOf.TypeArguments), VisitWithDefault(nameOf.Name)]);

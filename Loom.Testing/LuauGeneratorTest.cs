@@ -767,6 +767,140 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_SelfExpression_AsElementAccessOnSelf()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface WithIndexer { [string]: number }
+            trait GetValue<K, V> { fn get_value(key: K): V }
+            implement GetValue<string, number> for WithIndexer {
+                fn get_value(key) -> @[key];
+            }
+            """,
+            true
+        );
+
+        var getValueFunction = Assert.IsType<Function>(luauTree.Statements[5]);
+        Assert.Equal("GetValue_string_number_for_WithIndexer.get_value", getValueFunction.Name);
+
+        var @return = Assert.IsType<Return>(Assert.Single(getValueFunction.Body.Statements));
+        var elementAccess = Assert.IsType<ElementAccess>(@return.Expression);
+        Assert.Equal("self", Assert.IsType<Identifier>(elementAccess.Target).Name);
+        Assert.Equal("key", Assert.IsType<Identifier>(elementAccess.Index).Name);
+    }
+
+    [Fact]
+    public void Generates_SelfExpression_AsPropertyAccessOnSelf()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display(): void }
+            implement Display for Container {
+                fn display() -> print(@.value);
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[5]);
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var selfAccess = Assert.IsType<PropertyAccess>(Assert.Single(printCall.Arguments));
+        Assert.Equal("self", Assert.IsType<Identifier>(selfAccess.Target).Name);
+        Assert.Equal("value", Assert.Single(selfAccess.Names));
+    }
+
+    [Fact]
+    public void Generates_SelfExpression_CallsMethodFromOtherImplementedTrait_UsingSelfAndColonSyntax()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            trait Balls { fn balls: void }
+
+            implement Balls for Container {
+                fn balls -> print(@.value);
+            }
+
+            implement Display for Container {
+                fn display -> print(@.balls());
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[^1]);
+        Assert.Equal("Display_for_Container.display", displayFunction.Name);
+
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var ballsCall = Assert.IsType<Call>(Assert.Single(printCall.Arguments));
+        Assert.True(ballsCall.IsMethod);
+
+        var ballsAccess = Assert.IsType<PropertyAccess>(ballsCall.Callee);
+        Assert.Equal("self", Assert.IsType<Identifier>(ballsAccess.Target).Name);
+        Assert.Equal("balls", Assert.Single(ballsAccess.Names));
+    }
+
+    [Fact]
+    public void Generates_SelfExpression_BareRecursiveMethodCall_UsesSelfAndColonSyntax()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            implement Display for Container {
+                fn display -> print(display());
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[^1]);
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var recursiveCall = Assert.IsType<Call>(Assert.Single(printCall.Arguments));
+        Assert.True(recursiveCall.IsMethod);
+
+        var recursiveAccess = Assert.IsType<PropertyAccess>(recursiveCall.Callee);
+        Assert.Equal("self", Assert.IsType<Identifier>(recursiveAccess.Target).Name);
+        Assert.Equal("display", Assert.Single(recursiveAccess.Names));
+    }
+
+    [Fact]
+    public void Generates_BareCall_ToMethodFromOtherImplementedTrait_UsingSelfAndColonSyntax()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            trait Balls { fn balls: void }
+
+            implement Balls for Container {
+                fn balls -> print(@.value);
+            }
+
+            implement Display for Container {
+                fn display -> print(balls());
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[^1]);
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var ballsCall = Assert.IsType<Call>(Assert.Single(printCall.Arguments));
+        Assert.True(ballsCall.IsMethod);
+
+        var ballsAccess = Assert.IsType<PropertyAccess>(ballsCall.Callee);
+        Assert.Equal("self", Assert.IsType<Identifier>(ballsAccess.Target).Name);
+        Assert.Equal("balls", Assert.Single(ballsAccess.Names));
+    }
+
+    [Fact]
     public void Generates_TraitDeclaration()
     {
         var luauTree = Utility.GetLuauAST("trait T { fn method(): number }", true);

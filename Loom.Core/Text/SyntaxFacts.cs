@@ -95,7 +95,8 @@ public static class SyntaxFacts
             new KeyValuePair<string, SyntaxKind>("?.", SyntaxKind.QuestionDot),
             new KeyValuePair<string, SyntaxKind>("->", SyntaxKind.Arrow),
             new KeyValuePair<string, SyntaxKind>("::<", SyntaxKind.ColonColonLArrow),
-            new KeyValuePair<string, SyntaxKind>(";", SyntaxKind.Semicolon)
+            new KeyValuePair<string, SyntaxKind>(";", SyntaxKind.Semicolon),
+            new KeyValuePair<string, SyntaxKind>("@", SyntaxKind.At)
         ]
     );
 

@@ -763,6 +763,102 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Resolves_SelfExpression_ToImplementedInterface()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface WithIndexer { [string]: number }
+
+                trait GetValue<K, V> {
+                    fn get_value(key: K): V
+                }
+
+                implement GetValue<string, number> for WithIndexer {
+                    fn get_value(key) -> @[key];
+                }
+                """
+            )
+        );
+
+        var iface = Assert.IsType<InterfaceDeclaration>(model.Tree.Statements[0]);
+        var interfaceSymbol = Assert.IsType<InterfaceSymbol>(model.GetDeclarationSymbol(iface, SymbolKind.Interface));
+
+        var implement = Assert.IsType<Implement>(model.Tree.Statements[2]);
+        var method = Assert.Single(implement.Body.Implementations);
+        var body = Assert.IsType<ExpressionBody>(method.Body);
+        var elementAccess = Assert.IsType<ElementAccess>(body.Expression);
+        var selfExpression = Assert.IsType<SelfExpression>(elementAccess.Expression);
+
+        Assert.Same(interfaceSymbol, model.GetSymbol(selfExpression));
+    }
+
+    [Fact]
+    public void ThrowsFor_SelfExpression_OutsideImplementation()
+    {
+        var diagnostics = Utility.GetSemanticModel("let x = @;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.SelfOutsideImplementation, "'@' can only be used inside an implemented trait method.");
+    }
+
+    [Fact]
+    public void Resolves_BareCall_ToMethodFromOtherImplementedTrait()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface Container { value: number }
+                trait Display { fn display: void }
+                trait Balls { fn balls: void }
+
+                implement Balls for Container {
+                    fn balls -> print(@.value);
+                }
+
+                implement Display for Container {
+                    fn display -> print(balls());
+                }
+                """
+            )
+        );
+
+        var ballsImplement = Assert.IsType<Implement>(model.Tree.Statements[3]);
+        var ballsMethod = Assert.Single(ballsImplement.Body.Implementations);
+
+        var displayImplement = Assert.IsType<Implement>(model.Tree.Statements[4]);
+        var displayMethod = Assert.Single(displayImplement.Body.Implementations);
+        var body = Assert.IsType<ExpressionBody>(displayMethod.Body);
+        var printCall = Assert.IsType<Invocation>(body.Expression);
+        var ballsCall = Assert.IsType<Invocation>(Assert.Single(printCall.Arguments.ArgumentList));
+        var callee = Assert.IsType<Identifier>(ballsCall.Expression);
+
+        var symbol = model.GetSymbol(callee);
+        Assert.Equal(SymbolKind.Function, symbol?.Kind);
+        Assert.Same(ballsMethod, symbol?.Declaration);
+    }
+
+    [Fact]
+    public void ThrowsFor_BareCall_ToMethodFromTraitImplementedLaterInFile()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            trait Balls { fn balls: void }
+
+            implement Display for Container {
+                fn display -> print(balls());
+            }
+
+            implement Balls for Container {
+                fn balls -> print(@.value);
+            }
+            """
+        ).Diagnostics;
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'balls'.");
+    }
+
+    [Fact]
     public void Resolves_PropertyPointsToInterface()
     {
         var model = Utility.AssertNoErrors(

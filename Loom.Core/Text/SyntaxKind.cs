@@ -60,6 +60,7 @@ public enum SyntaxKind : ushort
     QuestionDot,
     ColonColonLArrow,
     Arrow,
+    At,
     NumberLiteral,
     StringLiteral,
     TrueLiteral,

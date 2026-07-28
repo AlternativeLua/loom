@@ -158,6 +158,9 @@ public sealed partial class Parser
         if (Match(out var nameToken, SyntaxKind.Identifier))
             return new Identifier(nameToken);
 
+        if (Match(out var atToken, SyntaxKind.At))
+            return new SelfExpression(atToken);
+
         if (Match(out var token, SyntaxFacts.IsLiteral))
             return new Literal(token, LiteralUtility.ResolveValue(token));
 
