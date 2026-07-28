@@ -8,7 +8,10 @@ public sealed class InterfaceSymbol(InterfaceDeclaration declaration, string nam
     public bool IsSealed { get; } = isSealed;
     public IReadOnlyList<InterfaceSymbol>? Constraints { get; } = constraints;
     public List<PropertySymbol> Properties { get; } = [];
+    /// <summary> Current interface properties + all constraint properties </summary>
+    public IReadOnlyList<PropertySymbol> FullProperties => field ??= Properties.Concat(GetFieldAndConstraintFields(i => i.Properties)).ToArray();
     public List<TraitSymbol> Implements { get; } = [];
+    public IReadOnlyList<Implement> FullImplementations => field ??= Implementations.Concat(GetFieldAndConstraintFields(i => i.Implementations)).ToArray();
     public List<Implement> Implementations { get; } = [];
 
     public PropertySymbol? GetPropertyAtPath(IReadOnlyList<string> path)
@@ -17,9 +20,7 @@ public sealed class InterfaceSymbol(InterfaceDeclaration declaration, string nam
             return null;
 
         var firstName = path[0];
-        var property = Properties.FirstOrDefault(p => p.Name == firstName)
-            ?? GetConstraintProperties().FirstOrDefault(p => p.Name == firstName);
-
+        var property = FullProperties.FirstOrDefault(p => p.Name == firstName);
         return property is { PointsTo: { } pointsTo } && path.Count > 1
             ? pointsTo.GetPropertyAtPath(path.Skip(1).ToArray())
             : property;
@@ -28,5 +29,6 @@ public sealed class InterfaceSymbol(InterfaceDeclaration declaration, string nam
     public override string ToString() =>
         $"InterfaceSymbol({Name}, IsSealed: {IsSealed}, Properties: [{string.Join(", ", Properties.Select(s => s.Name))}] Implements: [{string.Join(", ", Implements.Select(s => s.Name))}], Constraints: [{string.Join(", ", Constraints?.Select(s => s.Name) ?? [])}])";
 
-    private PropertySymbol[] GetConstraintProperties() => Constraints?.SelectMany(c => c.Properties.Concat(c.GetConstraintProperties())).ToArray() ?? [];
+    private T[] GetFieldAndConstraintFields<T>(Func<InterfaceSymbol, IReadOnlyList<T>> selector) =>
+        Constraints?.SelectMany(c => selector(c).Concat(c.GetFieldAndConstraintFields(selector))).ToArray() ?? [];
 }

@@ -1,0 +1,11 @@
+interface WithIndexer {
+  [string]: number;
+}
+
+trait GetValue<K, V> {
+  fn get_value(key: K): V;
+}
+
+implement GetValue<string, number> for WithIndexer {
+  fn get_value(key) -> @[key];
+}

@@ -106,6 +106,7 @@ public static class InternalCodes
     public const string InvalidDestructureSource = "L382";
     public const string UnknownDestructureProperty = "L383";
     public const string InvalidDestructureTarget = "L384";
+    public const string SelfOutsideImplementation = "L385";
 
     public const string SimplifiableCode = "L400";
 }
