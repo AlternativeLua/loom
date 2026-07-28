@@ -3288,6 +3288,35 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_OptionalChaining_InvocationThroughOptionalCallee()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Foo { bar: fn: number }
+            let x: Foo? = none;
+            x?.bar()
+            """
+        );
+
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void ThrowsFor_Invocation_OnOptionalCallee_WithoutOptionalChaining()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { bar: fn: number }
+            let x: Foo? = none;
+            x.bar()
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
     public void Checks_After_PropagatesBodyType()
     {
         var type = Utility.GetLastStatementType("after 1 { 42 }");

@@ -21,8 +21,20 @@ public sealed partial class LuauGenerator
 {
     public override LuauNode VisitInvocation(Invocation invocation)
     {
-        var callee = Visit(invocation.Expression);
         var arguments = invocation.Arguments.ArgumentList.ConvertAll(Visit);
+        switch (invocation.Expression)
+        {
+            case QualifiedName { Names: var names } qualifiedName when names.Exists(n => n.IsOptional):
+                return GenerateOptionalChain(qualifiedName, Visit(qualifiedName.Identifier), names, member => BuildCallExpression(invocation, member, arguments));
+            case PropertyAccess { Names: var names } propertyAccess when names.Exists(n => n.IsOptional):
+                return GenerateOptionalChain(propertyAccess, Visit(propertyAccess.Expression), names, member => BuildCallExpression(invocation, member, arguments));
+        }
+
+        return BuildCallExpression(invocation, Visit(invocation.Expression), arguments);
+    }
+
+    private LuauExpression BuildCallExpression(Invocation invocation, LuauExpression callee, List<LuauExpression> arguments)
+    {
         if (_semanticModel.GetType(invocation.Expression) is InstantiatedType { GenericType.UnderlyingType: InterfaceType { Name: "Event" } })
             return new Call(new Luau.AST.PropertyAccess(callee, ["Fire"]), arguments, true);
 
@@ -33,7 +45,7 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitQualifiedName(QualifiedName qualifiedName)
     {
         if (qualifiedName.Names.Exists(n => n.IsOptional))
-            return GenerateOptionalChain(Visit(qualifiedName.Identifier), qualifiedName.Names, 0);
+            return GenerateOptionalChain(qualifiedName, Visit(qualifiedName.Identifier), qualifiedName.Names);
 
         var luauAccess = new Luau.AST.PropertyAccess(Visit(qualifiedName.Identifier), qualifiedName.Names.ConvertAll(dotName => dotName.Name.Text));
         if (_macroExpander.TryGetQualifiedNameMacro(qualifiedName, luauAccess, out var propertyReplacement))
@@ -47,7 +59,7 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitPropertyAccess(PropertyAccess propertyAccess)
     {
         if (propertyAccess.Names.Exists(n => n.IsOptional))
-            return GenerateOptionalChain(Visit(propertyAccess.Expression), propertyAccess.Names, 0);
+            return GenerateOptionalChain(propertyAccess, Visit(propertyAccess.Expression), propertyAccess.Names);
 
         var luauAccess = new Luau.AST.PropertyAccess(Visit(propertyAccess.Expression), propertyAccess.Names.ConvertAll(dotName => dotName.Name.Text));
         if (_macroExpander.TryGetPropertyAccessMacro(propertyAccess, luauAccess, out var propertyReplacement))
@@ -59,27 +71,38 @@ public sealed partial class LuauGenerator
     }
 
     // a?.b?.c => if a ~= nil then if a.b ~= nil then a.b.c else nil else nil
-    private LuauExpression GenerateOptionalChain(LuauExpression target, List<DotName> names, int index)
+    // finalize lets an enclosing invocation (a?.b() -> if a ~= nil then a.b() else nil) place the
+    // call inside the short-circuit instead of calling the (possibly nil) chain result afterward.
+    private LuauExpression GenerateOptionalChain(Expression accessExpression, LuauExpression target, List<DotName> names, Func<LuauExpression, LuauExpression>? finalize = null)
     {
-        if (index >= names.Count)
-            return target;
+        var segments = names.ConvertAll(name => (Name: name.Name.Text, name.IsOptional));
+        if (_semanticModel.TryGetIntrinsicAttribute(accessExpression, "luau_name", out var attr) && ValidateLuauNameAttribute(attr, out var nameLiteral))
+            segments[^1] = (nameLiteral.Value, segments[^1].IsOptional);
 
-        if (!names[index].IsOptional)
+        return BuildOptionalChain(target, segments, 0, finalize ?? (expression => expression));
+    }
+
+    private LuauExpression BuildOptionalChain(LuauExpression target, List<(string Name, bool IsOptional)> segments, int index, Func<LuauExpression, LuauExpression> finalize)
+    {
+        if (index >= segments.Count)
+            return finalize(target);
+
+        if (!segments[index].IsOptional)
         {
             var plainNames = new List<string>();
             var i = index;
-            while (i < names.Count && !names[i].IsOptional)
+            while (i < segments.Count && !segments[i].IsOptional)
             {
-                plainNames.Add(names[i].Name.Text);
+                plainNames.Add(segments[i].Name);
                 i++;
             }
 
-            return GenerateOptionalChain(new Luau.AST.PropertyAccess(target, plainNames), names, i);
+            return BuildOptionalChain(new Luau.AST.PropertyAccess(target, plainNames), segments, i, finalize);
         }
 
         var condition = new Luau.AST.BinaryOperator(target, "~=", new NilLiteral());
-        var nextTarget = new Luau.AST.PropertyAccess(target, [names[index].Name.Text]);
-        var thenBranch = GenerateOptionalChain(nextTarget, names, index + 1);
+        var nextTarget = new Luau.AST.PropertyAccess(target, [segments[index].Name]);
+        var thenBranch = BuildOptionalChain(nextTarget, segments, index + 1, finalize);
         return new IfExpression(condition, thenBranch, [], new NilLiteral());
     }
 

@@ -204,7 +204,8 @@ public sealed partial class Resolver
         foreach (var symbol in
                  from property in properties
                  let attributeSymbols = property.Attributes?.AttributeList.Select(DeclareAttribute).ToList() ?? []
-                 let pointsTo = _semanticModel.GetSymbol(property.ColonTypeClause.Type, SymbolKind.Interface) as InterfaceSymbol
+                 let propertyType = property.ColonTypeClause.Type is OptionalType optionalType ? optionalType.NonNullableType : property.ColonTypeClause.Type
+                 let pointsTo = _semanticModel.GetSymbol(propertyType, SymbolKind.Interface) as InterfaceSymbol
                  select new PropertySymbol(property, pointsTo, attributeSymbols) { IsIntrinsic = interfaceSymbol.IsIntrinsic })
         {
             interfaceSymbol.Properties.Add(symbol);

@@ -2012,6 +2012,83 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_OptionalChain_Invocation_PlacesCallInsideShortCircuit()
+    {
+        var luauTree = Utility.GetLuauAST("a?.b()");
+        Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.First());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+
+        var condition = Assert.IsType<BinaryOperator>(ifExpression.Condition);
+        Assert.Equal("a", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+
+        var call = Assert.IsType<Call>(ifExpression.ThenBranch);
+        Assert.False(call.IsMethod);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Single(callee.Names);
+        Assert.Equal("b", callee.Names[0]);
+    }
+
+    [Fact]
+    public void Generates_OptionalChain_Invocation_UsesMethodCallSyntax_WithLuauNameAndLuauMethod()
+    {
+        const string source = """
+            declare interface Foo {
+                [luau_method, luau_name("DoFoo")]
+                do_foo: fn: void;
+            }
+            let a = none as never as Foo?;
+            a?.do_foo();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+
+        var call = Assert.IsType<Call>(ifExpression.ThenBranch);
+        Assert.True(call.IsMethod);
+
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Single(callee.Names);
+        Assert.Equal("DoFoo", callee.Names[0]);
+    }
+
+    [Fact]
+    public void Generates_OptionalChain_Invocation_UsesMethodCallSyntax_ThroughNestedOptionalProperty()
+    {
+        const string source = """
+            declare interface Foo {
+                [luau_method, luau_name("DoFoo")]
+                do_foo: fn: void;
+            }
+            declare interface Bar {
+                foo: Foo?;
+            }
+            let bar = none as never as Bar?;
+            bar?.foo?.do_foo();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var outerIf = Assert.IsType<IfExpression>(variable.Initializer);
+        var innerIf = Assert.IsType<IfExpression>(outerIf.ThenBranch);
+
+        var call = Assert.IsType<Call>(innerIf.ThenBranch);
+        Assert.True(call.IsMethod);
+
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Single(callee.Names);
+        Assert.Equal("DoFoo", callee.Names[0]);
+
+        var calleeTarget = Assert.IsType<PropertyAccess>(callee.Target);
+        Assert.Single(calleeTarget.Names);
+        Assert.Equal("foo", calleeTarget.Names[0]);
+    }
+
+    [Fact]
     public void Generates_PropertyAccess_OnRangeLiteral()
     {
         var luauTree = Utility.GetLuauAST("(1..10).minimum");

@@ -13,26 +13,52 @@ public sealed partial class TypeChecker
     public override Type VisitInvocation(Invocation invocation)
     {
         var type = Visit(invocation.Expression);
+
+        // a?.b() short-circuits to nil at runtime before ever calling 'b', so the callee is
+        // checked against its non-nullable type and the call's own result gains '| none' back.
+        var isOptionalChainCallee = IsOptionalChainAccess(invocation.Expression);
+        if (isOptionalChainCallee)
+            type = type.NonNullable();
+
         if (IsEventType(invocation, type, true, out _))
         {
             _diagnostics.Error(invocation, InternalCodes.InvalidInvocation, "Consumer events may only be observed, not fired.");
             return BindType(invocation, Types.PrimitiveType.Never);
         }
 
+        Type resultType;
         if (type is Types.FunctionType functionType)
-            return functionType.TypeParameters.Count == 0
+        {
+            resultType = functionType.TypeParameters.Count == 0
                 ? CheckNonGenericInvocation(invocation, functionType)
                 : CheckGenericInvocation(invocation, functionType);
+        }
+        else if (type is Types.IntersectionType { Types.Count: > 0 } intersection && intersection.Types.TrueForAll(t => t is Types.FunctionType))
+        {
+            resultType = CheckOverloadedInvocation(invocation, intersection.Types.ConvertAll(t => (Types.FunctionType)t));
+        }
+        else if (IsEventType(invocation, type, false, out var eventType))
+        {
+            resultType = CheckEventInvocation(invocation, eventType);
+        }
+        else
+        {
+            _diagnostics.Error(invocation, InternalCodes.InvalidInvocation, $"Cannot call value of type '{type}'.");
+            return BindType(invocation, Types.PrimitiveType.Never);
+        }
 
-        if (type is Types.IntersectionType { Types.Count: > 0 } intersection && intersection.Types.TrueForAll(t => t is Types.FunctionType))
-            return CheckOverloadedInvocation(invocation, intersection.Types.ConvertAll(t => (Types.FunctionType)t));
-
-        if (IsEventType(invocation, type, false, out var eventType))
-            return CheckEventInvocation(invocation, eventType);
-
-        _diagnostics.Error(invocation, InternalCodes.InvalidInvocation, $"Cannot call value of type '{type}'.");
-        return BindType(invocation, Types.PrimitiveType.Never);
+        return isOptionalChainCallee && !Type.IsNever(resultType)
+            ? BindType(invocation, TypeSimplifier.Simplify(new Types.UnionType([resultType, Types.PrimitiveType.None])))
+            : resultType;
     }
+
+    private static bool IsOptionalChainAccess(Expression expression) =>
+        expression switch
+        {
+            QualifiedName qualifiedName => qualifiedName.Names.Exists(n => n.IsOptional),
+            PropertyAccess propertyAccess => propertyAccess.Names.Exists(n => n.IsOptional),
+            _ => false
+        };
 
     // A callee typed as an intersection of function signatures is an overload set (MergeOverloadedProperties); first candidate whose required/optional parameter count fits and whose arguments are assignable wins.
     private Type CheckOverloadedInvocation(Invocation invocation, List<Types.FunctionType> candidates)

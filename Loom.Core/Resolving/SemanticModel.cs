@@ -159,7 +159,7 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
         if (names.Length == 0)
             return null;
 
-        var objectType = GetType(objectExpression);
+        var objectType = GetType(objectExpression).NonNullable();
         if (objectType is InstantiatedType instantiated)
             objectType = instantiated.Expand();
 

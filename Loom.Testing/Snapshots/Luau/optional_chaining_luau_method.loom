@@ -1,0 +1,11 @@
+declare interface Foo {
+    [luau_method, luau_name("DoFoo")]
+    do_foo: fn: void;
+}
+
+declare interface Bar {
+    foo: Foo?;
+}
+
+let bar = none as never as Bar?;
+bar?.foo?.do_foo();
