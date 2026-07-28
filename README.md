@@ -18,7 +18,7 @@
 
 ## Quick look
 
-```rs
+```ts
 interface User { name: string, age: number }
 let user = new User { name: "Ada", age: 30 };
 let { name, age } = user;
