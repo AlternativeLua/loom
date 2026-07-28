@@ -1808,4 +1808,59 @@ public class ResolverTest
         Assert.False(model.EmitDebugDiagnostics);
     }
     #endregion DebugDiagnostics
+
+    #region Destructuring
+    [Fact]
+    public void Resolves_ArrayDestructuring_DeclaresAllBindings() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let array = [1, 2]; let [first, second] = array; print(first); print(second);").Diagnostics);
+
+    [Fact]
+    public void Resolves_ObjectDestructuring_DeclaresAllBindings() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                "interface User { name: string } let user = new User { name: \"Ada\" }; let { name } = user; print(name);"
+            ).Diagnostics
+        );
+
+    [Fact]
+    public void Resolves_ObjectDestructuring_WithAlias_DeclaresBindingUnderAliasName()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            "interface User { age: number } let user = new User { age: 30 }; let { age: userAge } = user; print(userAge);"
+        ).Diagnostics;
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_ObjectDestructuring_AliasName_IsNotVisibleUnderOriginalName()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            "interface User { age: number } let user = new User { age: 30 }; let { age: userAge } = user; print(age);"
+        ).Diagnostics;
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'age'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Destructuring_MissingInitializer()
+    {
+        var diagnostics = Utility.GetSemanticModel("let [first, second];").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.MustHaveInitializer, "Destructuring declarations must be initialized.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Destructuring_WithMutKeyword()
+    {
+        var diagnostics = Utility.GetSemanticModel("let array = [1, 2]; mut [first, second] = array;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDestructureTarget, "Destructuring declarations must use 'let', not 'mut'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Destructuring_DuplicateBindingName()
+    {
+        var diagnostics = Utility.GetSemanticModel("let array = [1, 2]; let [x, x] = array;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.DuplicateName, "Variable 'x' is already declared in this scope.");
+    }
+    #endregion Destructuring
 }

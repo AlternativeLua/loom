@@ -3314,4 +3314,86 @@ public class LuauGeneratorTest
         Assert.Equal("-", unary.Operator);
         Assert.Equal("x", Assert.IsType<Identifier>(unary.Operand).Name);
     }
+
+    [Fact]
+    public void Generates_ArrayDestructuring_AsIndexedConsts()
+    {
+        var luauTree = Utility.GetLuauAST("let array = [1, 2]; let [first, second] = array;", true);
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        var first = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        Assert.Equal("first", first.Name);
+        var firstAccess = Assert.IsType<ElementAccess>(first.Initializer);
+        Assert.Equal("array", Assert.IsType<Identifier>(firstAccess.Target).Name);
+        Assert.Equal(1d, Assert.IsType<NumberLiteral>(firstAccess.Index).Value);
+
+        var second = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("second", second.Name);
+        var secondAccess = Assert.IsType<ElementAccess>(second.Initializer);
+        Assert.Equal(2d, Assert.IsType<NumberLiteral>(secondAccess.Index).Value);
+    }
+
+    [Fact]
+    public void Generates_ArrayDestructuring_FromNonTrivialInitializer_SpillsToTemp()
+    {
+        var luauTree = Utility.GetLuauAST("let [first, second] = [1, 2, 3];", true);
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        var temp = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_destructure", temp.Name);
+        Assert.IsType<Table>(temp.Initializer);
+
+        var first = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        var firstAccess = Assert.IsType<ElementAccess>(first.Initializer);
+        Assert.Equal("_destructure", Assert.IsType<Identifier>(firstAccess.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_ObjectDestructuring_AsPropertyConsts()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface User { name: string, age: number }
+            let user = new User { name: "Ada", age: 30 };
+            let { name, age } = user;
+            """,
+            true
+        );
+
+        var name = Assert.IsType<ConstVariable>(luauTree.Statements[^2]);
+        Assert.Equal("name", name.Name);
+        var nameAccess = Assert.IsType<PropertyAccess>(name.Initializer);
+        Assert.Equal("user", Assert.IsType<Identifier>(nameAccess.Target).Name);
+        Assert.Equal(["name"], nameAccess.Names);
+
+        var age = Assert.IsType<ConstVariable>(luauTree.Statements[^1]);
+        Assert.Equal("age", age.Name);
+        Assert.Equal(["age"], Assert.IsType<PropertyAccess>(age.Initializer).Names);
+    }
+
+    [Fact]
+    public void Generates_ObjectDestructuring_WithAlias_BindsUnderAliasName_ReadsOriginalProperty()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface User { age: number }
+            let user = new User { age: 30 };
+            let { age: userAge } = user;
+            """,
+            true
+        );
+
+        var userAge = Assert.IsType<ConstVariable>(luauTree.Statements[^1]);
+        Assert.Equal("userAge", userAge.Name);
+        var access = Assert.IsType<PropertyAccess>(userAge.Initializer);
+        Assert.Equal(["age"], access.Names);
+    }
+
+    [Fact]
+    public void Generates_Destructuring_NoRefutabilityGuards()
+    {
+        var rendered = Utility.GetLuauAST("let array = [1, 2]; let [first, second] = array;", true).Render();
+        Assert.DoesNotContain("typeof", rendered);
+        Assert.DoesNotContain("if ", rendered);
+    }
 }

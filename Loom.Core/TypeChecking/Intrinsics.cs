@@ -62,6 +62,7 @@ public static class Intrinsics
                 }
             )
             .Select(compilationUnit.Compile)
+            .OfType<CompiledFile>()
             .ToArray();
 
         var intrinsicSymbols = new HashSet<(Symbol, Type)>();

@@ -109,6 +109,23 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitVariableDeclaration(VariableDeclaration variableDeclaration) =>
         CombineResults([VisitWithDefault(variableDeclaration.ColonTypeClause), VisitWithDefault(variableDeclaration.EqualsValueClause)]);
 
+    public virtual T VisitDestructuringDeclaration(DestructuringDeclaration destructuringDeclaration) =>
+        CombineResults(
+            [
+                Visit(destructuringDeclaration.Target),
+                VisitWithDefault(destructuringDeclaration.ColonTypeClause),
+                VisitWithDefault(destructuringDeclaration.EqualsValueClause)
+            ]
+        );
+
+    public virtual T VisitDestructuringElement(DestructuringElement destructuringElement) => DefaultValue(destructuringElement);
+
+    public virtual T VisitArrayDestructuringTarget(ArrayDestructuringTarget arrayDestructuringTarget) => VisitList(arrayDestructuringTarget.Elements);
+
+    public virtual T VisitObjectDestructuringTarget(ObjectDestructuringTarget objectDestructuringTarget) => VisitList(objectDestructuringTarget.Fields);
+
+    public virtual T VisitObjectDestructuringField(ObjectDestructuringField objectDestructuringField) => DefaultValue(objectDestructuringField);
+
     public virtual T VisitEnumDeclaration(EnumDeclaration enumDeclaration) => VisitList(enumDeclaration.Members);
     public virtual T VisitEnumMember(EnumMember enumMember) => VisitWithDefault(enumMember.EqualsValueClause);
 
@@ -146,6 +163,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitInterpolatedStringLiteral(InterpolatedStringLiteral interpolatedStringLiteral) => VisitList(interpolatedStringLiteral.Expressions);
     public virtual T VisitIdentifier(Identifier identifier) => DefaultValue(identifier);
     public virtual T VisitParenthesized(Parenthesized parenthesized) => Visit(parenthesized.Expression);
+    public virtual T VisitTupleExpression(TupleExpression tupleExpression) => VisitList(tupleExpression.Expressions);
     public virtual T VisitNameOf(NameOf nameOf) => CombineResults([VisitWithDefault(nameOf.TypeArguments), VisitWithDefault(nameOf.Name)]);
     public virtual T VisitArguments(Arguments arguments) => VisitList(arguments.ArgumentList);
 
@@ -170,6 +188,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitPrimitiveType(PrimitiveType primitiveType) => DefaultValue(primitiveType);
     public virtual T VisitTypeName(TypeName typeName) => VisitWithDefault(typeName.TypeArguments);
     public virtual T VisitParenthesizedType(ParenthesizedType parenthesized) => Visit(parenthesized.Type);
+    public virtual T VisitTupleType(TupleType tupleType) => VisitList(tupleType.Types);
     public virtual T VisitIndexedType(IndexedType indexedType) => CombineResults([Visit(indexedType.TargetType), Visit(indexedType.IndexType)]);
     public virtual T VisitKeyOf(KeyOf keyOf) => Visit(keyOf.Type);
     public virtual T VisitTypeOf(TypeOf typeOf) => Visit(typeOf.Expression);

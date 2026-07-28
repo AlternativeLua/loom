@@ -59,6 +59,35 @@ public sealed partial class Resolver
         return false;
     }
 
+    public override bool VisitDestructuringDeclaration(DestructuringDeclaration destructuringDeclaration)
+    {
+        if (destructuringDeclaration.Keyword.Kind == SyntaxKind.MutKeyword)
+            _diagnostics.Error(
+                destructuringDeclaration,
+                InternalCodes.InvalidDestructureTarget,
+                "Destructuring declarations must use 'let', not 'mut'."
+            );
+
+        var declared = destructuringDeclaration.Target switch
+        {
+            ArrayDestructuringTarget arrayTarget =>
+                arrayTarget.Elements.All(element => DeclareVariable(element, element.Name.Text, SymbolKind.Variable)),
+            ObjectDestructuringTarget objectTarget =>
+                objectTarget.Fields.All(field => DeclareVariable(field, field.BindingName.Text, SymbolKind.Variable)),
+            _ => true
+        };
+
+        if (!declared)
+            return false;
+
+        base.VisitDestructuringDeclaration(destructuringDeclaration);
+        if (destructuringDeclaration.EqualsValueClause != null)
+            return true;
+
+        _diagnostics.Error(destructuringDeclaration, InternalCodes.MustHaveInitializer, "Destructuring declarations must be initialized.");
+        return false;
+    }
+
     public override bool VisitDeclareFunctionSignature(DeclareFunctionSignature declareFunctionSignature)
     {
         if (!DeclareVariable(declareFunctionSignature, SymbolKind.Function))

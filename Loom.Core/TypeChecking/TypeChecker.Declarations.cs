@@ -79,6 +79,72 @@ public sealed partial class TypeChecker
         return BindType(variableDeclaration, TypeSimplifier.Simplify(finalType));
     }
 
+    public override Type VisitDestructuringDeclaration(DestructuringDeclaration destructuringDeclaration)
+    {
+        Type? declaredType = null;
+        if (destructuringDeclaration.ColonTypeClause != null)
+            declaredType = Visit(destructuringDeclaration.ColonTypeClause);
+
+        var initializerType = destructuringDeclaration.EqualsValueClause != null
+            ? declaredType != null
+                ? Check(destructuringDeclaration.EqualsValueClause.Value, declaredType, _flowState)
+                : Visit(destructuringDeclaration.EqualsValueClause)
+            : null;
+
+        var subjectType = declaredType ?? initializerType ?? Types.PrimitiveType.Unknown;
+        switch (destructuringDeclaration.Target)
+        {
+            case ArrayDestructuringTarget arrayTarget:
+                CheckArrayDestructuringTarget(arrayTarget, subjectType);
+                break;
+            case ObjectDestructuringTarget objectTarget:
+                CheckObjectDestructuringTarget(objectTarget, subjectType);
+                break;
+        }
+
+        return BindType(destructuringDeclaration, Types.PrimitiveType.Void);
+    }
+
+    private void CheckArrayDestructuringTarget(ArrayDestructuringTarget target, Type subjectType)
+    {
+        var elementType = GetArrayElementType(subjectType);
+        if (elementType == null)
+        {
+            if (Type.IsNotUnknown(subjectType) && Type.IsNotNever(subjectType))
+                _diagnostics.Error(
+                    target,
+                    InternalCodes.InvalidDestructureSource,
+                    $"Cannot destructure value of type '{subjectType}' with an array pattern."
+                );
+
+            elementType = Types.PrimitiveType.Unknown;
+        }
+
+        foreach (var element in target.Elements)
+            BindType(element, elementType);
+    }
+
+    private void CheckObjectDestructuringTarget(ObjectDestructuringTarget target, Type subjectType)
+    {
+        foreach (var field in target.Fields)
+        {
+            var propertyType = TypeSimplifier.GetMemberPropertyType(subjectType, field.Name.Text);
+            if (propertyType == null)
+            {
+                if (Type.IsNotUnknown(subjectType) && Type.IsNotNever(subjectType))
+                    _diagnostics.Error(
+                        field,
+                        InternalCodes.UnknownDestructureProperty,
+                        $"Property '{field.Name.Text}' does not exist on type '{subjectType}'."
+                    );
+
+                propertyType = Types.PrimitiveType.Unknown;
+            }
+
+            BindType(field, propertyType);
+        }
+    }
+
     /// <remarks>
     ///     Imported declarations are typed by the module that exports them, and the base implementation would
     ///     return the type of the module path string — which would become the file's type when a module ends

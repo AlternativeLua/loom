@@ -3911,6 +3911,70 @@ public class TypeCheckerTest
     }
     #endregion Rest Parameters
 
+    #region Destructuring
+    [Fact]
+    public void Checks_ArrayDestructuring_BindsElementType()
+    {
+        var type = Utility.GetLastStatementType("let array: number[] = [1, 2, 3]; let [first, second] = array; first;");
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void Checks_ObjectDestructuring_BindsPropertyType()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface User { name: string, age: number }
+            let user = new User { name: "Ada", age: 30 };
+            let { name, age } = user;
+            age;
+            """
+        );
+
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void Checks_ObjectDestructuring_WithAlias_BindsAliasToPropertyType()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface User { age: number }
+            let user = new User { age: 30 };
+            let { age: userAge } = user;
+            userAge;
+            """
+        );
+
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void ThrowsFor_ObjectDestructuring_UnknownProperty()
+    {
+        const string source = """
+            interface User { name: string }
+            let user = new User { name: "Ada" };
+            let { age } = user;
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.UnknownDestructureProperty, "Property 'age' does not exist on type 'User'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ArrayDestructuring_OnNonArraySource()
+    {
+        const string source = """
+            let n: number = 1;
+            let [a, b] = n;
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDestructureSource, "Cannot destructure value of type 'number' with an array pattern.");
+    }
+    #endregion Destructuring
+
     #region Overloaded Interface Members
     [Fact]
     public void Checks_InterfaceDeclaration_DuplicateFunctionProperty_MergesIntoIntersection()

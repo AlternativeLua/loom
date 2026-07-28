@@ -876,4 +876,61 @@ public class ParserTest
         Assert.Null(functionDeclaration.Parameters!.ParameterList.Single().DotDot);
     }
     #endregion Rest Parameters
+
+    #region Destructuring
+    [Fact]
+    public void Parses_ArrayDestructuringTarget()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let [first, second] = array;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<ArrayDestructuringTarget>(destructuringDeclaration.Target);
+        Assert.Equal(["first", "second"], target.Elements.Select(e => e.Name.Text));
+    }
+
+    [Fact]
+    public void Parses_ObjectDestructuringTarget()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let { name, age } = user;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<ObjectDestructuringTarget>(destructuringDeclaration.Target);
+        Assert.Equal(["name", "age"], target.Fields.Select(f => f.Name.Text));
+        Assert.All(target.Fields, f => Assert.Null(f.Alias));
+    }
+
+    [Fact]
+    public void Parses_ObjectDestructuringTarget_WithFieldAlias()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let { age: userAge } = user;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<ObjectDestructuringTarget>(destructuringDeclaration.Target);
+        var field = Assert.Single(target.Fields);
+        Assert.Equal("age", field.Name.Text);
+        Assert.Equal("userAge", field.Alias!.Text);
+        Assert.Equal("userAge", field.BindingName.Text);
+    }
+
+    [Fact]
+    public void ThrowsFor_RestElement_InArrayDestructuringTarget()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("let [first, ..rest] = array;");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.InvalidDestructureTarget);
+        Assert.NotNull(diagnostic);
+    }
+
+    [Fact]
+    public void ThrowsFor_RestElement_InObjectDestructuringTarget()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("let { name, ..rest } = user;");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.InvalidDestructureTarget);
+        Assert.NotNull(diagnostic);
+    }
+
+    [Fact]
+    public void Parses_PlainVariableDeclaration_Unaffected()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x = 1;"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        Assert.Equal("x", variableDeclaration.Name.Text);
+    }
+    #endregion Destructuring
 }
