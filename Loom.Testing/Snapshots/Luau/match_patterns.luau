@@ -22,36 +22,36 @@ const function describe(x: number | string | Box): string
   return _match
 end
 const function describeGuarded(n: number): string
-  local _match_1
+  local _match
   if n > 0 then
     const m = n
-    _match_1 = "positive"
+    _match = "positive"
   else
-    _match_1 = "non-positive"
+    _match = "non-positive"
   end
-  return _match_1
+  return _match
 end
 const function describeAndPattern(x: number | string): string
-  local _match_2
+  local _match
   if typeof(x) == "number" and x > 0 then
     const n = x
-    _match_2 = "positive number"
+    _match = "positive number"
   elseif typeof(x) == "number" then
     const n = x
-    _match_2 = "non-positive number"
+    _match = "non-positive number"
   else
-    _match_2 = "string"
+    _match = "string"
   end
-  return _match_2
+  return _match
 end
 const _subject = {1, 2, 3}
-local _match_3
+local _match
 if typeof(_subject) == "table" then
   const head = _subject[1]
   const rest = table.move(_subject, 2, #_subject, 1, {})
-  _match_3 = head
+  _match = head
 else
-  _match_3 = 0
+  _match = 0
 end
-const firstAndRest = _match_3
+const firstAndRest = _match
 const onlyWildcard = 42

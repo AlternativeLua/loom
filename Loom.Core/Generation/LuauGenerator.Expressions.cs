@@ -311,7 +311,7 @@ public sealed partial class LuauGenerator
 
     private List<LuauExpression> UnwrapFunctionArgument(Statement body, LuauType? returnType = null)
     {
-        var chunk = GenerateChunk(body);
+        var (chunk, _) = _state.CaptureIsolated(() => GenerateChunk(body));
         return chunk is { Statements: [ExpressionStatement { Expression: Call { IsMethod: false } call }] }
             ? [call.Callee, ..call.Arguments]
             : [new AnonymousFunction(null, [], returnType ?? new UnitType(), chunk)];
