@@ -2,9 +2,14 @@ using Loom.Luau.AST;
 
 namespace Loom.Core.Generation;
 
-internal sealed class LuauScope(LuauScope? parent = null)
+internal sealed class LuauScope(LuauScope? parent = null, bool isolated = false)
 {
-    private readonly Dictionary<string, int> _nameCounts = parent?._nameCounts ?? [];
+    // Non-isolated scopes share their parent's name table, so sibling statements within the same
+    // real Luau block (e.g. two prerequisite-generating statements in one function body) still see
+    // each other's synthesized names. Isolated scopes get a fresh table instead - used specifically
+    // where a genuinely new Luau function scope begins, so unrelated function bodies (which don't
+    // share a real Luau scope) don't evade collisions against each other for no reason.
+    private readonly Dictionary<string, int> _nameCounts = isolated || parent == null ? [] : parent._nameCounts;
 
     public LuauScope? Parent { get; } = parent;
     public List<LuauStatement> PrereqStatements { get; } = [];

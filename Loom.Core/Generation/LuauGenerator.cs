@@ -72,10 +72,16 @@ public sealed partial class LuauGenerator
 
     protected override LuauNode Visit(Node node) => node.Accept(this);
 
-    private Chunk GenerateFunctionBody(FunctionDeclaration functionDeclaration) =>
-        functionDeclaration.Body is ExpressionBody expressionBody
-            ? new Chunk(GenerateStatements(expressionBody.Expression))
-            : GenerateChunk(functionDeclaration.Body);
+    private Chunk GenerateFunctionBody(FunctionDeclaration functionDeclaration)
+    {
+        var (chunk, _) = _state.CaptureIsolated(() =>
+            functionDeclaration.Body is ExpressionBody expressionBody
+                ? new Chunk(GenerateStatements(expressionBody.Expression))
+                : GenerateChunk(functionDeclaration.Body)
+        );
+
+        return chunk;
+    }
 
     private Luau.AST.TypeParameters GenerateTypeParameters(TypeParameters? typeParameters) =>
         MaybeVisit<Luau.AST.TypeParameters>(typeParameters) ?? new Luau.AST.TypeParameters();
