@@ -3444,6 +3444,28 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_ObjectPattern_UsesLuauNameForRenamedField()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Box {
+                [luau_name("Value")]
+                value: number
+            }
+            let box = new Box { value: 1 };
+            let m = match box { { value } -> value, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("value", binding.Name);
+        var access = Assert.IsType<PropertyAccess>(binding.Initializer);
+        Assert.Equal(["Value"], access.Names);
+    }
+
+    [Fact]
     public void Generates_Match_OrPattern_CombinesConditionsWithOr()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { 0 | 1 -> 0, _ -> 0 }");

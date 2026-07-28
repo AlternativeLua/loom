@@ -156,10 +156,13 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
             _ => (expression, [])
         };
 
-        if (names.Length == 0)
-            return null;
+        return names.Length == 0 ? null : GetPropertySymbol(GetType(objectExpression), names);
+    }
 
-        var objectType = GetType(objectExpression).NonNullable();
+    /// <summary> Looks up a property by path directly off a type, for callers with no access-expression node to read it from (e.g. a match object pattern field). </summary>
+    public PropertySymbol? GetPropertySymbol(Type objectType, IReadOnlyList<string> path)
+    {
+        objectType = objectType.NonNullable();
         if (objectType is InstantiatedType instantiated)
             objectType = instantiated.Expand();
 
@@ -167,7 +170,7 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
             return null;
 
         var interfaceSymbol = FindDeclarationSymbol<InterfaceSymbol>(interfaceType.Name);
-        return interfaceSymbol?.GetPropertyAtPath(names);
+        return interfaceSymbol?.GetPropertyAtPath(path);
     }
 
     public Type GetType(Node node) => TypeSolver.GetType(node);

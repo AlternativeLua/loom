@@ -313,13 +313,24 @@ public sealed partial class LuauGenerator
         }
     }
 
-    private bool CompileObjectPatternFields(ObjectPattern objectPattern, LuauExpression subject, List<LuauExpression> conditions, List<LuauStatement> bindings) =>
-        !(
+    private bool CompileObjectPatternFields(ObjectPattern objectPattern, LuauExpression subject, List<LuauExpression> conditions, List<LuauStatement> bindings)
+    {
+        var patternType = _semanticModel.GetType(objectPattern);
+        return !(
             from field in objectPattern.Fields
-            let propertyAccess = new Luau.AST.PropertyAccess(subject, [field.Name.Text])
+            let name = GetRenamedPatternFieldName(patternType, field.Name.Text)
+            let propertyAccess = new Luau.AST.PropertyAccess(subject, [name])
             where !TryCompilePattern(field.Pattern, propertyAccess, conditions, bindings, out _)
             select field
         ).Any();
+    }
+
+    private string GetRenamedPatternFieldName(Type patternType, string name) =>
+        _semanticModel.GetPropertySymbol(patternType, [name]) is { } propertySymbol
+        && propertySymbol.TryGetIntrinsicAttribute("luau_name", out var luauNameAttribute)
+        && ValidateLuauNameAttribute(luauNameAttribute, out var nameLiteral)
+            ? nameLiteral.Value
+            : name;
 
     private static Call BuildArrayRestSlice(LuauExpression subject, int elementCount)
     {
