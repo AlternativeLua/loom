@@ -194,12 +194,20 @@ public sealed partial class LuauGenerator
             return _guardSubstitutionValue!;
 
         var luauIdentifier = new Luau.AST.Identifier(identifier.Name.Text);
-        return _macroExpander.TryGetInvocationMacroReference(identifier, luauIdentifier, out var referenceReplacement)
-            ? referenceReplacement
-            : _semanticModel.GetSymbol(identifier) is { Kind: SymbolKind.InjectedPropertyVariable }
-                ? new Luau.AST.PropertyAccess(LuauFactory.Self, [luauIdentifier.Name])
-                : luauIdentifier;
+        if (_macroExpander.TryGetInvocationMacroReference(identifier, luauIdentifier, out var referenceReplacement))
+            return referenceReplacement;
+
+        var symbol = _semanticModel.GetSymbol(identifier);
+        return symbol is { Kind: SymbolKind.InjectedPropertyVariable } || IsImplementMethodSymbol(symbol)
+            ? new Luau.AST.PropertyAccess(LuauFactory.Self, [luauIdentifier.Name])
+            : luauIdentifier;
     }
+
+    // A bare call to a sibling (or its own) method inside an `implement` block resolves to an ordinary
+    // SymbolKind.Function - correctly scoped to that block by the resolver - but still needs routing
+    // through 'self' and Luau's ':' call syntax, the same as an explicit `@.method()` would.
+    private static bool IsImplementMethodSymbol(Symbol? symbol) =>
+        symbol is { Kind: SymbolKind.Function, Declaration: FunctionDeclaration { Parent: ImplementBody } };
 
     public override LuauNode VisitSelfExpression(SelfExpression selfExpression) => LuauFactory.Self;
 
@@ -292,6 +300,7 @@ public sealed partial class LuauGenerator
     /// </summary>
     private bool IsMethodReference(Expression expression) =>
         _semanticModel.TryGetIntrinsicAttribute(expression, "luau_method", out _)
+        || expression is Identifier identifier && IsImplementMethodSymbol(_semanticModel.GetSymbol(identifier))
         || expression is { Children: [{ } child, ..], Tokens: [.., { Kind: SyntaxKind.Identifier } name] }
         && _semanticModel.GetType(child) is InterfaceType interfaceType
         && interfaceType.TraitMethodNames.Contains(name.Text);

@@ -845,6 +845,31 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_SelfExpression_BareRecursiveMethodCall_UsesSelfAndColonSyntax()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            implement Display for Container {
+                fn display -> print(display());
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[^1]);
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var recursiveCall = Assert.IsType<Call>(Assert.Single(printCall.Arguments));
+        Assert.True(recursiveCall.IsMethod);
+
+        var recursiveAccess = Assert.IsType<PropertyAccess>(recursiveCall.Callee);
+        Assert.Equal("self", Assert.IsType<Identifier>(recursiveAccess.Target).Name);
+        Assert.Equal("display", Assert.Single(recursiveAccess.Names));
+    }
+
+    [Fact]
     public void Generates_TraitDeclaration()
     {
         var luauTree = Utility.GetLuauAST("trait T { fn method(): number }", true);
