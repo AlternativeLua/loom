@@ -1,0 +1,7 @@
+fn returns_tuple: (string, number) {
+    return ("abc", 420);
+}
+
+let (one, two) = returns_tuple();
+print(one);
+print(two);

@@ -3459,4 +3459,37 @@ public class LuauGeneratorTest
 
         Assert.Contains("return table.unpack(t)", rendered);
     }
+
+    [Fact]
+    public void Generates_TupleDestructure_OfLiteral_EmitsNoTableOrMultiConst()
+    {
+        var rendered = Utility.GetLuauAST("let (one, two) = (\"abc\", 420);", true).Render();
+        Assert.Contains("const one = \"abc\"", rendered);
+        Assert.Contains("const two = 420", rendered);
+        Assert.DoesNotContain("table.unpack", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleDestructure_OfCall_EmitsMultiConstNoUnpack()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                return ("abc", 420);
+            }
+            let (one, two) = returns_tuple();
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("const one, two = returns_tuple()", rendered);
+        Assert.DoesNotContain("table.unpack", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleDestructure_OfValue_WrapsTableUnpack()
+    {
+        var rendered = Utility.GetLuauAST("let t: (string, number) = (\"abc\", 420); let (one, two) = t;", true).Render();
+        Assert.Contains("const one, two = table.unpack(t)", rendered);
+    }
 }

@@ -1862,5 +1862,15 @@ public class ResolverTest
         var diagnostics = Utility.GetSemanticModel("let array = [1, 2]; let [x, x] = array;").Diagnostics;
         Utility.AssertDiagnostic(diagnostics, InternalCodes.DuplicateName, "Variable 'x' is already declared in this scope.");
     }
+
+    [Fact]
+    public void Resolves_TupleDestructuring_DeclaresAllBindings() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel("let t: (string, number) = (\"abc\", 420); let (one, two) = t; print(one); print(two);").Diagnostics
+        );
+
+    [Fact]
+    public void Resolves_TupleConstraint_ResolvesTupleName() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("declare fn something<T: Tuple>(..args: T): void;").Diagnostics);
     #endregion Destructuring
 }

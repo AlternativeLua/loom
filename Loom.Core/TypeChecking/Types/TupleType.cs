@@ -27,6 +27,7 @@ public sealed class TupleType(List<Type> elementTypes) : NativelyIndexableType
 
                 return other switch
                 {
+                    TupleMarkerType => true,
                     TupleType tuple =>
                         ElementTypes.Count == tuple.ElementTypes.Count
                         && ElementTypes.Zip(tuple.ElementTypes).All(pair => pair.First.IsAssignableTo(pair.Second)),

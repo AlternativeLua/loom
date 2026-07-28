@@ -74,6 +74,8 @@ public sealed partial class Resolver
                 arrayTarget.Elements.All(element => DeclareVariable(element, element.Name.Text, SymbolKind.Variable)),
             ObjectDestructuringTarget objectTarget =>
                 objectTarget.Fields.All(field => DeclareVariable(field, field.BindingName.Text, SymbolKind.Variable)),
+            TupleDestructuringTarget tupleTarget =>
+                tupleTarget.Elements.All(element => DeclareVariable(element, element.Name.Text, SymbolKind.Variable)),
             _ => true
         };
 

@@ -126,6 +126,8 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
 
     public virtual T VisitObjectDestructuringField(ObjectDestructuringField objectDestructuringField) => DefaultValue(objectDestructuringField);
 
+    public virtual T VisitTupleDestructuringTarget(TupleDestructuringTarget tupleDestructuringTarget) => VisitList(tupleDestructuringTarget.Elements);
+
     public virtual T VisitEnumDeclaration(EnumDeclaration enumDeclaration) => VisitList(enumDeclaration.Members);
     public virtual T VisitEnumMember(EnumMember enumMember) => VisitWithDefault(enumMember.EqualsValueClause);
 

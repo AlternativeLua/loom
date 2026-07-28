@@ -13,6 +13,8 @@ public static class Intrinsics
     private static HashSet<(Symbol, Type)>? _cachedIntrinsics;
     private static bool _compilingIntrinsic;
 
+    public static readonly TupleMarkerType TupleMarker = new();
+
     public static readonly InterfaceType Range = new(
         "Range",
         [],

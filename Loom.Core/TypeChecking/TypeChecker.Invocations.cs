@@ -44,13 +44,18 @@ public sealed partial class TypeChecker
             {
                 var fixedCount = candidate.HasRestParameter ? candidate.ParameterTypes.Count - 1 : candidate.ParameterTypes.Count;
                 var requiredCount = candidate.ParameterTypes.Take(fixedCount).Count(Type.IsNotOptional);
-                var restElementType = GetRestElementType(candidate.ParameterTypes, candidate.HasRestParameter);
+                var exactRestArity = GetRestExactArity(candidate.ParameterTypes, candidate.HasRestParameter, fixedCount);
+                var arityOk = exactRestArity is { } exact
+                    ? argumentTypes.Count == exact
+                    : candidate.HasRestParameter || argumentTypes.Count <= fixedCount;
+
                 return argumentTypes.Count >= requiredCount
-                    && (candidate.HasRestParameter || argumentTypes.Count <= fixedCount)
-                    && !argumentTypes.Where((argumentType, i) => i < fixedCount
-                        ? !argumentType.IsAssignableTo(candidate.ParameterTypes[i])
-                        : restElementType != null && !argumentType.IsAssignableTo(restElementType)
-                    ).Any();
+                    && arityOk
+                    && !argumentTypes.Where((argumentType, i) =>
+                    {
+                        var expected = GetArgumentExpectedType(candidate.ParameterTypes, candidate.HasRestParameter, i, fixedCount);
+                        return expected != null && !argumentType.IsAssignableTo(expected);
+                    }).Any();
             }
         );
 
@@ -148,15 +153,13 @@ public sealed partial class TypeChecker
     private List<Type> BuildArgumentTypes(List<Expression> argumentList, List<Type> parameterTypes, bool hasRestParameter = false)
     {
         var fixedCount = hasRestParameter ? parameterTypes.Count - 1 : parameterTypes.Count;
-        var restElementType = GetRestElementType(parameterTypes, hasRestParameter);
         var argumentTypes = new List<Type>(argumentList.Count);
         argumentTypes.AddRange(
-            argumentList.Select((t, i) => i < fixedCount
-                ? Check(t, parameterTypes[i])
-                : restElementType != null
-                    ? Check(t, restElementType)
-                    : Visit(t)
-            )
+            argumentList.Select((t, i) =>
+            {
+                var expected = GetArgumentExpectedType(parameterTypes, hasRestParameter, i, fixedCount);
+                return expected != null ? Check(t, expected) : Visit(t);
+            })
         );
 
         return argumentTypes;
@@ -172,16 +175,43 @@ public sealed partial class TypeChecker
     {
         CheckArity(arguments, parameters, argumentTypes, parameterTypes, hasRestParameter);
         var fixedCount = hasRestParameter ? parameterTypes.Count - 1 : parameterTypes.Count;
-        var restElementType = GetRestElementType(parameterTypes, hasRestParameter);
         for (var i = 0; i < args.Count; i++)
-            if (i < fixedCount)
-                Check(args[i], parameterTypes[i]);
-            else if (restElementType != null)
-                Check(args[i], restElementType);
+        {
+            var expected = GetArgumentExpectedType(parameterTypes, hasRestParameter, i, fixedCount);
+            if (expected != null)
+                Check(args[i], expected);
+        }
     }
 
-    private static Type? GetRestElementType(List<Type> parameterTypes, bool hasRestParameter) =>
-        hasRestParameter && parameterTypes.Count > 0 && parameterTypes[^1] is Types.ArrayType restArray ? restArray.ElementType : null;
+    /// <summary>
+    ///     The type argument <paramref name="index" /> should be checked against, or null when it's an extra
+    ///     rest-position argument with no uniform element type to check (an array rest with no element type
+    ///     information reaching this point, which shouldn't happen but is handled permissively).
+    /// </summary>
+    private static Type? GetArgumentExpectedType(List<Type> parameterTypes, bool hasRestParameter, int index, int fixedCount)
+    {
+        if (index < fixedCount)
+            return index < parameterTypes.Count ? parameterTypes[index] : null;
+
+        if (!hasRestParameter || parameterTypes.Count == 0)
+            return null;
+
+        return parameterTypes[^1] switch
+        {
+            Types.TupleType restTuple => index - fixedCount < restTuple.ElementTypes.Count ? restTuple.ElementTypes[index - fixedCount] : null,
+            Types.ArrayType restArray => restArray.ElementType,
+            _ => null
+        };
+    }
+
+    /// <summary>
+    ///     The exact total argument count required when the rest parameter is a fixed-arity tuple (rather than
+    ///     an array, which accepts any count), or null when arity isn't constrained to an exact number.
+    /// </summary>
+    private static int? GetRestExactArity(List<Type> parameterTypes, bool hasRestParameter, int fixedCount) =>
+        hasRestParameter && parameterTypes.Count > 0 && parameterTypes[^1] is Types.TupleType restTuple
+            ? fixedCount + restTuple.ElementTypes.Count
+            : null;
 
     private void CheckArity(Arguments arguments, Parameters? parameters, List<Type> argumentTypes, List<Type> parameterTypes, bool hasRestParameter = false)
     {
@@ -207,6 +237,21 @@ public sealed partial class TypeChecker
 
         var minimum = requiredParameterTypes.Count;
         var maximum = fixedParameterTypes.Count;
+        var exactRestArity = GetRestExactArity(parameterTypes, hasRestParameter, maximum);
+        if (exactRestArity is { } exact)
+        {
+            if (argumentTypes.Count == exact) return;
+
+            var tupleArity = exact - maximum;
+            _diagnostics.Error(
+                arguments,
+                InternalCodes.TupleRestArityMismatch,
+                $"Tuple rest parameter expects exactly {tupleArity} argument{(tupleArity == 1 ? "" : "s")}, but {Math.Max(argumentTypes.Count - maximum, 0)} were provided."
+            );
+
+            return;
+        }
+
         var arityDisplay = hasRestParameter
             ? $"{minimum}+"
             : minimum == maximum
@@ -259,10 +304,7 @@ public sealed partial class TypeChecker
             return null;
 
         var fixedCount = functionType.HasRestParameter ? functionType.ParameterTypes.Count - 1 : functionType.ParameterTypes.Count;
-        if (index < fixedCount)
-            return functionType.ParameterTypes[index];
-
-        return GetRestElementType(functionType.ParameterTypes, functionType.HasRestParameter);
+        return GetArgumentExpectedType(functionType.ParameterTypes, functionType.HasRestParameter, index, fixedCount);
     }
 
     /// <summary>

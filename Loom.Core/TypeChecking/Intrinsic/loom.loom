@@ -1,5 +1,7 @@
 ## Loom standard library
 
+interface Tuple;
+
 interface Record<K, V> {
     [K]: V;
 }

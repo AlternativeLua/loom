@@ -92,6 +92,9 @@ public sealed partial class TypeChecker
         var symbol = _semanticModel.GetSymbol(typeName);
         if (symbol != null)
         {
+            if (IsTupleMarkerSymbol(symbol))
+                return BindType(typeName, Intrinsics.TupleMarker);
+
             var declaredType = ResolveHoistedType(symbol);
             if (symbol is { Kind: SymbolKind.EnumType } && declaredType is ObjectType objectType)
                 return BindType(typeName, typeName.Parent is IndexedType or KeyOf ? objectType : objectType.PropertyUnion());
@@ -109,6 +112,8 @@ public sealed partial class TypeChecker
         _diagnostics.Error(typeName, InternalCodes.CannotFindSymbol, $"Cannot find symbol for declaration of type '{typeName.Name.Text}'.");
         return BindType(typeName, Types.PrimitiveType.Never);
     }
+
+    private static bool IsTupleMarkerSymbol(Symbol symbol) => symbol is { IsIntrinsic: true, Name: "Tuple" } && symbol.File.Name == "loom.loom";
 
     public override Types.TypeParameter VisitTypeParameter(TypeParameter typeParameter)
     {

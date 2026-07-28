@@ -100,9 +100,47 @@ public sealed partial class TypeChecker
             case ObjectDestructuringTarget objectTarget:
                 CheckObjectDestructuringTarget(objectTarget, subjectType);
                 break;
+            case TupleDestructuringTarget tupleTarget:
+                CheckTupleDestructuringTarget(tupleTarget, subjectType);
+                break;
         }
 
         return BindType(destructuringDeclaration, Types.PrimitiveType.Void);
+    }
+
+    private void CheckTupleDestructuringTarget(TupleDestructuringTarget target, Type subjectType)
+    {
+        if (subjectType is not Types.TupleType tupleType)
+        {
+            if (Type.IsNotUnknown(subjectType) && Type.IsNotNever(subjectType))
+                _diagnostics.Error(
+                    target,
+                    InternalCodes.InvalidDestructureSource,
+                    $"Cannot destructure value of type '{subjectType}' with a tuple pattern."
+                );
+
+            foreach (var element in target.Elements)
+                BindType(element, Types.PrimitiveType.Unknown);
+
+            return;
+        }
+
+        if (target.Elements.Count != tupleType.ElementTypes.Count)
+        {
+            _diagnostics.Error(
+                target,
+                InternalCodes.TupleArityMismatch,
+                $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {target.Elements.Count} were provided."
+            );
+
+            foreach (var element in target.Elements)
+                BindType(element, Types.PrimitiveType.Unknown);
+
+            return;
+        }
+
+        for (var i = 0; i < target.Elements.Count; i++)
+            BindType(target.Elements[i], tupleType.ElementTypes[i]);
     }
 
     private void CheckArrayDestructuringTarget(ArrayDestructuringTarget target, Type subjectType)
@@ -186,7 +224,7 @@ public sealed partial class TypeChecker
         if (declaredType != null && parameter.EqualsValueClause != null)
             _semanticModel.TypeSolver.AddConstraint(initializerType!, declaredType, parameter.EqualsValueClause.Value);
 
-        if (parameter.DotDot != null && declaredType != null && !IsArrayType(declaredType))
+        if (parameter.DotDot != null && declaredType != null && !IsArrayType(declaredType) && !IsTupleRestType(declaredType))
             _diagnostics.Error(
                 parameter,
                 InternalCodes.InvalidRestParameterType,
@@ -197,6 +235,14 @@ public sealed partial class TypeChecker
     }
 
     private static bool IsArrayType(Type type) => (type is InstantiatedType instantiated ? instantiated.Expand() : type) is Types.ArrayType;
+
+    private static bool IsTupleRestType(Type type) =>
+        (type is InstantiatedType instantiated ? instantiated.Expand() : type) switch
+        {
+            Types.TupleType => true,
+            Types.TypeParameter { Constraint: Types.TupleMarkerType } => true,
+            _ => false
+        };
 
     private Type GetReturnType(FunctionDeclaration functionDeclaration)
     {

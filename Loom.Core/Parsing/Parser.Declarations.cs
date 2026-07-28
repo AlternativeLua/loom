@@ -242,7 +242,7 @@ public sealed partial class Parser
 
     private Statement ParseVariableDeclaration(Token keyword)
     {
-        if (Current().Kind is SyntaxKind.LBracket or SyntaxKind.LBrace)
+        if (Current().Kind is SyntaxKind.LBracket or SyntaxKind.LBrace or SyntaxKind.LParen)
             return ParseDestructuringDeclaration(keyword);
 
         var name = ExpectIdentifier();
@@ -260,9 +260,20 @@ public sealed partial class Parser
     }
 
     private DestructuringTarget ParseDestructuringTarget() =>
-        Current().Kind == SyntaxKind.LBrace
-            ? ParseObjectDestructuringTarget()
-            : ParseArrayDestructuringTarget();
+        Current().Kind switch
+        {
+            SyntaxKind.LBrace => ParseObjectDestructuringTarget(),
+            SyntaxKind.LParen => ParseTupleDestructuringTarget(),
+            _ => ParseArrayDestructuringTarget()
+        };
+
+    private TupleDestructuringTarget ParseTupleDestructuringTarget()
+    {
+        var leftParen = Expect(SyntaxKind.LParen);
+        var elements = ParseDelimited(ParseDestructuringElement);
+        var rightParen = Expect(SyntaxKind.RParen);
+        return new TupleDestructuringTarget(leftParen, rightParen, elements);
+    }
 
     private ArrayDestructuringTarget ParseArrayDestructuringTarget()
     {

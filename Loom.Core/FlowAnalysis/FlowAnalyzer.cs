@@ -226,6 +226,8 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
                 arrayTarget.Elements.Select(element => semanticModel.GetDeclarationSymbol(element)).OfType<Symbol>(),
             ObjectDestructuringTarget objectTarget =>
                 objectTarget.Fields.Select(field => semanticModel.GetDeclarationSymbol(field)).OfType<Symbol>(),
+            TupleDestructuringTarget tupleTarget =>
+                tupleTarget.Elements.Select(element => semanticModel.GetDeclarationSymbol(element)).OfType<Symbol>(),
             _ => []
         };
 

@@ -4080,6 +4080,121 @@ public class TypeCheckerTest
             "Tuple type '(string, number)' expects 2 element(s), but 3 were provided."
         );
     }
+
+    [Fact]
+    public void Checks_TuplePattern_BindsElementTypesPositionally()
+    {
+        const string source = """
+            let t: (string, number) = ("abc", 420);
+            let (one, two) = t;
+            two;
+            """;
+
+        var type = Utility.GetLastStatementType(source);
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void ThrowsFor_TuplePattern_ArityMismatch()
+    {
+        const string source = """
+            let t: (string, number) = ("abc", 420);
+            let (one, two, three) = t;
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TupleArityMismatch,
+            "Tuple type '(string, number)' expects 2 element(s), but 3 were provided."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_TuplePattern_NonTupleSource()
+    {
+        const string source = """
+            let n: number = 1;
+            let (one, two) = n;
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDestructureSource, "Cannot destructure value of type 'number' with a tuple pattern.");
+    }
+
+    [Fact]
+    public void Checks_TupleConstraint_AcceptsTupleArgument() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                declare fn something<T: Tuple>(..args: T): void;
+                something::<(string, number)>("abc", 420);
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_TupleConstraint_RejectsNonTuple()
+    {
+        const string source = """
+            declare fn something<T: Tuple>(..args: T): void;
+            something::<number[]>(1, 2);
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ConstraintViolation,
+            "Type 'number[]' does not satisfy constraint 'Tuple' for type parameter 'T'."
+        );
+    }
+
+    [Fact]
+    public void Checks_TupleRest_ExactArity_Ok() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                declare fn something<T: Tuple>(..args: T): void;
+                something::<(string, number, bool)>("abc", 420, true);
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_TupleRest_WrongArity()
+    {
+        const string source = """
+            declare fn something<T: Tuple>(..args: T): void;
+            something::<(string, number)>("abc");
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TupleRestArityMismatch,
+            "Tuple rest parameter expects exactly 2 arguments, but 1 were provided."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_TupleRest_PositionalTypeMismatch()
+    {
+        const string source = """
+            declare fn something<T: Tuple>(..args: T): void;
+            something::<(string, number)>("abc", "def");
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"def\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_RestParameter_TupleTypeParameter_WithoutTupleConstraint()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("declare fn something<T>(..args: T): void;");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.InvalidRestParameterType);
+        Assert.NotNull(diagnostic);
+    }
     #endregion Tuples
 
     #region Overloaded Interface Members
