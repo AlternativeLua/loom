@@ -56,9 +56,30 @@ public sealed partial class TypeChecker
     public override Type VisitSelfExpression(SelfExpression selfExpression)
     {
         var implement = selfExpression.FirstAncestorOfType<Implement>();
-        return implement == null
-            ? BindType(selfExpression, PrimitiveType.Never)
-            : BindType(selfExpression, _semanticModel.GetType(implement.InterfaceName));
+        if (implement == null)
+            return BindType(selfExpression, PrimitiveType.Never);
+
+        var interfaceType = _semanticModel.GetType(implement.InterfaceName);
+
+        // '@' sees every method from every trait implemented on this interface - not just the trait
+        // being implemented by the enclosing block - so a fresh InterfaceType is built here rather than
+        // reusing the cached one, to avoid mutating a type shared with unrelated `new Foo {}` call sites.
+        if (interfaceType is not InterfaceType nonGenericInterfaceType
+            || _semanticModel.GetSymbol(implement.InterfaceName, SymbolKind.Interface) is not InterfaceSymbol interfaceSymbol)
+            return BindType(selfExpression, interfaceType);
+
+        var traitProperties = interfaceSymbol.Implementations
+            .SelectMany(i => i.Body.Implementations)
+            .Select(declaration => new ObjectProperty(false, declaration.Name.Text, _semanticModel.GetType(declaration)))
+            .ToList();
+
+        var objectType = new ObjectType(nonGenericInterfaceType.ObjectType.Indexer, [..nonGenericInterfaceType.ObjectType.Properties, ..traitProperties]);
+        var selfType = new InterfaceType(nonGenericInterfaceType.Name, nonGenericInterfaceType.Constraints, objectType)
+        {
+            TraitMethodNames = traitProperties.ConvertAll(property => property.Name).ToHashSet()
+        };
+
+        return BindType(selfExpression, selfType);
     }
 
     public override Type VisitTraitDeclaration(TraitDeclaration traitDeclaration)

@@ -1039,6 +1039,28 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_SelfExpression_SeesMethodsFromOtherImplementedTraits()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            trait Balls { fn balls: void }
+
+            implement Balls for Container {
+                fn balls -> print(@.value);
+            }
+
+            implement Display for Container {
+                fn display -> print(@.balls());
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
     public void ThrowsFor_Implement_DefaultValueWrongType()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(

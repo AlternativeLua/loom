@@ -812,6 +812,39 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_SelfExpression_CallsMethodFromOtherImplementedTrait_UsingSelfAndColonSyntax()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display: void }
+            trait Balls { fn balls: void }
+
+            implement Balls for Container {
+                fn balls -> print(@.value);
+            }
+
+            implement Display for Container {
+                fn display -> print(@.balls());
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[^1]);
+        Assert.Equal("Display_for_Container.display", displayFunction.Name);
+
+        var @return = Assert.IsType<Return>(Assert.Single(displayFunction.Body.Statements));
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        var ballsCall = Assert.IsType<Call>(Assert.Single(printCall.Arguments));
+        Assert.True(ballsCall.IsMethod);
+
+        var ballsAccess = Assert.IsType<PropertyAccess>(ballsCall.Callee);
+        Assert.Equal("self", Assert.IsType<Identifier>(ballsAccess.Target).Name);
+        Assert.Equal("balls", Assert.Single(ballsAccess.Names));
+    }
+
+    [Fact]
     public void Generates_TraitDeclaration()
     {
         var luauTree = Utility.GetLuauAST("trait T { fn method(): number }", true);
