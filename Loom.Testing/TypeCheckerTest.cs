@@ -4195,6 +4195,70 @@ public class TypeCheckerTest
         var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.InvalidRestParameterType);
         Assert.NotNull(diagnostic);
     }
+
+    [Fact]
+    public void Checks_MatchTuplePattern_BindsElementTypesPositionally()
+    {
+        const string source = """
+            let t: (string, number) = ("abc", 420);
+            match t {
+                (a, b) -> b,
+                _ -> 0,
+            };
+            """;
+
+        var type = Utility.GetLastStatementType(source);
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void ThrowsFor_MatchTuplePattern_ArityMismatch()
+    {
+        const string source = """
+            let t: (string, number) = ("abc", 420);
+            match t {
+                (a, b, c) -> a,
+                _ -> "none",
+            };
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TupleArityMismatch,
+            "Tuple type '(string, number)' expects 2 element(s), but 3 were provided."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_MatchTuplePattern_NonTupleScrutinee()
+    {
+        const string source = """
+            let n: number = 1;
+            match n {
+                (a, b) -> a,
+                _ -> "none",
+            };
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Tuple pattern cannot match value of type 'number'.");
+    }
+
+    [Fact]
+    public void Checks_MatchTuplePattern_NestedTuplePattern()
+    {
+        const string source = """
+            let t: (string, (number, bool)) = ("abc", (420, true));
+            match t {
+                (a, (b, c)) -> c,
+                _ -> false,
+            };
+            """;
+
+        var type = Utility.GetLastStatementType(source);
+        Assert.Equal(PrimitiveType.Bool, type);
+    }
     #endregion Tuples
 
     #region Overloaded Interface Members

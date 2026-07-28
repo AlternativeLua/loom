@@ -3492,4 +3492,24 @@ public class LuauGeneratorTest
         var rendered = Utility.GetLuauAST("let t: (string, number) = (\"abc\", 420); let (one, two) = t;", true).Render();
         Assert.Contains("const one, two = table.unpack(t)", rendered);
     }
+
+    [Fact]
+    public void Generates_MatchTuplePattern_AsIndexedAccess_NoTableMoveOrSlice()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            let t: (string, number) = ("abc", 420);
+            match t {
+                (a, b) -> a,
+                _ -> "none",
+            };
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("typeof(t) == \"table\"", rendered);
+        Assert.Contains("t[1]", rendered);
+        Assert.Contains("t[2]", rendered);
+        Assert.DoesNotContain("table.move", rendered);
+    }
 }

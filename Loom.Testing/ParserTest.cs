@@ -970,5 +970,33 @@ public class ParserTest
         var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
         Assert.IsType<ParenthesizedType>(variableDeclaration.ColonTypeClause!.Type);
     }
+
+    [Fact]
+    public void Parses_TupleDestructuringTarget()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let (one, two) = t;"));
+        var destructuringDeclaration = Assert.IsType<DestructuringDeclaration>(result.Tree.Statements.Single());
+        var target = Assert.IsType<TupleDestructuringTarget>(destructuringDeclaration.Target);
+        Assert.Equal(["one", "two"], target.Elements.Select(e => e.Name.Text));
+    }
+
+    [Fact]
+    public void Parses_TuplePattern_InMatch()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("match t { (a, b) -> a, _ -> \"none\" };"));
+        var matchExpression = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(result.Tree.Statements.Single()).Expression);
+        var tuplePattern = Assert.IsType<TuplePattern>(matchExpression.Arms[0].Pattern);
+        Assert.Equal(2, tuplePattern.Patterns.Count);
+        Assert.IsType<IdentifierPattern>(tuplePattern.Patterns[0]);
+        Assert.IsType<IdentifierPattern>(tuplePattern.Patterns[1]);
+    }
+
+    [Fact]
+    public void ThrowsFor_RestElement_InTuplePattern()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("match t { (a, ..b) -> a, _ -> \"none\" };");
+        var diagnostic = diagnostics.Find(d => d.Code == InternalCodes.UnexpectedToken);
+        Assert.NotNull(diagnostic);
+    }
     #endregion Tuples
 }

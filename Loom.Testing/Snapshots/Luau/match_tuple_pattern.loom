@@ -1,0 +1,6 @@
+let t: (string, number) = ("abc", 420);
+let result = match t {
+    (a, b) -> a,
+    _ -> "none",
+};
+print(result);

@@ -176,6 +176,9 @@ public sealed partial class TypeChecker
             case ArrayPattern arrayPattern:
                 CheckArrayPattern(arrayPattern, inputType);
                 break;
+            case TuplePattern tuplePattern:
+                CheckTuplePattern(tuplePattern, inputType);
+                break;
             case OrPattern orPattern:
                 CheckOrPattern(orPattern, inputType);
                 break;
@@ -303,6 +306,45 @@ public sealed partial class TypeChecker
 
         if (pattern.Rest != null)
             CheckRestPattern(pattern.Rest, elementType);
+
+        BindType(pattern, inputType);
+    }
+
+    private void CheckTuplePattern(TuplePattern pattern, Type inputType)
+    {
+        if (inputType is not Types.TupleType tupleType)
+        {
+            if (Type.IsNotUnknown(inputType) && Type.IsNotNever(inputType))
+                _diagnostics.Error(
+                    pattern,
+                    InternalCodes.TypeMismatch,
+                    $"Tuple pattern cannot match value of type '{inputType}'."
+                );
+
+            foreach (var element in pattern.Patterns)
+                CheckPattern(element, PrimitiveType.Unknown);
+
+            BindType(pattern, inputType);
+            return;
+        }
+
+        if (pattern.Patterns.Count != tupleType.ElementTypes.Count)
+        {
+            _diagnostics.Error(
+                pattern,
+                InternalCodes.TupleArityMismatch,
+                $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {pattern.Patterns.Count} were provided."
+            );
+
+            foreach (var element in pattern.Patterns)
+                CheckPattern(element, PrimitiveType.Unknown);
+
+            BindType(pattern, inputType);
+            return;
+        }
+
+        for (var i = 0; i < pattern.Patterns.Count; i++)
+            CheckPattern(pattern.Patterns[i], tupleType.ElementTypes[i]);
 
         BindType(pattern, inputType);
     }

@@ -41,6 +41,15 @@ public sealed partial class Resolver
 
     public override bool VisitRestPattern(RestPattern restPattern) => Visit(restPattern.Pattern);
 
+    public override bool VisitTuplePattern(TuplePattern tuplePattern)
+    {
+        foreach (var pattern in tuplePattern.Patterns)
+            if (!Visit(pattern))
+                return false;
+
+        return true;
+    }
+
     public override bool VisitOrPattern(OrPattern orPattern)
     {
         foreach (var pattern in orPattern.Patterns)

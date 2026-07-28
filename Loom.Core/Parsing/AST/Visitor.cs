@@ -45,6 +45,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitArrayPattern(ArrayPattern arrayPattern) => CombineResults([VisitList(arrayPattern.Elements), VisitWithDefault(arrayPattern.Rest)]);
 
     public virtual T VisitRestPattern(RestPattern restPattern) => Visit(restPattern.Pattern);
+    public virtual T VisitTuplePattern(TuplePattern tuplePattern) => VisitList(tuplePattern.Patterns);
     public virtual T VisitNullPattern(NullPattern nullPattern) => DefaultValue(nullPattern);
 
     public virtual T VisitImplementBody(ImplementBody implementBody) => VisitList(implementBody.Implementations);

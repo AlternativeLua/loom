@@ -122,6 +122,8 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
                     .Concat(arrayPattern.Rest != null ? CollectPatternBindingSymbols(arrayPattern.Rest) : []),
             RestPattern restPattern =>
                 CollectPatternBindingSymbols(restPattern.Pattern),
+            TuplePattern tuplePattern =>
+                tuplePattern.Patterns.SelectMany(CollectPatternBindingSymbols),
             OrPattern orPattern =>
                 orPattern.Patterns.SelectMany(CollectPatternBindingSymbols),
             RangePattern rangePattern =>
