@@ -337,13 +337,21 @@ public sealed partial class LuauGenerator
             conditions.Add(new BinaryOperator(TypeofCall(subject), "==", new StringLiteral(typeofString)));
     }
 
-    // `n when Foo` needs more than `typeof(n) == "table"`: Luau has no runtime representation of an
-    // interface, so matching one structurally requires checking each of its required fields exists.
+    // `n when Foo` needs more than `typeof(n) == "table"`: a Roblox Instance subclass is checked with
+    // `:IsA(...)`, and a plain interface has no runtime representation, so matching one structurally
+    // requires checking each of its required fields exists.
     private static void AddTypeCondition(List<LuauExpression> conditions, Type type, LuauExpression subject, bool checkRequiredFields)
     {
         if (type is not InterfaceType interfaceType)
         {
             AddTypeofCondition(conditions, type, subject);
+            return;
+        }
+
+        if (interfaceType.MatchOrMatchConstraint(i => i.Name is "Instance" or "Object"))
+        {
+            conditions.Add(new BinaryOperator(TypeofCall(subject), "==", new StringLiteral("Instance")));
+            conditions.Add(new Call(new Luau.AST.PropertyAccess(subject, ["IsA"]), [new StringLiteral(interfaceType.Name)], true));
             return;
         }
 

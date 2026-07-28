@@ -3333,6 +3333,33 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_TypedPattern_OnInstanceType_ChecksIsA()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            let x = 1 as never;
+            let m = match x { inst when Model -> 1, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("and", condition.Operator);
+
+        var typeofCondition = Assert.IsType<BinaryOperator>(condition.Left);
+        Assert.Equal("==", typeofCondition.Operator);
+        Assert.Equal("Instance", Assert.IsType<StringLiteral>(typeofCondition.Right).Value);
+
+        var isACall = Assert.IsType<Call>(condition.Right);
+        Assert.True(isACall.IsMethod);
+        var isACallee = Assert.IsType<PropertyAccess>(isACall.Callee);
+        Assert.Single(isACallee.Names);
+        Assert.Equal("IsA", isACallee.Names[0]);
+        Assert.Equal("Model", Assert.IsType<StringLiteral>(Assert.Single(isACall.Arguments)).Value);
+    }
+
+    [Fact]
     public void Generates_Match_RangePattern_ChecksTypeofAndBounds()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { 0..5 -> 1, _ -> 0 }");
