@@ -3396,4 +3396,67 @@ public class LuauGeneratorTest
         Assert.DoesNotContain("typeof", rendered);
         Assert.DoesNotContain("if ", rendered);
     }
+
+    [Fact]
+    public void Generates_TupleLiteral_AsTable()
+    {
+        var luauTree = Utility.GetLuauAST("let t = (\"abc\", 420);", true);
+        var variable = Assert.IsType<ConstVariable>(Assert.Single(luauTree.Statements));
+        var table = Assert.IsType<Table>(variable.Initializer);
+        Assert.Equal(2, table.Initializers.Count);
+    }
+
+    [Fact]
+    public void Generates_TupleReturnType_RendersLuauMultiReturnSyntax()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                return ("abc", 420);
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("(): (string, number)", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleVariableAnnotation_RendersTableUnionType()
+    {
+        var rendered = Utility.GetLuauAST("let t: (string, number) = (\"abc\", 420);", true).Render();
+        Assert.Contains("{ string | number }", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleReturn_OfLiteral_EmitsNoTableOrUnpack()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                return ("abc", 420);
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("return \"abc\", 420", rendered);
+        Assert.DoesNotContain("table.unpack", rendered);
+    }
+
+    [Fact]
+    public void Generates_TupleReturn_OfVariable_WrapsTableUnpack()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn returns_tuple: (string, number) {
+                let t = ("abc", 420);
+                return t;
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("return table.unpack(t)", rendered);
+    }
 }

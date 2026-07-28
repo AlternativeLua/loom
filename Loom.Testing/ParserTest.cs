@@ -933,4 +933,42 @@ public class ParserTest
         Assert.Equal("x", variableDeclaration.Name.Text);
     }
     #endregion Destructuring
+
+    #region Tuples
+    [Fact]
+    public void Parses_TupleType()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: (string, number) = (\"a\", 1);"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var tupleType = Assert.IsType<TupleType>(variableDeclaration.ColonTypeClause!.Type);
+        Assert.Equal(2, tupleType.Types.Count);
+        Assert.IsType<PrimitiveType>(tupleType.Types[0]);
+        Assert.IsType<PrimitiveType>(tupleType.Types[1]);
+    }
+
+    [Fact]
+    public void Parses_TupleExpression()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x = (\"a\", 1);"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var tupleExpression = Assert.IsType<TupleExpression>(variableDeclaration.EqualsValueClause!.Value);
+        Assert.Equal(2, tupleExpression.Expressions.Count);
+    }
+
+    [Fact]
+    public void Parses_ParenthesizedExpression_WithoutComma_StaysGrouping()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x = (1);"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        Assert.IsType<Parenthesized>(variableDeclaration.EqualsValueClause!.Value);
+    }
+
+    [Fact]
+    public void Parses_ParenthesizedType_WithoutComma_StaysGrouping()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: (number) = 1;"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        Assert.IsType<ParenthesizedType>(variableDeclaration.ColonTypeClause!.Type);
+    }
+    #endregion Tuples
 }

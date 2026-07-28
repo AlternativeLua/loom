@@ -146,6 +146,9 @@ public sealed partial class TypeChecker
         return BindType(arrayLiteral, type);
     }
 
+    public override Type VisitTupleExpression(TupleExpression tupleExpression) =>
+        BindType(tupleExpression, new Types.TupleType(tupleExpression.Expressions.ConvertAll(Visit)));
+
     public override Type VisitLiteral(Literal literal) => BindType(literal, new Types.LiteralType(literal.Value));
 
     public override Type VisitInterpolatedStringLiteral(InterpolatedStringLiteral interpolatedStringLiteral)

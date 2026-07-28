@@ -25,6 +25,9 @@ public sealed partial class TypeChecker
         if (expression is ArrayLiteral arrayLiteral && expected is ArrayType arrayType)
             return CheckArrayLiteral(arrayLiteral, arrayType, state);
 
+        if (expression is TupleExpression tupleExpression && expected is Types.TupleType tupleType)
+            return CheckTupleExpression(tupleExpression, tupleType, state);
+
         if (expression is MatchExpression matchExpression)
             return CheckMatchExpression(matchExpression, expected, state);
 
@@ -79,6 +82,25 @@ public sealed partial class TypeChecker
         }
 
         return BindType(arrayLiteral, expected);
+    }
+
+    private Types.TupleType CheckTupleExpression(TupleExpression tupleExpression, Types.TupleType expected, FlowState state)
+    {
+        if (tupleExpression.Expressions.Count != expected.ElementTypes.Count)
+        {
+            _diagnostics.Error(
+                tupleExpression,
+                InternalCodes.TupleArityMismatch,
+                $"Tuple type '{expected}' expects {expected.ElementTypes.Count} element(s), but {tupleExpression.Expressions.Count} were provided."
+            );
+
+            return BindType(tupleExpression, expected);
+        }
+
+        for (var i = 0; i < tupleExpression.Expressions.Count; i++)
+            Check(tupleExpression.Expressions[i], expected.ElementTypes[i], state);
+
+        return BindType(tupleExpression, expected);
     }
 
     private Type CheckMatchExpression(MatchExpression matchExpression, Type expected, FlowState state)
