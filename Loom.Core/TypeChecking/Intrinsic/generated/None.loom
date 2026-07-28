@@ -7539,13 +7539,13 @@ declare interface EditableMesh: Object {
 
 declare interface ExecutedRemoteCommand: Object {
 	[luau_name("RunMoreCode"), luau_method]
-	run_more_code: fn(code: string, args: unknown): void;
+	run_more_code: fn(code: string, ..args: unknown[]): void;
 	[luau_name("SendUpdate"), luau_method]
-	send_update: fn(args: unknown): void;
+	send_update: fn(..args: unknown[]): void;
 	[luau_name("Stop"), luau_method]
 	stop: fn: void;
 	[luau_name("ReceivedUpdate")]
-	event received_update(args: unknown);
+	event received_update(..args: unknown[]);
 }
 
 declare interface AccessoryDescription: Instance {
@@ -8608,7 +8608,7 @@ declare interface AuroraScriptService: Instance {
 	[luau_name("GetLocalFrameId"), luau_method]
 	get_local_frame_id: fn: number;
 	[luau_name("SendMessage"), luau_method]
-	send_message: fn(instance: Instance, behaviorName: string, functionName: string, args: unknown): void;
+	send_message: fn(instance: Instance, behaviorName: string, functionName: string, ..args: unknown[]): void;
 	[luau_name("getBehaviors"), luau_method]
 	get_behaviors: fn: Instance[];
 	[luau_name("getBehaviorsForInstance"), luau_method]
@@ -9053,30 +9053,30 @@ declare interface BaseRemoteEvent: Instance;
 declare interface RemoteEvent: BaseRemoteEvent {
 	_is_creatable: true;
 	[luau_name("FireAllClients"), luau_method]
-	fire_all_clients: fn(arguments: unknown): void;
+	fire_all_clients: fn(..arguments: unknown[]): void;
 	[luau_name("FireClient"), luau_method]
-	fire_client: fn(player: Player, arguments: unknown): void;
+	fire_client: fn(player: Player, ..arguments: unknown[]): void;
 	[luau_name("FireServer"), luau_method]
-	fire_server: fn(arguments: unknown): void;
+	fire_server: fn(..arguments: unknown[]): void;
 	[luau_name("OnClientEvent")]
-	event on_client_event(arguments: unknown);
+	event on_client_event(..arguments: unknown[]);
 	[luau_name("OnServerEvent")]
-	event on_server_event(player: Player, arguments: unknown);
+	event on_server_event(player: Player, ..arguments: unknown[]);
 }
 
 #: Same as RemoteEvents but events are sent unreliably (neither reliably nor ordered). :#
 declare interface UnreliableRemoteEvent: BaseRemoteEvent {
 	_is_creatable: true;
 	[luau_name("FireAllClients"), luau_method]
-	fire_all_clients: fn(arguments: unknown): void;
+	fire_all_clients: fn(..arguments: unknown[]): void;
 	[luau_name("FireClient"), luau_method]
-	fire_client: fn(player: Player, arguments: unknown): void;
+	fire_client: fn(player: Player, ..arguments: unknown[]): void;
 	[luau_name("FireServer"), luau_method]
-	fire_server: fn(arguments: unknown): void;
+	fire_server: fn(..arguments: unknown[]): void;
 	[luau_name("OnClientEvent")]
-	event on_client_event(arguments: unknown);
+	event on_client_event(..arguments: unknown[]);
 	[luau_name("OnServerEvent")]
-	event on_server_event(player: Player, arguments: unknown);
+	event on_server_event(player: Player, ..arguments: unknown[]);
 }
 
 declare interface BaseWrap: Instance {
@@ -9183,15 +9183,15 @@ declare interface Beam: Instance {
 declare interface BindableEvent: Instance {
 	_is_creatable: true;
 	[luau_name("Fire"), luau_method]
-	fire: fn(arguments: unknown): void;
+	fire: fn(..arguments: unknown[]): void;
 	[luau_name("Event")]
-	event _event(arguments: unknown);
+	event _event(..arguments: unknown[]);
 }
 
 declare interface BindableFunction: Instance {
 	_is_creatable: true;
 	[luau_name("Invoke"), luau_method]
-	invoke: fn(arguments: unknown): unknown;
+	invoke: fn(..arguments: unknown[]): unknown;
 }
 
 declare interface BodyMover: Instance;
@@ -9457,7 +9457,7 @@ declare interface Chat: Instance {
 	[luau_name("Chat"), luau_method]
 	chat: fn(partOrCharacter: Instance, message: string, color: Enum["ChatColor"]?): void;
 	[luau_name("InvokeChatCallback"), luau_method]
-	invoke_chat_callback: fn(callbackType: Enum["ChatCallbackType"], callbackArguments: unknown): unknown;
+	invoke_chat_callback: fn(callbackType: Enum["ChatCallbackType"], ..callbackArguments: unknown[]): unknown;
 	[luau_name("RegisterChatCallback"), luau_method]
 	register_chat_callback: fn(callbackType: Enum["ChatCallbackType"], callbackFunction: fn: void): void;
 	[luau_name("SetBubbleChatSettings"), luau_method]
@@ -10120,13 +10120,13 @@ declare interface ContentProvider: Instance {
 declare interface ContextActionService: Instance {
 	_is_service: true;
 	[luau_name("BindAction"), luau_method]
-	bind_action: fn(actionName: string, functionToBind: fn: void, createTouchButton: bool, inputTypes: unknown): void;
+	bind_action: fn(actionName: string, functionToBind: fn: void, createTouchButton: bool, ..inputTypes: unknown[]): void;
 	[luau_name("BindActionAtPriority"), luau_method]
-	bind_action_at_priority: fn(actionName: string, functionToBind: fn: void, createTouchButton: bool, priorityLevel: number, inputTypes: unknown): void;
+	bind_action_at_priority: fn(actionName: string, functionToBind: fn: void, createTouchButton: bool, priorityLevel: number, ..inputTypes: unknown[]): void;
 	[luau_name("BindActionToInputTypes"), luau_method]
-	bind_action_to_input_types: fn(actionName: string, functionToBind: fn: void, createTouchButton: bool, inputTypes: unknown): void;
+	bind_action_to_input_types: fn(actionName: string, functionToBind: fn: void, createTouchButton: bool, ..inputTypes: unknown[]): void;
 	[luau_name("BindActivate"), luau_method]
-	bind_activate: fn(userInputTypeForActivation: Enum["UserInputType"], keyCodesForActivation: unknown): void;
+	bind_activate: fn(userInputTypeForActivation: Enum["UserInputType"], ..keyCodesForActivation: unknown[]): void;
 	[luau_name("GetAllBoundActionInfo"), luau_method]
 	get_all_bound_action_info: fn: UnknownRecord;
 	[luau_name("GetBoundActionInfo"), luau_method]
@@ -12045,7 +12045,7 @@ declare interface GuiService: Instance {
 	[luau_name("AddSelectionParent"), luau_method]
 	add_selection_parent: fn(selectionName: string, selectionParent: Instance): void;
 	[luau_name("AddSelectionTuple"), luau_method]
-	add_selection_tuple: fn(selectionName: string, selections: unknown): void;
+	add_selection_tuple: fn(selectionName: string, ..selections: unknown[]): void;
 	[luau_name("CloseInspectMenu"), luau_method]
 	close_inspect_menu: fn: void;
 	[luau_name("DismissNotification"), luau_method]
@@ -12113,7 +12113,7 @@ declare interface HapticService: Instance {
 	[luau_name("IsVibrationSupported"), luau_method]
 	is_vibration_supported: fn(inputType: Enum["UserInputType"]): bool;
 	[luau_name("SetMotor"), luau_method]
-	set_motor: fn(inputType: Enum["UserInputType"], vibrationMotor: Enum["VibrationMotor"], vibrationValues: unknown): void;
+	set_motor: fn(inputType: Enum["UserInputType"], vibrationMotor: Enum["VibrationMotor"], ..vibrationValues: unknown[]): void;
 }
 
 declare interface HarmonyService: Instance {
@@ -14143,7 +14143,7 @@ declare interface Model: PVInstance {
 	[luau_name("BreakJoints"), luau_method]
 	break_joints: fn: void;
 	[luau_name("GetBoundingBox"), luau_method]
-	get_bounding_box: fn: unknown[];
+	get_bounding_box: fn: (CFrame, Vector3);
 	[luau_name("GetExtentsSize"), luau_method]
 	get_extents_size: fn: Vector3;
 	[luau_name("GetModelCFrame"), luau_method]
@@ -14183,7 +14183,7 @@ declare interface Actor: Model {
 	[luau_name("BindToMessageParallel"), luau_method]
 	bind_to_message_parallel: fn(topic: string, callback: fn: void): ScriptConnection;
 	[luau_name("SendMessage"), luau_method]
-	send_message: fn(topic: string, message: unknown): void;
+	send_message: fn(topic: string, ..message: unknown[]): void;
 }
 
 declare interface BackpackItem: Model {
@@ -15215,7 +15215,7 @@ declare interface RemoteCommandService: Instance {
 	[luau_name("GetStoppingSignal"), luau_method]
 	get_stopping_signal: fn: ScriptSignal;
 	[luau_name("SendUpdate"), luau_method]
-	send_update: fn(args: unknown): void;
+	send_update: fn(..args: unknown[]): void;
 }
 
 declare interface RemoteCursorService: Instance {
@@ -15229,9 +15229,9 @@ declare interface RemoteDebuggerServer: Instance {
 declare interface RemoteFunction: Instance {
 	_is_creatable: true;
 	[luau_name("InvokeClient"), luau_method]
-	invoke_client: fn(player: Player, arguments: unknown): unknown;
+	invoke_client: fn(player: Player, ..arguments: unknown[]): unknown;
 	[luau_name("InvokeServer"), luau_method]
-	invoke_server: fn(arguments: unknown): unknown;
+	invoke_server: fn(..arguments: unknown[]): unknown;
 }
 
 declare interface ReplicatedFirst: Instance {
@@ -15971,7 +15971,7 @@ declare interface SoundService: Instance {
 	[luau_name("SetInputDevice"), luau_method]
 	set_input_device: fn(nameOrInstance: unknown, guidOrPin: string): void;
 	[luau_name("SetListener"), luau_method]
-	set_listener: fn(listenerType: Enum["ListenerType"], listener: unknown): void;
+	set_listener: fn(listenerType: Enum["ListenerType"], ..listener: unknown[]): void;
 }
 
 declare interface SoundShimService: Instance {
@@ -16871,7 +16871,7 @@ declare interface TweenService: Instance {
 	[luau_name("GetValue"), luau_method]
 	get_value: fn(alpha: number, easingStyle: Enum["EasingStyle"], easingDirection: Enum["EasingDirection"]): number;
 	[luau_name("SmoothDamp"), luau_method]
-	smooth_damp: fn(current: unknown, target: unknown, velocity: unknown, smoothTime: number, maxSpeed: number?, dt: number?): unknown[];
+	smooth_damp: fn(current: unknown, target: unknown, velocity: unknown, smoothTime: number, maxSpeed: number?, dt: number?): (unknown, unknown);
 }
 
 declare interface UGCAvatarService: Instance {
