@@ -3653,6 +3653,66 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_FunctionParameter_WithDefaultValue_EmitsNilGuard()
+    {
+        var luauTree = Utility.GetLuauAST("fn abc(param = 69) -> print(param);");
+        var fn = Assert.IsType<Function>(luauTree.Statements.Single());
+
+        var guard = Assert.IsType<IfStatement>(fn.Body.Statements[0]);
+        var condition = Assert.IsType<BinaryOperator>(guard.Condition);
+        Assert.Equal("==", condition.Operator);
+        Assert.Equal("param", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.IsType<NilLiteral>(condition.Right);
+
+        var assignment = Assert.IsType<ExpressionStatement>(Assert.Single(guard.ThenBranch.Statements));
+        var binaryOperator = Assert.IsType<BinaryOperator>(assignment.Expression);
+        Assert.Equal("=", binaryOperator.Operator);
+        Assert.Equal("param", Assert.IsType<Identifier>(binaryOperator.Left).Name);
+        Assert.Equal(69, Assert.IsType<NumberLiteral>(binaryOperator.Right).Value);
+
+        var @return = Assert.IsType<Return>(fn.Body.Statements[1]);
+        var printCall = Assert.IsType<Call>(@return.Expression);
+        Assert.Equal("param", Assert.IsType<Identifier>(Assert.Single(printCall.Arguments)).Name);
+    }
+
+    [Fact]
+    public void Generates_FunctionParameter_WithoutDefaultValue_EmitsNoGuard()
+    {
+        var luauTree = Utility.GetLuauAST("fn abc(param: number) -> print(param);");
+        var fn = Assert.IsType<Function>(luauTree.Statements.Single());
+        Assert.DoesNotContain(fn.Body.Statements, s => s is IfStatement);
+    }
+
+    [Fact]
+    public void Generates_RestParameter_WithDefaultValue_SkipsNilGuard()
+    {
+        var luauTree = Utility.GetLuauAST("fn abc(..rest: number[] = [1, 2]) -> print(rest);");
+        var fn = Assert.IsType<Function>(luauTree.Statements.Single());
+        Assert.DoesNotContain(fn.Body.Statements, s => s is IfStatement);
+    }
+
+    [Fact]
+    public void Generates_ImplementMethodParameter_WithDefaultValue_EmitsNilGuard()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Container { value: number }
+            trait Display { fn display(depth: number): void }
+            implement Display for Container {
+                fn display(depth = 1) -> print(depth * value);
+            }
+            """,
+            true
+        );
+
+        var displayFunction = Assert.IsType<Function>(luauTree.Statements[^1]);
+        var guard = Assert.IsType<IfStatement>(displayFunction.Body.Statements[0]);
+        var condition = Assert.IsType<BinaryOperator>(guard.Condition);
+        Assert.Equal("depth", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.IsType<NilLiteral>(condition.Right);
+    }
+
+    [Fact]
     public void Generates_EnumDeclaration_WithoutTypeCheck_EmitsEmptyPlaceholder()
     {
         var luauTree = Utility.GetLuauAST("enum Abc { A, B }");
