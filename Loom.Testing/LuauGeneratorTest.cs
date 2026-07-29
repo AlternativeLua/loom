@@ -3698,6 +3698,28 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_NestedArrayInsideObjectInsideTypedPattern()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Foo { items: number[] }
+            let foo = new Foo { items: [1, 2] };
+            let m = match foo { f when Foo { items: [first, ..rest] } -> first, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var firstBinding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements.First(s => s is ConstVariable { Name: "first" }));
+        var elementAccess = Assert.IsType<ElementAccess>(firstBinding.Initializer);
+        var itemsAccess = Assert.IsType<PropertyAccess>(elementAccess.Target);
+        Assert.Equal(["items"], itemsAccess.Names);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(elementAccess.Index).Value);
+
+        Assert.Contains(ifStatement.ThenBranch.Statements, s => s is ConstVariable { Name: "rest" });
+    }
+
+    [Fact]
     public void Generates_Match_ObjectPattern_UsesLuauNameForRenamedField()
     {
         var luauTree = Utility.GetLuauAST(

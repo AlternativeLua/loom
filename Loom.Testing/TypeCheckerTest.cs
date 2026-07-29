@@ -6422,6 +6422,38 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_Match_Guard_OnArrayPattern_ReferencesElementBindings() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("match [1, 2] { [a, b] when a > b -> a, _ -> 0 }"));
+
+    [Fact]
+    public void Allows_Match_Guard_OnObjectPattern_ReferencesFieldBindings()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { x: number }
+            let value = new Foo { x: 5 };
+            match value { { x } when x > 0 -> x, _ -> 0 }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_NestedArrayInsideObjectInsideTypedPattern()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { items: number[] }
+            let value = new Foo { items: [1, 2] };
+            match value { f when Foo { items: [first, ..rest] } -> first, _ -> 0 }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
     public void Checks_Match_ResultType_IsUnionOfArms()
     {
         var type = Utility.GetLastStatementType(

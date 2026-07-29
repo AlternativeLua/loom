@@ -334,6 +334,25 @@ public class ParserTest
     }
 
     [Fact]
+    public void Parses_MatchExpression_NestedArrayInsideObjectInsideTypedPattern()
+    {
+        var tree = Utility.GetAST("match value { f when Foo { items: [first, ..rest] } -> first }");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var arm = Assert.Single(Assert.IsType<MatchExpression>(expressionStatement.Expression).Arms);
+        var typed = Assert.IsType<TypedPattern>(arm.Pattern);
+
+        Assert.NotNull(typed.ObjectPattern);
+        var field = Assert.Single(typed.ObjectPattern.Fields);
+        Assert.Equal("items", field.Name.Text);
+
+        var array = Assert.IsType<ArrayPattern>(field.Pattern);
+        Assert.Single(array.Elements);
+        Assert.Equal("first", Assert.IsType<IdentifierPattern>(array.Elements[0]).Name.Text);
+        Assert.NotNull(array.Rest);
+        Assert.Equal("rest", Assert.IsType<IdentifierPattern>(array.Rest.Pattern).Name.Text);
+    }
+
+    [Fact]
     public void Parses_MatchExpression_TypedCastPattern_WithGuard()
     {
         var tree = Utility.GetAST("match value { f when Foo { some_field: let n } when n > 0 -> n }");
@@ -405,6 +424,37 @@ public class ParserTest
         Assert.Equal("head", Assert.IsType<IdentifierPattern>(array.Elements[0]).Name.Text);
         Assert.NotNull(array.Rest);
         Assert.Equal("rest", Assert.IsType<IdentifierPattern>(array.Rest.Pattern).Name.Text);
+    }
+
+    [Fact]
+    public void Parses_MatchExpression_ArrayPatternWithLiteralRest()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("match xs { [a, ..0] -> a, _ -> 0 }"));
+        var arm = result.Tree.Statements
+            .OfType<ExpressionStatement>()
+            .Select(s => Assert.IsType<MatchExpression>(s.Expression))
+            .Single()
+            .Arms[0];
+
+        var array = Assert.IsType<ArrayPattern>(arm.Pattern);
+        Assert.NotNull(array.Rest);
+        Assert.Equal(0L, Assert.IsType<LiteralPattern>(array.Rest.Pattern).Value);
+    }
+
+    [Fact]
+    public void Parses_MatchExpression_ArrayPatternWithTypedRest()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("match xs { [a, ..n when number] -> a, _ -> 0 }"));
+        var arm = result.Tree.Statements
+            .OfType<ExpressionStatement>()
+            .Select(s => Assert.IsType<MatchExpression>(s.Expression))
+            .Single()
+            .Arms[0];
+
+        var array = Assert.IsType<ArrayPattern>(arm.Pattern);
+        Assert.NotNull(array.Rest);
+        var typedPattern = Assert.IsType<TypedPattern>(array.Rest.Pattern);
+        Assert.Equal("n", typedPattern.Name.Text);
     }
 
     [Fact]

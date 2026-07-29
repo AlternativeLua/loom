@@ -1495,6 +1495,17 @@ public class ResolverTest
         );
 
     [Fact]
+    public void Allows_Match_NestedArrayInsideObjectInsideTypedPattern() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface Foo { items: number[] }
+                match 1 { f when Foo { items: [first, ..rest] } -> first, _ -> 0 }
+                """
+            )
+        );
+
+    [Fact]
     public void Allows_Match_ObjectShorthandBinding() => Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { { value } -> value }"));
 
     [Fact]
