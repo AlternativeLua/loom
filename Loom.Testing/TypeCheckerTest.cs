@@ -4926,6 +4926,33 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_MathMemberAccess_Property()
+    {
+        var type = Utility.GetLastStatementType("math.pi");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_Invocation()
+    {
+        var type = Utility.GetLastStatementType("math.floor(1.5)");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void ThrowsFor_MathMemberAccess_MissingProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("math.missing");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAccess,
+            "Expression of type '\"missing\"' cannot be used to index type 'MathLib'. Property 'missing' does not exist on type 'MathLib'."
+        );
+    }
+
+    [Fact]
     public void Checks_NameOf()
     {
         var type = Utility.GetLastStatementType("let x = 1; nameof(x)");

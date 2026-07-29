@@ -28,9 +28,9 @@ public class ModuleRequirePathTest
         }
         """;
 
-    private static (string Path, string Source)[] MathAndMain =>
+    private static (string Path, string Source)[] GeometryAndMain =>
     [
-        ("main.loom", "import { square } from \"./math\"\nprint(square(2));"), ("math.loom", "export fn square(x: number): number -> x * x;")
+        ("main.loom", "import { square } from \"./geometry\"\nprint(square(2));"), ("geometry.loom", "export fn square(x: number): number -> x * x;")
     ];
 
     [Fact]
@@ -38,8 +38,8 @@ public class ModuleRequirePathTest
         AssertMainRequires(
             OutputMappedProject,
             """
-            const math = require("@game/ReplicatedStorage/Shared/math")
-            const square = math.square
+            const geometry = require("@game/ReplicatedStorage/Shared/geometry")
+            const square = geometry.square
             print(square(2))
             """
         );
@@ -59,14 +59,14 @@ public class ModuleRequirePathTest
     [Fact]
     public void FallsBack_ToTheSpecifier_AndWarns_WhenRojoDoesNotMapTheOutput() =>
         Utility.WithTempProject(
-            MathAndMain,
+            GeometryAndMain,
             (_, result) =>
             {
-                Assert.Contains("require(\"./math\")", MainOutput(result));
+                Assert.Contains("require(\"./geometry\")", MainOutput(result));
                 Utility.AssertDiagnostic(
                     result.Diagnostics,
                     InternalCodes.ModuleNotFoundInRojo,
-                    "Could not locate module './math' through the Rojo project; falling back to a relative require.",
+                    "Could not locate module './geometry' through the Rojo project; falling back to a relative require.",
                     "add a $path mapping to your default.project.json that includes the output directory"
                 );
             },
@@ -76,10 +76,10 @@ public class ModuleRequirePathTest
     [Fact]
     public void FallsBack_Silently_WhenThereIsNoRojoProject() =>
         Utility.WithTempProject(
-            MathAndMain,
+            GeometryAndMain,
             (_, result) =>
             {
-                Assert.Contains("require(\"./math\")", MainOutput(result));
+                Assert.Contains("require(\"./geometry\")", MainOutput(result));
 
                 // nothing to consult means nothing to warn about
                 Assert.DoesNotContain(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.ModuleNotFoundInRojo);
@@ -88,7 +88,7 @@ public class ModuleRequirePathTest
 
     private static void AssertMainRequires(string rojoProject, string expected) =>
         Utility.WithTempProject(
-            MathAndMain,
+            GeometryAndMain,
             (_, result) =>
             {
                 Utility.AssertNoErrors(result);

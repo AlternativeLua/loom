@@ -886,4 +886,32 @@ public class MacroExpanderTest
         Assert.IsType<UnaryOperator>(subtraction.Right);
     }
 
+    [Fact]
+    public void Generates_Math_Property()
+    {
+        const string source = "math.pi";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var access = Assert.IsType<PropertyAccess>(variable.Initializer);
+        Assert.Equal("math", Assert.IsType<Identifier>(access.Target).Name);
+        Assert.Equal("pi", Assert.Single(access.Names));
+    }
+
+    [Theory]
+    [InlineData("floor", "math.floor(1.5)")]
+    [InlineData("sqrt", "math.sqrt(4)")]
+    [InlineData("random", "math.random()")]
+    public void Generates_Math_Invocation(string functionName, string source)
+    {
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("math", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal(functionName, Assert.Single(callee.Names));
+    }
 }

@@ -1,0 +1,40 @@
+## Typings for Luau's built-in math library.
+
+declare interface MathLib {
+    huge: number;
+    pi: number;
+    abs: fn(x: number): number;
+    acos: fn(x: number): number;
+    asin: fn(x: number): number;
+    atan: fn(y: number, x: number?): number;
+    atan2: fn(y: number, x: number): number;
+    ceil: fn(x: number): number;
+    clamp: fn(x: number, min: number, max: number): number;
+    cos: fn(x: number): number;
+    cosh: fn(x: number): number;
+    deg: fn(x: number): number;
+    exp: fn(x: number): number;
+    floor: fn(x: number): number;
+    fmod: fn(x: number, y: number): number;
+    frexp: fn(x: number): (number, number);
+    ldexp: fn(x: number, e: number): number;
+    log: fn(x: number, base: number?): number;
+    log10: fn(x: number): number;
+    max: fn(..values: number[]): number;
+    min: fn(..values: number[]): number;
+    modf: fn(x: number): (number, number);
+    noise: fn(x: number, y: number?, z: number?): number;
+    pow: fn(x: number, y: number): number;
+    rad: fn(x: number): number;
+    random: fn(m: number?, n: number?): number;
+    randomseed: fn(seed: number?): void;
+    round: fn(x: number): number;
+    sign: fn(x: number): number;
+    sin: fn(x: number): number;
+    sinh: fn(x: number): number;
+    sqrt: fn(x: number): number;
+    tan: fn(x: number): number;
+    tanh: fn(x: number): number;
+}
+
+declare let math: MathLib;
