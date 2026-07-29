@@ -81,12 +81,14 @@ public sealed partial class TypeChecker
             case LiteralPattern literalPattern:
                 return RemoveCoveredType(remaining, new LiteralType(literalPattern.Value));
 
-            // An attached object sub-pattern (e.g. `p when Point { x: 0 }`) only matches a subset of
-            // the type, so it can't be treated as covering the whole pattern type like a bare `p when Point` would.
-            case TypedPattern { ObjectPattern: null } typedPattern:
+            // An attached object sub-pattern with fields (e.g. `p when Point { x: 0 }`) only matches a
+            // subset of the type, so it can't be treated as covering the whole pattern type like a bare
+            // `p when Point` would - but an empty one (`p when Point { }`) imposes no such constraint, so
+            // it covers exactly as much as no object sub-pattern at all.
+            case TypedPattern { ObjectPattern: null or { Fields.Count: 0 } } typedPattern:
                 return RemoveCoveredType(remaining, _semanticModel.GetType(typedPattern.Type));
 
-            case TypePattern { ObjectPattern: null } typePattern:
+            case TypePattern { ObjectPattern: null or { Fields.Count: 0 } } typePattern:
                 return RemoveCoveredType(remaining, _semanticModel.GetType(typePattern.Type));
 
             default:

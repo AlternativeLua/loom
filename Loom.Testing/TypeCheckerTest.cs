@@ -6620,6 +6620,69 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByEmptyObjectTypePatterns()
+    {
+        // an empty object sub-pattern imposes no constraint beyond the type check itself, so it should
+        // cover exactly as much as a bare type pattern with no object sub-pattern at all
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                A {} -> "a",
+                B {} -> "b",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByEmptyObjectTypedPatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                a when A {} -> "a",
+                b when B {} -> "b",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_UnionPartiallyCoveredByNonEmptyObjectTypePattern()
+    {
+        // unlike an empty object sub-pattern, a field-constrained one only matches a subset of the type,
+        // so it must not be credited as full coverage of that union member
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                A { tag: "a" } -> "a",
+                B {} -> "b",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_Match_NonExhaustive_UnionCoveredOnlyByLiterals()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
