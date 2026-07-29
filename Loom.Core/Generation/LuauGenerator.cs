@@ -80,7 +80,29 @@ public sealed partial class LuauGenerator
                 : GenerateChunk(functionDeclaration.Body)
         );
 
+        // Luau has no default-parameter syntax, so `param = 69` compiles to a nil-check prepended to
+        // the body instead - a rest parameter's table is never nil, so it's never guarded here.
+        var defaultGuards = (functionDeclaration.Parameters?.ParameterList ?? [])
+            .Where(parameter => parameter.DotDot == null && parameter.EqualsValueClause != null)
+            .Select(GenerateParameterDefaultGuard)
+            .ToList();
+
+        if (defaultGuards.Count > 0)
+            chunk.Statements.InsertRange(0, defaultGuards);
+
         return chunk;
+    }
+
+    private IfStatement GenerateParameterDefaultGuard(Loom.Core.Parsing.AST.Parameter parameter)
+    {
+        var identifier = new Identifier(parameter.Name.Text);
+        var condition = new BinaryOperator(identifier, "==", new NilLiteral());
+
+        var statements = new List<LuauStatement>();
+        var (value, scope) = _state.Capture(() => Visit(parameter.EqualsValueClause!.Value));
+        ApplyPrereqAndPostreq(statements, scope, new ExpressionStatement(new BinaryOperator(identifier, "=", value)));
+
+        return new IfStatement(condition, new Chunk(statements), [], null);
     }
 
     private Luau.AST.TypeParameters GenerateTypeParameters(TypeParameters? typeParameters) =>

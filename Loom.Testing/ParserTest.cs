@@ -94,6 +94,7 @@ public class ParserTest
         new("type F = (fn())", InternalCodes.MissingDeclareFnReturnType, "Function types must have a return type.", null),
         new("fn foo(..a: number[], b: number) { }", InternalCodes.RestParameterNotLast, "A rest parameter must be the last parameter.", null),
         new("fn foo(..a) { }", InternalCodes.MissingRestParameterType, "A rest parameter must have an explicit array type.", null),
+        new("fn foo(..a: number[] = [1, 2]) { }", InternalCodes.RestParameterHasDefaultValue, "A rest parameter may not have a default value.", null),
         new("interface I { name }", InternalCodes.ExpectedInterfaceMemberType, "Expected indexer type, got '}'.", null),
         new("interface I { [number] }", InternalCodes.UnexpectedToken, "Expected property name, got '}'.", null),
         new("interface { }", InternalCodes.UnexpectedToken, "Expected interface name, got '{'.", null),

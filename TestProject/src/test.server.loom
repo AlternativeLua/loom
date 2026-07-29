@@ -1,2 +1,2 @@
-let model = new_instance::<Model>();
-let (position, cf) = model.get_bounding_box();
+fn abc(..foo: bool[] = []) -> none;
+abc()
