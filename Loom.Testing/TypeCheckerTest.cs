@@ -4866,6 +4866,93 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_StringMemberAccess_Length()
+    {
+        var type = Utility.GetLastStatementType("let s = 'abc'; s.length");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Theory]
+    [InlineData("upper", "()")]
+    [InlineData("lower", "()")]
+    [InlineData("trim", "()")]
+    [InlineData("reverse", "()")]
+    [InlineData("replace", "('a', 'b')")]
+    [InlineData("repeat", "(2)")]
+    public void Checks_StringMemberAccess_StringReturningMethods(string method, string arguments)
+    {
+        var type = Utility.GetLastStatementType($"let s = 'abc'; s.{method}{arguments}");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.String, primitive.Kind);
+    }
+
+    [Theory]
+    [InlineData("has", "('a')")]
+    [InlineData("starts_with", "('a')")]
+    [InlineData("ends_with", "('c')")]
+    public void Checks_StringMemberAccess_BoolReturningMethods(string method, string arguments)
+    {
+        var type = Utility.GetLastStatementType($"let s = 'abc'; s.{method}{arguments}");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Bool, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_StringMemberAccess_Split()
+    {
+        var type = Utility.GetLastStatementType("let s = 'a,b'; s.split(',')");
+        var array = Assert.IsType<ArrayType>(type);
+        var element = Assert.IsType<PrimitiveType>(array.ElementType);
+        Assert.Equal(PrimitiveTypeKind.String, element.Kind);
+    }
+
+    [Fact]
+    public void ThrowsFor_StringMemberAccess_MissingProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let s = 'abc'; s.missing");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAccess,
+            "Expression of type '\"missing\"' cannot be used to index type 'string'. Property 'missing' does not exist on type 'string'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_StringMemberAccess_AssignToLength()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let s = 'abc'; s.length = 5");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AssignToImmutable, "Cannot assign to immutable property 'length'.");
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_Property()
+    {
+        var type = Utility.GetLastStatementType("math.pi");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_Invocation()
+    {
+        var type = Utility.GetLastStatementType("math.floor(1.5)");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void ThrowsFor_MathMemberAccess_MissingProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("math.missing");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAccess,
+            "Expression of type '\"missing\"' cannot be used to index type 'MathLib'. Property 'missing' does not exist on type 'MathLib'."
+        );
+    }
+
+    [Fact]
     public void Checks_NameOf()
     {
         var type = Utility.GetLastStatementType("let x = 1; nameof(x)");

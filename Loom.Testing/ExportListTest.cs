@@ -8,7 +8,7 @@ namespace Loom.Testing;
 [Collection("Assembly")]
 public class ExportListTest
 {
-    private const string MathModule = """
+    private const string GeometryModule = """
         export let pi = 3;
         export type Scalar = number;
         export interface Point { x: number y: number }
@@ -46,15 +46,15 @@ public class ExportListTest
     [Fact]
     public void ReExports_AnotherModulesExport() =>
         WithModule(
-            "export { pi, Scalar as Num } from \"./math\"",
+            "export { pi, Scalar as Num } from \"./geometry\"",
             (_, exports) =>
             {
                 Assert.Equal(["pi", "Num"], exports.Select(export => export.Name));
                 Assert.Equal(["pi", "Scalar"], exports.Select(export => export.SourceName));
-                Assert.All(exports, export => Assert.Equal("math.loom", export.Module?.Name));
+                Assert.All(exports, export => Assert.Equal("geometry.loom", export.Module?.Name));
 
                 // a re-export forwards the name without binding it in this module's scope
-                Assert.Empty(exports[0].Symbol.File.Name == "math.loom" ? [] : new[] { "bound locally" });
+                Assert.Empty(exports[0].Symbol.File.Name == "geometry.loom" ? [] : new[] { "bound locally" });
             }
         );
 
@@ -62,7 +62,7 @@ public class ExportListTest
     public void Generates_ReturnTable_AndExportedTypeAliases() =>
         Utility.WithTempProject(
             [
-                ("math.loom", MathModule),
+                ("geometry.loom", GeometryModule),
                 (
                     "index.loom",
                     """
@@ -70,8 +70,8 @@ public class ExportListTest
                     type Local = string;
                     export { tau, tau as TAU }
                     export { Local }
-                    export { pi, Scalar as Num } from "./math"
-                    export type { Point } from "./math"
+                    export { pi, Scalar as Num } from "./geometry"
+                    export type { Point } from "./geometry"
                     """
                 )
             ],
@@ -82,12 +82,12 @@ public class ExportListTest
                     result,
                     "index.loom",
                     """
-                    const math = require("./math")
+                    const geometry = require("./geometry")
                     const tau = 6
                     export type Local = string
-                    export type Num = math.Scalar
-                    export type Point = math.Point
-                    return { tau = tau, TAU = tau, pi = math.pi }
+                    export type Num = geometry.Scalar
+                    export type Point = geometry.Point
+                    return { tau = tau, TAU = tau, pi = geometry.pi }
                     """
                 );
             }
@@ -97,8 +97,8 @@ public class ExportListTest
     public void Imports_ThroughAReExportingModule() =>
         Utility.WithTempProject(
             [
-                ("math.loom", MathModule),
-                ("index.loom", "export { pi } from \"./math\"\nexport { Point } from \"./math\""),
+                ("geometry.loom", GeometryModule),
+                ("index.loom", "export { pi } from \"./geometry\"\nexport { Point } from \"./geometry\""),
                 ("main.loom", "import { pi, Point } from \"./index\"\nlet p: Point = new Point { x: pi, y: pi };\nprint(p);")
             ],
             (_, result) =>
@@ -149,8 +149,8 @@ public class ExportListTest
     [Fact]
     public void Reports_ReExportOfAMemberTheModuleDoesNotExport() =>
         WithModule(
-            "export { cube } from \"./math\"",
-            (result, _) => Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.NoExportedMember, "Module 'math.loom' does not export 'cube'.")
+            "export { cube } from \"./geometry\"",
+            (result, _) => Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.NoExportedMember, "Module 'geometry.loom' does not export 'cube'.")
         );
 
     [Fact]
@@ -167,7 +167,7 @@ public class ExportListTest
 
     private static void WithModule(string source, Action<CompilationResult, List<ExportBinding>> assert) =>
         Utility.WithTempProject(
-            [("index.loom", source), ("math.loom", MathModule)],
+            [("index.loom", source), ("geometry.loom", GeometryModule)],
             (_, result) =>
             {
                 var index = result.Files.Single(file => file.SourceFile.Name == "index.loom");

@@ -29,6 +29,28 @@ public static class Intrinsics
         )
     );
 
+    public static readonly InterfaceType StringMembers = new(
+        "string",
+        [],
+        new ObjectType(
+            null,
+            [
+                new ObjectProperty(false, "length", PrimitiveType.Number),
+                new ObjectProperty(false, "upper", new FunctionType([], [], PrimitiveType.String)),
+                new ObjectProperty(false, "lower", new FunctionType([], [], PrimitiveType.String)),
+                new ObjectProperty(false, "trim", new FunctionType([], [], PrimitiveType.String)),
+                new ObjectProperty(false, "replace", new FunctionType([], [PrimitiveType.String, PrimitiveType.String], PrimitiveType.String)),
+                new ObjectProperty(false, "reverse", new FunctionType([], [], PrimitiveType.String)),
+                new ObjectProperty(false, "repeat", new FunctionType([], [PrimitiveType.Number], PrimitiveType.String)),
+                new ObjectProperty(false, "split", new FunctionType([], [new OptionalType(PrimitiveType.String)], new ArrayType(PrimitiveType.String, true))),
+                new ObjectProperty(false, "has", new FunctionType([], [PrimitiveType.String], PrimitiveType.Bool)),
+                new ObjectProperty(false, "starts_with", new FunctionType([], [PrimitiveType.String], PrimitiveType.Bool)),
+                new ObjectProperty(false, "ends_with", new FunctionType([], [PrimitiveType.String], PrimitiveType.Bool)),
+                new ObjectProperty(false, "byte", new FunctionType([], [new OptionalType(PrimitiveType.Number)], new OptionalType(PrimitiveType.Number)))
+            ]
+        )
+    );
+
     public static HashSet<(Symbol, Type)> Register(SemanticModel model, CompilationUnit injectInto)
     {
         _cachedIntrinsics ??= CompileIntrinsics(injectInto);

@@ -684,4 +684,234 @@ public class MacroExpanderTest
         Assert.Equal(1, start.Value);
         Assert.Equal(1, end.Value);
     }
+
+    [Theory]
+    [InlineData("s.length")]
+    [InlineData("s['length']")]
+    public void Generates_String_Length(string access)
+    {
+        var source = $"let s = 'abc'; {access}";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var unaryOperator = Assert.IsType<UnaryOperator>(variable.Initializer);
+        Assert.Equal("#", unaryOperator.Operator);
+        Assert.Equal("s", Assert.IsType<Identifier>(unaryOperator.Operand).Name);
+    }
+
+    [Theory]
+    [InlineData("upper")]
+    [InlineData("lower")]
+    [InlineData("reverse")]
+    public void Generates_String_UnaryLibraryCall(string methodName)
+    {
+        var source = $"let s = 'abc'; s.{methodName}()";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal(methodName, Assert.Single(callee.Names));
+        Assert.Equal("s", Assert.IsType<Identifier>(Assert.Single(call.Arguments)).Name);
+    }
+
+    [Theory]
+    [InlineData("let _ = s.split()", 1)]
+    [InlineData("let _ = s.split(',')", 2)]
+    public void Generates_String_Split(string statementSource, int argumentCount)
+    {
+        var source = $"let s = 'a,b,c'; {statementSource}";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(variable.Initializer);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("split", Assert.Single(callee.Names));
+        Assert.Equal(argumentCount, call.Arguments.Count);
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments.First()).Name);
+    }
+
+    [Fact]
+    public void Generates_String_Repeat()
+    {
+        const string source = "let s = 'ab'; s.repeat(3)";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("rep", Assert.Single(callee.Names));
+        Assert.Equal(2, call.Arguments.Count);
+        Assert.Equal(3, Assert.IsType<NumberLiteral>(call.Arguments.Last()).Value);
+    }
+
+    [Fact]
+    public void Generates_String_Byte()
+    {
+        const string source = "let s = 'ab'; s.byte()";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("byte", Assert.Single(callee.Names));
+        Assert.Equal("s", Assert.IsType<Identifier>(Assert.Single(call.Arguments)).Name);
+    }
+
+    [Fact]
+    public void Generates_String_Trim()
+    {
+        const string source = "let s = '  ab  '; s.trim()";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var parenthesized = Assert.IsType<Parenthesized>(variable.Initializer);
+        var call = Assert.IsType<Call>(parenthesized.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("gsub", Assert.Single(callee.Names));
+        Assert.Equal(3, call.Arguments.Count);
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments[0]).Name);
+    }
+
+    [Fact]
+    public void Generates_String_Replace()
+    {
+        const string source = "let s = 'abc'; s.replace('b', 'x')";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var parenthesized = Assert.IsType<Parenthesized>(variable.Initializer);
+        var call = Assert.IsType<Call>(parenthesized.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("gsub", Assert.Single(callee.Names));
+        Assert.Equal(3, call.Arguments.Count);
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments[0]).Name);
+        Assert.Equal("b", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+        Assert.Equal("x", Assert.IsType<StringLiteral>(call.Arguments[2]).Value);
+    }
+
+    [Fact]
+    public void Generates_String_Has()
+    {
+        const string source = "let s = 'abc'; s.has('b')";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binaryOperator = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.Equal("~=", binaryOperator.Operator);
+        Assert.IsType<NilLiteral>(binaryOperator.Right);
+
+        var call = Assert.IsType<Call>(binaryOperator.Left);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("find", Assert.Single(callee.Names));
+        Assert.Equal(4, call.Arguments.Count);
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments[0]).Name);
+        Assert.Equal("b", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+        Assert.True(Assert.IsType<BooleanLiteral>(call.Arguments[3]).Value);
+    }
+
+    [Fact]
+    public void Generates_String_StartsWith()
+    {
+        const string source = "let s = 'abc'; s.starts_with('ab')";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var prefixVariable = Assert.IsType<ConstVariable>(luauTree.Statements[^2]);
+        Assert.IsType<StringLiteral>(prefixVariable.Initializer);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binaryOperator = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.Equal("==", binaryOperator.Operator);
+        Assert.Equal(prefixVariable.Name, Assert.IsType<Identifier>(binaryOperator.Right).Name);
+
+        var call = Assert.IsType<Call>(binaryOperator.Left);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("sub", Assert.Single(callee.Names));
+        Assert.Equal(3, call.Arguments.Count);
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments[0]).Name);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(call.Arguments[1]).Value);
+
+        var lengthOperator = Assert.IsType<UnaryOperator>(call.Arguments[2]);
+        Assert.Equal("#", lengthOperator.Operator);
+    }
+
+    [Fact]
+    public void Generates_String_EndsWith()
+    {
+        const string source = "let s = 'abc'; s.ends_with('bc')";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        // the receiver is already a plain identifier, so only the literal suffix argument gets hoisted
+        var suffixVariable = Assert.IsType<ConstVariable>(luauTree.Statements[^2]);
+        Assert.IsType<StringLiteral>(suffixVariable.Initializer);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var binaryOperator = Assert.IsType<BinaryOperator>(variable.Initializer);
+        Assert.Equal("==", binaryOperator.Operator);
+        Assert.Equal(suffixVariable.Name, Assert.IsType<Identifier>(binaryOperator.Right).Name);
+
+        var call = Assert.IsType<Call>(binaryOperator.Left);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("sub", Assert.Single(callee.Names));
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments[0]).Name);
+
+        var start = Assert.IsType<BinaryOperator>(call.Arguments[1]);
+        Assert.Equal("+", start.Operator);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(start.Right).Value);
+
+        var subtraction = Assert.IsType<BinaryOperator>(start.Left);
+        Assert.Equal("-", subtraction.Operator);
+        Assert.IsType<UnaryOperator>(subtraction.Left);
+        Assert.IsType<UnaryOperator>(subtraction.Right);
+    }
+
+    [Fact]
+    public void Generates_Math_Property()
+    {
+        const string source = "math.pi";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var access = Assert.IsType<PropertyAccess>(variable.Initializer);
+        Assert.Equal("math", Assert.IsType<Identifier>(access.Target).Name);
+        Assert.Equal("pi", Assert.Single(access.Names));
+    }
+
+    [Theory]
+    [InlineData("floor", "math.floor(1.5)")]
+    [InlineData("sqrt", "math.sqrt(4)")]
+    [InlineData("random", "math.random()")]
+    public void Generates_Math_Invocation(string functionName, string source)
+    {
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("math", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal(functionName, Assert.Single(callee.Names));
+    }
 }

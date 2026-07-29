@@ -5,7 +5,7 @@ namespace Loom.Testing;
 [Collection("Assembly")]
 public class ImportGeneratorTest
 {
-    private const string MathModule = """
+    private const string GeometryModule = """
         export let pi = 3;
         export fn square(x: number): number -> x * x;
         export type Scalar = number;
@@ -17,11 +17,11 @@ public class ImportGeneratorTest
     [Fact]
     public void Requires_TheModule_AndBindsEachValue() =>
         AssertGenerated(
-            "import { square, pi } from \"./math\"\nprint(square(pi));",
+            "import { square, pi } from \"./geometry\"\nprint(square(pi));",
             """
-            const math = require("./math")
-            const square = math.square
-            const pi = math.pi
+            const geometry = require("./geometry")
+            const square = geometry.square
+            const pi = geometry.pi
             print(square(pi))
             """
         );
@@ -29,10 +29,10 @@ public class ImportGeneratorTest
     [Fact]
     public void Binds_AnAlias_ToItsExportedName() =>
         AssertGenerated(
-            "import { pi as PI } from \"./math\"\nprint(PI);",
+            "import { pi as PI } from \"./geometry\"\nprint(PI);",
             """
-            const math = require("./math")
-            const PI = math.pi
+            const geometry = require("./geometry")
+            const PI = geometry.pi
             print(PI)
             """
         );
@@ -40,10 +40,10 @@ public class ImportGeneratorTest
     [Fact]
     public void Aliases_ImportedTypes_OntoTheRequiredModule() =>
         AssertGenerated(
-            "import type { Scalar } from \"./math\"\nlet total: Scalar = 1;\nprint(total);",
+            "import type { Scalar } from \"./geometry\"\nlet total: Scalar = 1;\nprint(total);",
             """
-            const math = require("./math")
-            type Scalar = math.Scalar
+            const geometry = require("./geometry")
+            type Scalar = geometry.Scalar
             const total: Scalar = 1
             print(total)
             """
@@ -52,10 +52,10 @@ public class ImportGeneratorTest
     [Fact]
     public void Aliases_GenericImportedTypes_WithTheirParameters() =>
         AssertGenerated(
-            "import type { Box } from \"./math\"\nlet items: Box<number> = mut [1];\nprint(items);",
+            "import type { Box } from \"./geometry\"\nlet items: Box<number> = mut [1];\nprint(items);",
             """
-            const math = require("./math")
-            type Box<T> = math.Box<T>
+            const geometry = require("./geometry")
+            type Box<T> = geometry.Box<T>
             const items: Box<number> = {1}
             print(items)
             """
@@ -64,10 +64,10 @@ public class ImportGeneratorTest
     [Fact]
     public void Aliases_ImportedEnum_WithoutBindingAValue() =>
         AssertGenerated(
-            "import { Color } from \"./math\"\nlet c: Color = Color.Blue;\nprint(c);",
+            "import { Color } from \"./geometry\"\nlet c: Color = Color.Blue;\nprint(c);",
             """
-            const math = require("./math")
-            type Color = math.Color
+            const geometry = require("./geometry")
+            type Color = geometry.Color
             const c: Color = 2
             print(c)
             """
@@ -76,10 +76,10 @@ public class ImportGeneratorTest
     [Fact]
     public void Aliases_ImportedInterface_UsedAsBothTypeAndValue() =>
         AssertGenerated(
-            "import { Point } from \"./math\"\nlet p: Point = new Point { x: 1, y: 2 };\nprint(p.x);",
+            "import { Point } from \"./geometry\"\nlet p: Point = new Point { x: 1, y: 2 };\nprint(p.x);",
             """
-            const math = require("./math")
-            type Point = math.Point
+            const geometry = require("./geometry")
+            type Point = geometry.Point
             const p: Point = { x = 1, y = 2 }
             print(p.x)
             """
@@ -89,15 +89,15 @@ public class ImportGeneratorTest
     public void Requires_AModule_OnceForEveryImportDeclarationNamingIt() =>
         AssertGenerated(
             """
-            import { pi } from "./math"
-            import type { Scalar } from "./math"
+            import { pi } from "./geometry"
+            import type { Scalar } from "./geometry"
             let total: Scalar = pi;
             print(total);
             """,
             """
-            const math = require("./math")
-            const pi = math.pi
-            type Scalar = math.Scalar
+            const geometry = require("./geometry")
+            const pi = geometry.pi
+            type Scalar = geometry.Scalar
             const total: Scalar = pi
             print(total)
             """
@@ -106,23 +106,23 @@ public class ImportGeneratorTest
     [Fact]
     public void Suffixes_TheModuleLocal_WhenTheNameIsAlreadyDeclared() =>
         AssertGenerated(
-            "import { pi } from \"./math\"\nlet math = 1;\nprint(math, pi);",
+            "import { pi } from \"./geometry\"\nlet geometry = 1;\nprint(geometry, pi);",
             """
-            const math_1 = require("./math")
-            const pi = math_1.pi
-            const math = 1
-            print(math, pi)
+            const geometry_1 = require("./geometry")
+            const pi = geometry_1.pi
+            const geometry = 1
+            print(geometry, pi)
             """
         );
 
     [Fact]
     public void Requires_TheRuntimeLibrary_BeforeAnyModule() =>
         AssertGenerated(
-            "import { pi } from \"./math\"\nevent tick;\nprint(pi);",
+            "import { pi } from \"./geometry\"\nevent tick;\nprint(pi);",
             """
             const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
-            const math = require("./math")
-            const pi = math.pi
+            const geometry = require("./geometry")
+            const pi = geometry.pi
             const tick: Loom.Event = Loom.Event.new()
             print(pi)
             """
@@ -144,7 +144,7 @@ public class ImportGeneratorTest
 
     private static void AssertGenerated(string source, string expected) =>
         Utility.WithTempProject(
-            [("main.loom", source), ("math.loom", MathModule)],
+            [("main.loom", source), ("geometry.loom", GeometryModule)],
             (_, result) => AssertRendered(result, expected)
         );
 
