@@ -3535,6 +3535,83 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_TypePattern_ChecksTypeofWithoutBinding()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Foo { field: number }
+            let x = 1 as never;
+            let m = match x { Foo {} -> 1, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("==", condition.Operator);
+        var typeofCall = Assert.IsType<Call>(condition.Left);
+        Assert.Equal("typeof", Assert.IsType<Identifier>(typeofCall.Callee).Name);
+        Assert.Equal("table", Assert.IsType<StringLiteral>(condition.Right).Value);
+
+        // unlike a typed pattern, a bare type pattern captures nothing - the arm body has no binding to
+        // emit, just the assignment of the arm's result
+        Assert.Single(ifStatement.ThenBranch.Statements);
+    }
+
+    [Fact]
+    public void Generates_Match_TypePattern_OnInterface_BindsObjectFieldsWithoutOuterBinding()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Foo { field: number }
+            let x = 1 as never;
+            let m = match x { Foo { field } -> field, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("==", condition.Operator);
+
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[0]);
+        Assert.Equal("field", binding.Name);
+        var access = Assert.IsType<PropertyAccess>(binding.Initializer);
+        Assert.Equal(["field"], access.Names);
+    }
+
+    [Fact]
+    public void Generates_Match_TypePattern_OnInstanceType_ChecksIsA()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            let x = 1 as never;
+            let m = match x { Model {} -> 1, _ -> 0 }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("and", condition.Operator);
+
+        var typeofCondition = Assert.IsType<BinaryOperator>(condition.Left);
+        Assert.Equal("==", typeofCondition.Operator);
+        Assert.Equal("Instance", Assert.IsType<StringLiteral>(typeofCondition.Right).Value);
+
+        var isACall = Assert.IsType<Call>(condition.Right);
+        Assert.True(isACall.IsMethod);
+        var isACallee = Assert.IsType<PropertyAccess>(isACall.Callee);
+        Assert.Single(isACallee.Names);
+        Assert.Equal("IsA", isACallee.Names[0]);
+        Assert.Equal("Model", Assert.IsType<StringLiteral>(Assert.Single(isACall.Arguments)).Value);
+
+        // unlike a typed pattern, a bare type pattern captures nothing - the arm body has no binding to
+        // emit, just the assignment of the arm's result
+        Assert.Single(ifStatement.ThenBranch.Statements);
+    }
+
+    [Fact]
     public void Generates_Match_RangePattern_ChecksTypeofAndBounds()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { 0..5 -> 1, _ -> 0 }");

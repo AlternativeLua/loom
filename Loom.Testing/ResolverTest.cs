@@ -611,6 +611,15 @@ public class ResolverTest
     }
 
     [Fact]
+    public void ThrowsFor_MatchTypePattern_DoesNotBindOuterName()
+    {
+        // a bare type pattern ('Foo { ... }') captures nothing under a name of its own, unlike a typed
+        // pattern ('f when Foo') - only its object sub-pattern's own fields get bound
+        var diagnostics = Utility.GetSemanticModel("interface Foo {}; match 1 { Foo {} -> f }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'f'.");
+    }
+
+    [Fact]
     public void ThrowsFor_ExportMutable()
     {
         var diagnostics = Utility.GetSemanticModel("export mut x = 1;").Diagnostics;
@@ -1254,6 +1263,21 @@ public class ResolverTest
         var symbol = model.GetSymbol(typeName);
         Assert.NotNull(symbol);
         Assert.Equal("Foo", symbol.Name);
+    }
+
+    [Fact]
+    public void Resolves_MatchTypePattern_ObjectFieldBinding()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("interface Foo { field: number }; match 1 { Foo { field } -> field }"));
+        var match = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(model.Tree.Statements[1]).Expression);
+        var arm = Assert.Single(match.Arms);
+        var typePattern = Assert.IsType<TypePattern>(arm.Pattern);
+        var field = Assert.Single(typePattern.ObjectPattern!.Fields);
+        var identifierPattern = Assert.IsType<IdentifierPattern>(field.Pattern);
+        var declaration = model.GetDeclarationSymbol(identifierPattern);
+        Assert.NotNull(declaration);
+        Assert.Equal("field", declaration.Name);
+        Assert.Equal(declaration, model.GetSymbol(Assert.IsType<Identifier>(arm.Body)));
     }
 
     [Fact]

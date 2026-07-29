@@ -6320,6 +6320,42 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_Match_TypePattern_BindsObjectFields()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Foo { field: number }
+            let x: Foo = new Foo { field: 1 };
+            match x {
+                Foo { field } -> field,
+                _ -> 0,
+            }
+            """
+        );
+
+        Assert.Equal(PrimitiveType.Number, type.Widen());
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_TypePattern_DoesNotBindOuterName()
+    {
+        // unlike a typed pattern ('f when Foo'), a bare type pattern captures nothing under a name of
+        // its own - the body has no binding to read the matched value back through
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { field: number }
+            let x: Foo = new Foo { field: 1 };
+            match x {
+                Foo {} -> f,
+                _ -> 0,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindSymbol, "Cannot find symbol for declaration of variable 'f'.");
+    }
+
+    [Fact]
     public void Allows_Match_ArrayAndRestBindings()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
