@@ -152,6 +152,7 @@ public class ParserTest
         new("match x { name when -> 1 }", InternalCodes.UnexpectedToken, "Expected type, got '->'.", null),
         new("match x { _ when -> 1 }", InternalCodes.UnexpectedToken, "Expected expression, got '->'.", null),
         new("match x { [a, ..rest, b] -> 1 }", InternalCodes.UnexpectedToken, "Rest pattern must be the last element in an array pattern.", null),
+        new("match x { [a, ..b, ..c] -> 1 }", InternalCodes.UnexpectedToken, "Rest pattern must appear at most once in an array pattern.", null),
         new("let x = mut 5", InternalCodes.UnexpectedToken, "Expected array literal after 'mut'.", null)
     ];
 

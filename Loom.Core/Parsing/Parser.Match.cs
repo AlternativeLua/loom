@@ -194,15 +194,14 @@ public sealed partial class Parser
         {
             if (Match(out var dotDot, SyntaxKind.DotDot))
             {
-                if (rest != null)
-                {
-                    _diagnostics.Error(dotDot, InternalCodes.UnexpectedToken, "Rest pattern must appear at most once in an array pattern.");
-                    break;
-                }
-
                 rest = new RestPattern(dotDot, ParsePrimaryPattern());
                 Match(SyntaxKind.Comma, SyntaxKind.Semicolon);
-                if (!IsEof() && Current() is not { Kind: SyntaxKind.RBracket })
+
+                // the loop always exits once a rest pattern has been parsed, so a second '..' is caught
+                // here - by looking at what follows - rather than by looping back around to see it
+                if (!IsEof() && Current() is { Kind: SyntaxKind.DotDot })
+                    _diagnostics.Error(Current(), InternalCodes.UnexpectedToken, "Rest pattern must appear at most once in an array pattern.");
+                else if (!IsEof() && Current() is not { Kind: SyntaxKind.RBracket })
                     _diagnostics.Error(Current(), InternalCodes.UnexpectedToken, "Rest pattern must be the last element in an array pattern.");
 
                 break;
