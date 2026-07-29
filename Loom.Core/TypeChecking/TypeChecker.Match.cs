@@ -314,7 +314,32 @@ public sealed partial class TypeChecker
 
     private void CheckTuplePattern(TuplePattern pattern, Type inputType)
     {
-        if (inputType is not Types.TupleType tupleType)
+        if (inputType is Types.TupleType tupleType)
+        {
+            if (pattern.Patterns.Count != tupleType.ElementTypes.Count)
+            {
+                _diagnostics.Error(
+                    pattern,
+                    InternalCodes.TupleArityMismatch,
+                    $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {pattern.Patterns.Count} were provided."
+                );
+
+                foreach (var element in pattern.Patterns)
+                    CheckPattern(element, PrimitiveType.Unknown);
+
+                BindType(pattern, inputType);
+                return;
+            }
+
+            for (var i = 0; i < pattern.Patterns.Count; i++)
+                CheckPattern(pattern.Patterns[i], tupleType.ElementTypes[i]);
+
+            BindType(pattern, inputType);
+            return;
+        }
+
+        var elementTypes = GetTupleElementTypes(inputType, pattern.Patterns.Count);
+        if (elementTypes == null)
         {
             if (Type.IsNotUnknown(inputType) && Type.IsNotNever(inputType))
                 _diagnostics.Error(
@@ -330,25 +355,41 @@ public sealed partial class TypeChecker
             return;
         }
 
-        if (pattern.Patterns.Count != tupleType.ElementTypes.Count)
-        {
-            _diagnostics.Error(
-                pattern,
-                InternalCodes.TupleArityMismatch,
-                $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {pattern.Patterns.Count} were provided."
-            );
-
-            foreach (var element in pattern.Patterns)
-                CheckPattern(element, PrimitiveType.Unknown);
-
-            BindType(pattern, inputType);
-            return;
-        }
-
         for (var i = 0; i < pattern.Patterns.Count; i++)
-            CheckPattern(pattern.Patterns[i], tupleType.ElementTypes[i]);
+            CheckPattern(pattern.Patterns[i], elementTypes[i]);
 
         BindType(pattern, inputType);
+    }
+
+    // A union of tuples (e.g. `(string, number) | (bool, number)`) can be tuple-destructured by a
+    // pattern whose arity matches at least one member - each position then narrows to the union of
+    // that position's type across every same-arity member, mirroring GetArrayElementType's handling
+    // of unions of arrays.
+    private static List<Type>? GetTupleElementTypes(Type type, int arity)
+    {
+        if (type is Types.TupleType tuple)
+            return tuple.ElementTypes.Count == arity ? tuple.ElementTypes : null;
+
+        if (type is not UnionType union)
+            return null;
+
+        var perPosition = new List<Type>[arity];
+        for (var i = 0; i < arity; i++)
+            perPosition[i] = [];
+
+        var matchedAny = false;
+        foreach (var member in union.Types)
+        {
+            var memberElementTypes = GetTupleElementTypes(member, arity);
+            if (memberElementTypes == null)
+                continue;
+
+            matchedAny = true;
+            for (var i = 0; i < arity; i++)
+                perPosition[i].Add(memberElementTypes[i]);
+        }
+
+        return matchedAny ? perPosition.Select(types => TypeSimplifier.Simplify(new UnionType(types))).ToList() : null;
     }
 
     private void CheckRestPattern(RestPattern pattern, Type elementType)
@@ -378,12 +419,32 @@ public sealed partial class TypeChecker
         return patternType;
     }
 
+    // A union of arrays (e.g. `number[] | string[]`) is a legitimate array pattern target - matching
+    // `[n]` against it should narrow to the union of each member's element type - but if any member
+    // isn't array-like at all, the union can't be array-destructured, so the whole thing bails to null
+    // rather than silently matching just the array members.
     private static Type? GetArrayElementType(Type type)
     {
         if (type is InstantiatedType instantiated)
             type = instantiated.Expand();
 
-        return type is ArrayType array ? array.ElementType : null;
+        if (type is ArrayType array)
+            return array.ElementType;
+
+        if (type is not UnionType union)
+            return null;
+
+        var elementTypes = new List<Type>(union.Types.Count);
+        foreach (var member in union.Types)
+        {
+            var elementType = GetArrayElementType(member);
+            if (elementType == null)
+                return null;
+
+            elementTypes.Add(elementType);
+        }
+
+        return TypeSimplifier.Simplify(new UnionType(elementTypes));
     }
 
     /// <summary>

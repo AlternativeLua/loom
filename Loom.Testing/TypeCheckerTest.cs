@@ -6494,6 +6494,54 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_Match_ArrayPattern_OnUnionOfArrays_NarrowsElementType()
+    {
+        const string source = """
+            let value: number[] | string[] = [1];
+            match value {
+                [n] -> n,
+                _ -> 0,
+            }
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_ArrayPattern_OnUnionWithNonArrayMember()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number[] | string = [1];
+            match value {
+                [n] -> n,
+                _ -> 0,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Array pattern cannot match value of type 'number[] | string'."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_TuplePattern_OnUnionOfSameArityTuples_NarrowsElementTypesPositionally()
+    {
+        const string source = """
+            let value: (string, number) | (bool, number) = ("abc", 1);
+            match value {
+                (a, b) -> b,
+                _ -> 0,
+            }
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+    }
+
+    [Fact]
     public void ThrowsFor_Match_ObjectField_MissingProperty()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
@@ -6778,6 +6826,69 @@ public class TypeCheckerTest
             let value: number | string = 5;
             match value {
                 n when number & n > 0 -> "positive",
+                s when string -> s,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_ArrayPatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number[] | string[] = [1];
+            match value {
+                [n] -> "n",
+                [s] -> "s",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_TuplePatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: (string, number) | (bool, number) = ("abc", 1);
+            match value {
+                (a, b) -> "n",
+                (c, d) -> "s",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_RangePatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number | string = 5;
+            match value {
+                0..10 -> "n",
                 s when string -> s,
             }
             """
