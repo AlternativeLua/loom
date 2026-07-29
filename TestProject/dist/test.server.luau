@@ -1,2 +1,5 @@
-const model = Instance.new("Model")
-const position, cf = model:GetBoundingBox()
+const function abc(...: boolean)
+  local foo = {...}
+  return nil
+end
+abc()

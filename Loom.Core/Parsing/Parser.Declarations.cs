@@ -396,6 +396,9 @@ public sealed partial class Parser
 
             if (parameter.ColonTypeClause == null)
                 _diagnostics.Error(parameter, InternalCodes.MissingRestParameterType, "A rest parameter must have an explicit array type.");
+
+            if (parameter.EqualsValueClause != null)
+                _diagnostics.Error(parameter, InternalCodes.RestParameterHasDefaultValue, "A rest parameter may not have a default value.");
         }
     }
 }

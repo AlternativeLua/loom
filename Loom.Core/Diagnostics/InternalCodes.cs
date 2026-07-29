@@ -21,6 +21,7 @@ public static class InternalCodes
     public const string ExpectedDeclarationSignature = "L208";
     public const string DeclarationOutsideOfBlock = "L209";
     public const string ExpectedInterfaceMemberType = "L210";
+    public const string RestParameterHasDefaultValue = "L211";
 
     public const string CannotFindName = "L301";
     public const string DuplicateName = "L302";

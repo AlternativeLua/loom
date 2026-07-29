@@ -3684,14 +3684,6 @@ public class LuauGeneratorTest
     }
 
     [Fact]
-    public void Generates_RestParameter_WithDefaultValue_SkipsNilGuard()
-    {
-        var luauTree = Utility.GetLuauAST("fn abc(..rest: number[] = [1, 2]) -> print(rest);");
-        var fn = Assert.IsType<Function>(luauTree.Statements.Single());
-        Assert.DoesNotContain(fn.Body.Statements, s => s is IfStatement);
-    }
-
-    [Fact]
     public void Generates_ImplementMethodParameter_WithDefaultValue_EmitsNilGuard()
     {
         var luauTree = Utility.GetLuauAST(
