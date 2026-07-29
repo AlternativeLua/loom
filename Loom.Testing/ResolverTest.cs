@@ -1505,6 +1505,16 @@ public class ResolverTest
         Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { 2 | 3 | 4 -> true, 0..5 | 10..15 | 100 -> false, _ -> false }"));
 
     [Fact]
+    public void Allows_Match_OrPattern_AlternativesSharingBindingName() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { let x | let x -> x, _ -> 0 }"));
+
+    [Fact]
+    public void Allows_Match_OrPattern_ObjectAlternativesSharingFieldBindingName() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel("interface Foo { x: number }; interface Bar { x: number }; match 1 { Foo { x } | Bar { x } -> x, _ -> 0 }")
+        );
+
+    [Fact]
     public void Allows_Match_LetPatternBinding() => Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { let name -> name }"));
 
     [Fact]

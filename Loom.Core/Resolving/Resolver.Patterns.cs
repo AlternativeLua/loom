@@ -50,13 +50,27 @@ public sealed partial class Resolver
         return true;
     }
 
+    // Each alternative is resolved in its own throwaway scope so alternatives that bind the same name
+    // (e.g. `Foo { x } | Bar { x } -> x`) don't collide as duplicate declarations in the shared arm
+    // scope - only one arm ever actually runs. The first alternative's bindings are then declared for
+    // real in the enclosing scope, since that's what the arm body (and a sibling pattern, if nested)
+    // sees.
     public override bool VisitOrPattern(OrPattern orPattern)
     {
+        ResolverScope? firstScope = null;
         foreach (var pattern in orPattern.Patterns)
-            if (!Visit(pattern))
+        {
+            var scope = PushScope();
+            var success = Visit(pattern);
+            PopScope();
+            if (!success)
                 return false;
 
-        return true;
+            firstScope ??= scope;
+        }
+
+        return firstScope == null
+            || firstScope.VariableLookup.Values.SelectMany(symbols => symbols).All(symbol => DeclareVariable(symbol.Declaration, symbol));
     }
 
     public override bool VisitAndPattern(AndPattern andPattern) => Visit(andPattern.Pattern) && Visit(andPattern.Guard);
