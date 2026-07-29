@@ -94,6 +94,9 @@ public sealed partial class TypeChecker
 
             case NativelyIndexableType:
                 return GetTypeAtIndex(node, type, indexType);
+
+            case Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.String }:
+                return GetTypeAtIndex(node, Intrinsics.StringMembers, indexType);
         }
 
         _diagnostics.Error(node, InternalCodes.InvalidAccess, errorMessage);
