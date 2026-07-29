@@ -3404,6 +3404,49 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_Match_GuardOnArrayPattern_SubstitutesElementAccessesInCondition()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match [1, 2] { [a, b] when a > b -> a, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("and", condition.Operator);
+
+        var guardCondition = Assert.IsType<BinaryOperator>(condition.Right);
+        Assert.Equal(">", guardCondition.Operator);
+
+        var left = Assert.IsType<ElementAccess>(guardCondition.Left);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(left.Target).Name);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(left.Index).Value);
+
+        var right = Assert.IsType<ElementAccess>(guardCondition.Right);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(right.Target).Name);
+        Assert.Equal(2, Assert.IsType<NumberLiteral>(right.Index).Value);
+    }
+
+    [Fact]
+    public void Generates_Match_GuardOnObjectPattern_SubstitutesPropertyAccessesInCondition()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { { x } when x > 0 -> x, _ -> 0 }");
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        var guardCondition = Assert.IsType<BinaryOperator>(condition.Right);
+
+        var left = Assert.IsType<PropertyAccess>(guardCondition.Left);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(left.Target).Name);
+        Assert.Equal(["x"], left.Names);
+    }
+
+    [Fact]
+    public void Generates_Match_OrPattern_AlternativesSharingBindingName_DeclaresBinding()
+    {
+        var luauTree = Utility.GetLuauAST("let m = match 1 { let x | let x -> x, _ -> 0 }");
+
+        var binding = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("x", binding.Name);
+        Assert.Equal("_subject", Assert.IsType<Identifier>(binding.Initializer).Name);
+    }
+
+    [Fact]
     public void Generates_Match_IdentifierPattern_BindsSubjectAndIsIrrefutable()
     {
         var luauTree = Utility.GetLuauAST("let m = match 1 { n -> n }");

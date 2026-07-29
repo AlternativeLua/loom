@@ -190,8 +190,8 @@ public sealed partial class LuauGenerator
 
     public override LuauNode VisitIdentifier(Identifier identifier)
     {
-        if (identifier.Name.Text == _guardSubstitutionName)
-            return _guardSubstitutionValue!;
+        if (_guardSubstitutions != null && _guardSubstitutions.TryGetValue(identifier.Name.Text, out var substitution))
+            return substitution;
 
         var luauIdentifier = new Luau.AST.Identifier(identifier.Name.Text);
         if (_macroExpander.TryGetInvocationMacroReference(identifier, luauIdentifier, out var referenceReplacement))
