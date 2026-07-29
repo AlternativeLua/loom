@@ -44,13 +44,18 @@ internal static class Utility
     public static ParserResult Parse(string source) => new Parser(Tokenize(source)).Parse();
     public static DiagnosticBag GetParserDiagnostics(string source) => Parse(source).Diagnostics;
 
-    public static SemanticModel GetSemanticModel(string source, bool isDeclaration = false, bool disableRuntimeLib = true, bool debug = false)
+    public static SemanticModel GetSemanticModel(
+        string source,
+        bool isDeclaration = false,
+        bool disableRuntimeLib = true,
+        bool debug = false,
+        ProjectType projectType = ProjectType.Game)
     {
         var parserResult = Parse(source);
         if (isDeclaration)
             parserResult.Tree.File.IsDeclaration = true;
 
-        var compilationUnit = new CompilationUnit(new LoomConfig { Debug = debug });
+        var compilationUnit = new CompilationUnit(new LoomConfig { Debug = debug, ProjectType = projectType });
         var semanticModel = new Resolver(parserResult, compilationUnit).Resolve();
         semanticModel.DisableRuntimeLibraryImport = disableRuntimeLib;
 
@@ -59,22 +64,25 @@ internal static class Utility
 
     public static (FlowAnalyzerResult AnalyzerResult, SemanticModel SemanticModel, FlowAnalyzer Analyzer) FlowAnalyze(
         string source,
-        bool disableRuntimeLib = true)
+        bool disableRuntimeLib = true,
+        ProjectType projectType = ProjectType.Game)
     {
-        var semanticModel = GetSemanticModel(source, disableRuntimeLib: disableRuntimeLib);
+        var semanticModel = GetSemanticModel(source, disableRuntimeLib: disableRuntimeLib, projectType: projectType);
         var flowAnalyzer = new FlowAnalyzer(semanticModel);
         var result = flowAnalyzer.Analyze();
         return (result, semanticModel, flowAnalyzer);
     }
 
-    private static TypeChecker GetTypeChecker(string source)
+    private static TypeChecker GetTypeChecker(string source, ProjectType projectType = ProjectType.Game)
     {
-        var (_, semanticModel, flowAnalyzer) = FlowAnalyze(source);
+        var (_, semanticModel, flowAnalyzer) = FlowAnalyze(source, projectType: projectType);
         return new TypeChecker(semanticModel, flowAnalyzer);
     }
 
-    public static TypeCheckerResult TypeCheck(string source) => GetTypeChecker(source).Check();
-    public static DiagnosticBag GetTypeCheckerDiagnostics(string source) => TypeCheck(source).Diagnostics;
+    public static TypeCheckerResult TypeCheck(string source, ProjectType projectType = ProjectType.Game) => GetTypeChecker(source, projectType).Check();
+
+    public static DiagnosticBag GetTypeCheckerDiagnostics(string source, ProjectType projectType = ProjectType.Game) =>
+        TypeCheck(source, projectType).Diagnostics;
 
     public static Token IdentifierToken(string name, LocationSpan? span = null) => Token(SyntaxKind.Identifier, name, span);
     private static Token Token(SyntaxKind kind, string text, LocationSpan? span = null) => new(kind, span ?? Span, text);

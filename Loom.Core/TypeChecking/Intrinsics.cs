@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using Loom.Config;
 using Loom.Core.Pipeline;
 using Loom.Core.Resolving;
 using Loom.Core.Resolving.Symbols;
+using Loom.Core.Text;
 using Loom.Core.TypeChecking.Types;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -10,8 +12,23 @@ namespace Loom.Core.TypeChecking;
 
 public static class Intrinsics
 {
-    private static HashSet<(Symbol, Type)>? _cachedIntrinsics;
-    private static bool _compilingIntrinsic;
+    private const string CoreFileName = "loom.loom";
+    private const string PluginSecurityFileName = "PluginSecurity.loom";
+    private const string NonPluginRuntimeFileName = "None.loom";
+
+    // Compiling the intrinsic files below sends each one through the same Resolver pipeline as any
+    // regular source file, which unconditionally calls back into Register(). This flag breaks that
+    // recursion: the reentrant call sees no cached entry and returns immediately (see CompileIntrinsics),
+    // which is fine because intrinsic files reach each other through compilationUnit.Globals instead of
+    // ambient injection - see CompileCoreFile. Thread-local so one thread bootstrapping doesn't also
+    // suppress a genuine, unrelated Register() call happening concurrently on another thread.
+    [ThreadStatic]
+    private static bool _isBootstrapping;
+
+    // Keyed by ProjectType because PluginSecurity.loom and None.loom are only included for some project
+    // types (see IsIncludedFor) - a single unkeyed cache would serve one project type's intrinsics to
+    // every other project type compiled afterward in the same process.
+    private static readonly ConcurrentDictionary<ProjectType, HashSet<(Symbol, Type)>> _cache = new();
 
     public static readonly TupleMarkerType TupleMarker = new();
 
@@ -53,71 +70,95 @@ public static class Intrinsics
 
     public static HashSet<(Symbol, Type)> Register(SemanticModel model, CompilationUnit injectInto)
     {
-        _cachedIntrinsics ??= CompileIntrinsics(injectInto);
-
-        foreach (var (symbol, type) in _cachedIntrinsics)
+        var intrinsics = _cache.GetOrAdd(injectInto.Config.ProjectType, CompileIntrinsics);
+        foreach (var (symbol, type) in intrinsics)
             model.TypeSolver.SetType(symbol.Declaration, type);
 
-        return _cachedIntrinsics;
+        return intrinsics;
     }
 
-    private static HashSet<(Symbol, Type)> CompileIntrinsics(CompilationUnit injectInto)
+    private static HashSet<(Symbol, Type)> CompileIntrinsics(ProjectType projectType)
     {
-        if (_compilingIntrinsic) return [];
-        _compilingIntrinsic = true;
+        if (_isBootstrapping)
+            return [];
 
-        var sourceDirectory = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
-        var loomConfig = new LoomConfig
+        _isBootstrapping = true;
+        try
         {
-            ProjectType = ProjectType.Library, NoEmit = true, Files = new FilesConfig { SourceDirectory = $"{sourceDirectory}/Loom.Core/TypeChecking/Intrinsic" }
+            var compilationUnit = CreateCompilationUnit();
+            var files = compilationUnit.SourceFiles.Where(file => IsIncludedFor(file, projectType)).ToList();
+            foreach (var file in files)
+                file.IsIntrinsic = true;
+
+            var coreFile = files.Find(file => file.Name == CoreFileName);
+            var compiledFiles = new List<CompiledFile>();
+            if (coreFile != null && CompileCoreFile(compilationUnit, coreFile) is { } compiledCoreFile)
+                compiledFiles.Add(compiledCoreFile);
+
+            foreach (var file in files)
+                if (file != coreFile && compilationUnit.Compile(file) is { } compiledFile)
+                    compiledFiles.Add(compiledFile);
+
+            return CollectDeclaredSymbols(compiledFiles);
+        }
+        finally
+        {
+            _isBootstrapping = false;
+        }
+    }
+
+    private static CompilationUnit CreateCompilationUnit()
+    {
+        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
+        var config = new LoomConfig
+        {
+            ProjectType = ProjectType.Library,
+            NoEmit = true,
+            Files = new FilesConfig { SourceDirectory = $"{repositoryRoot}/Loom.Core/TypeChecking/Intrinsic" }
         };
 
-        var compilationUnit = new CompilationUnit(loomConfig);
-        var projectType = injectInto.Config.ProjectType;
-        var sourceFiles = compilationUnit.SourceFiles
-            .Where(file =>
-                {
-                    file.IsIntrinsic = true;
-                    if (projectType != ProjectType.Plugin && file.Name == "PluginSecurity.loom")
-                        return false;
+        return new CompilationUnit(config);
+    }
 
-                    return projectType != ProjectType.Plugin || file.Name != "None.loom";
-                }
-            )
-            .ToList();
+    private static bool IsIncludedFor(SourceFile file, ProjectType projectType) =>
+        file.Name switch
+        {
+            PluginSecurityFileName => projectType == ProjectType.Plugin,
+            NonPluginRuntimeFileName => projectType != ProjectType.Plugin,
+            _ => true
+        };
 
-        // loom.loom is compiled first, ahead of everything else, and its declarations (luau_name,
-        // luau_method, override) are shared with the other intrinsic files via the compilation unit's
-        // Globals - the same channel a regular project's .d.loom files use to reach every other file in
-        // the unit. This is the only channel intrinsic files have for referencing each other: ambient
-        // intrinsic injection (DeclareIntrinsicSymbols) stays off for the whole compile below, guarded by
-        // _compilingIntrinsic, to avoid recursing back into this same method.
-        var baseFile = sourceFiles.Find(file => file.Name == "loom.loom");
-        var baseCompiled = baseFile != null ? compilationUnit.Compile(baseFile) : null;
-        if (baseCompiled != null)
-            foreach (var symbol in baseCompiled.Tree.Statements.SelectMany(statement => baseCompiled.SemanticModel.GetDeclarationSymbols(statement)))
-                compilationUnit.Globals[symbol] = baseCompiled.SemanticModel.GetType(symbol.Declaration);
+    /// <summary>
+    ///     loom.loom declares luau_name, luau_method, and override, which every other intrinsic file's
+    ///     attributes depend on, so it must compile - and have its declarations copied into
+    ///     <see cref="CompilationUnit.Globals" /> - before any other intrinsic file does. Globals is the
+    ///     same channel a regular project's own .d.loom files use to reach every other file in the unit;
+    ///     it is the only channel intrinsic files have for referencing each other, since ambient intrinsic
+    ///     injection stays off for this whole bootstrap (see <see cref="_isBootstrapping" />).
+    /// </summary>
+    private static CompiledFile? CompileCoreFile(CompilationUnit compilationUnit, SourceFile coreFile)
+    {
+        var compiled = compilationUnit.Compile(coreFile);
+        if (compiled == null)
+            return null;
 
-        var compiledFiles = sourceFiles
-            .Where(file => file != baseFile)
-            .Select(compilationUnit.Compile)
-            .Append(baseCompiled)
-            .OfType<CompiledFile>()
-            .ToArray();
+        foreach (var symbol in compiled.Tree.Statements.SelectMany(statement => compiled.SemanticModel.GetDeclarationSymbols(statement)))
+            compilationUnit.Globals[symbol] = compiled.SemanticModel.GetType(symbol.Declaration);
 
+        return compiled;
+    }
+
+    private static HashSet<(Symbol, Type)> CollectDeclaredSymbols(IEnumerable<CompiledFile> compiledFiles)
+    {
         var intrinsicSymbols = new HashSet<(Symbol, Type)>();
         foreach (var compiledFile in compiledFiles)
+        foreach (var symbol in compiledFile.Tree.Statements.SelectMany(statement => compiledFile.SemanticModel.GetDeclarationSymbols(statement)))
         {
-            var symbols = compiledFile.Tree.Statements.SelectMany(statement => compiledFile.SemanticModel.GetDeclarationSymbols(statement));
-            foreach (var symbol in symbols)
-            {
-                symbol.IsIntrinsic = true;
-                symbol.IsGlobal = true;
-                intrinsicSymbols.Add((symbol, compiledFile.SemanticModel.GetType(symbol.Declaration)));
-            }
+            symbol.IsIntrinsic = true;
+            symbol.IsGlobal = true;
+            intrinsicSymbols.Add((symbol, compiledFile.SemanticModel.GetType(symbol.Declaration)));
         }
 
-        _compilingIntrinsic = false;
         return intrinsicSymbols;
     }
 }
