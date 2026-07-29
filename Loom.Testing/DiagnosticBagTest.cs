@@ -335,4 +335,25 @@ public class DiagnosticBagTest
         var bag = new DiagnosticBag();
         Assert.Equal("", bag.ToString());
     }
+
+    [Fact]
+    public void GetHashCode_StableAcrossToString()
+    {
+        var diag = Utility.GetParserDiagnostics("let x = ;").Set.First();
+        var before = diag.GetHashCode();
+        _ = diag.ToString();
+        Assert.Equal(before, diag.GetHashCode());
+    }
+
+    [Fact]
+    public void Set_ContainsDiagnostic_AfterToStringIsCalled()
+    {
+        var bag = new DiagnosticBag();
+        bag.Error(_span, "L999", "test message");
+        var diag = bag.Set.Single();
+
+        _ = diag.ToString();
+
+        Assert.Contains(diag, bag.Set);
+    }
 }
