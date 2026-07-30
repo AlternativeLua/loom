@@ -66,9 +66,8 @@ public sealed partial class Parser
         return new InterfaceBody(leftBrace, rightBrace, members);
     }
 
-    // A member that fails to parse (e.g. missing its ': Type' clause) is skipped rather than aborting
-    // the whole body, so parsing still reaches the closing '}' and reports one diagnostic per bad
-    // member instead of leaving '}' unconsumed and cascading into an unrelated top-level parse error.
+    // A member that fails to parse is skipped rather than aborting the whole body, so parsing still
+    // reaches the closing '}' instead of leaving it unconsumed and cascading into an unrelated error.
     private List<Statement> ParseInterfaceMembers()
     {
         var members = new List<Statement>();

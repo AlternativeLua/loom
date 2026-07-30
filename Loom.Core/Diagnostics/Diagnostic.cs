@@ -24,10 +24,8 @@ public sealed record Diagnostic(LocationSpan Span, DiagnosticSeverity Severity, 
     private string GutterIndent => new(' ', LineDigits);
     private string Gutter => $"{Colors.Dim}{GutterIndent} │{Colors.Reset}";
 
-    // Records include every instance field in the synthesized equality/hash code, but
-    // _severityStyle and the SourceLines cache are presentation-only and populate lazily
-    // (on first ToString()), so leaving them in would change a Diagnostic's hash code
-    // after it's already been inserted into a HashSet<Diagnostic> (see DiagnosticBag.Set).
+    // Explicit so the lazily-populated SourceLines/_severityStyle fields (record equality includes
+    // every instance field by default) can't change this Diagnostic's hash after it's in a HashSet.
     public bool Equals(Diagnostic? other) =>
         other is not null
         && (ReferenceEquals(this, other)

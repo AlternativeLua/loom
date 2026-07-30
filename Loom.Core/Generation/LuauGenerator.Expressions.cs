@@ -132,11 +132,8 @@ public sealed partial class LuauGenerator
             return new Luau.AST.BinaryOperator(access, "~=", new NilLiteral());
         }
 
-        // Luau's `or` treats `false` as absent, but `??` is specifically nil-only coalescing (it warns
-        // when the left side isn't optional - see TypeChecker.Check.cs CheckNullCoalesce), so `flag ??
-        // true` on a `bool?` holding `false` must keep `false`, not fall through to `true` the way `or`
-        // would. The left side is hoisted to a local first so it's only evaluated once, since it's
-        // referenced both in the nil check and (if non-nil) the result.
+        // Unlike Luau's `or`, `??` must only substitute on nil, not on falsy `false` - the left side is
+        // hoisted to a local since it's referenced in both the nil check and the result.
         if (binaryOperator.Operator.Kind == SyntaxKind.QuestionQuestion)
         {
             var leftValue = _state.PushToVariable("_coalesce", Visit(binaryOperator.Left));
@@ -144,10 +141,7 @@ public sealed partial class LuauGenerator
             return new IfExpression(condition, leftValue, [], Visit(binaryOperator.Right));
         }
 
-        // Luau's augmented assignment only covers arithmetic/concat operators (+=, -=, etc.), so those
-        // pass straight through unchanged below - but it has no &&=/||=/??= at all, and no &&/|| tokens
-        // to build them from either, so those three need to desugar into a plain `left = left <op>
-        // right` assignment using the same and/or/nil-check translation the non-compound forms use.
+        // Luau has no &&=/||=/??= (unlike +=/-=/etc.), so desugar to a plain `left = left <op> right`.
         if (binaryOperator.Operator.Kind is SyntaxKind.AmpersandAmpersandEquals or SyntaxKind.PipePipeEquals or SyntaxKind.QuestionQuestionEquals)
         {
             var leftValue = Visit(binaryOperator.Left);

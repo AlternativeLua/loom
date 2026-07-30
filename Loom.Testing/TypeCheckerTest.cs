@@ -2996,8 +2996,6 @@ public class TypeCheckerTest
     [Fact]
     public void Checks_Narrowing_AfterAssignment_DoesNotLeakIntoNextAssignmentsTargetType()
     {
-        // a prior narrowing of `n` must not restrict what a later assignment to `n` itself can accept -
-        // that check needs n's full declared type ('number?'), not whatever it was last narrowed to.
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
             mut n: number? = none;

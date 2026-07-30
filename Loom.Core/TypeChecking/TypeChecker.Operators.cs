@@ -18,9 +18,8 @@ public sealed partial class TypeChecker
         }
         else
         {
-            // Resolved without any narrowing on the target still in effect - a prior `??=`/etc. narrows
-            // what *reading* the variable sees, but checking a fresh value against it needs the full
-            // declared type, or a legal `n = none` after `n` was narrowed to `number` would wrongly fail.
+            // Without narrowing: checking a fresh value needs the target's full declared type, not
+            // whatever a prior `??=`/etc. last narrowed it to (else a legal `n = none` could wrongly fail).
             var targetState = _narrower.WithoutNarrowing(assignmentOperator.Left, _flowState);
             var targetType = Visit(assignmentOperator.Left, targetState);
             var valueType = Check(assignmentOperator.Right, targetType);
@@ -31,17 +30,15 @@ public sealed partial class TypeChecker
         return resultType;
     }
 
-    // Only handled when the assignment is its own statement (the overwhelmingly common case, and the
-    // one CheckStatements can actually thread forward via _exitStates) - an assignment nested inside a
-    // larger expression doesn't get its own entry in the statement list to attach a narrowed exit state
-    // to. Also skipped when resultType isn't even assignable to the target's own type, since that means
-    // the "assignment" isn't really storing a new value into the target at all - e.g. `handler +=
-    // callback` on an event field returns a ScriptConnection, not a new value for `handler`.
     private void NarrowAfterAssignment(AssignmentOperator assignmentOperator, Type resultType)
     {
+        // Only CheckStatements can thread a narrowed state forward via _exitStates, and only for an
+        // assignment that's its own statement - one nested in a larger expression has no entry to attach to.
         if (assignmentOperator.Parent is not ExpressionStatement statement)
             return;
 
+        // Skip if resultType isn't even assignable to the target's type - e.g. `handler += callback` on
+        // an event field returns a ScriptConnection, not a new value for `handler`.
         var targetType = _semanticModel.GetType(assignmentOperator.Left);
         if (!resultType.IsAssignableTo(targetType))
             return;

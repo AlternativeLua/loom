@@ -361,10 +361,8 @@ public sealed partial class TypeChecker
         BindType(pattern, inputType);
     }
 
-    // A union of tuples (e.g. `(string, number) | (bool, number)`) can be tuple-destructured by a
-    // pattern whose arity matches at least one member - each position then narrows to the union of
-    // that position's type across every same-arity member, mirroring GetArrayElementType's handling
-    // of unions of arrays.
+    // A union of tuples narrows per-position across every member matching the pattern's arity, mirroring
+    // GetArrayElementType's handling of unions of arrays.
     private static List<Type>? GetTupleElementTypes(Type type, int arity)
     {
         if (type is Types.TupleType tuple)
@@ -419,10 +417,8 @@ public sealed partial class TypeChecker
         return patternType;
     }
 
-    // A union of arrays (e.g. `number[] | string[]`) is a legitimate array pattern target - matching
-    // `[n]` against it should narrow to the union of each member's element type - but if any member
-    // isn't array-like at all, the union can't be array-destructured, so the whole thing bails to null
-    // rather than silently matching just the array members.
+    // A union of arrays narrows to the union of each member's element type - unless some member isn't
+    // array-like at all, in which case the whole union can't be array-destructured.
     private static Type? GetArrayElementType(Type type)
     {
         if (type is InstantiatedType instantiated)

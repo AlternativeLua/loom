@@ -14,10 +14,8 @@ namespace Loom.Core.Generation;
 
 public sealed partial class LuauGenerator
 {
-    // Set only while compiling a match arm's Guard expression, so a guard that references one of the
-    // arm's own pattern-bound names (e.g. `n when n > 0`, or `[a, b] when a > b`) resolves to the
-    // matching subject access instead of the not-yet-declared local - the bindings themselves are only
-    // introduced inside the arm body, after the guard passes.
+    // Set while compiling a guard, so it sees the pattern's bound names as subject accesses instead of
+    // the not-yet-declared locals (those are only introduced in the arm body, after the guard passes).
     private Dictionary<string, LuauExpression>? _guardSubstitutions;
 
     public override LuauNode VisitMatchExpression(MatchExpression matchExpression)
@@ -179,8 +177,7 @@ public sealed partial class LuauGenerator
 
                 break;
 
-            // Every alternative of a valid or-pattern binds the same names against the same subject, so
-            // the first alternative's bindings apply regardless of which one actually matched at runtime.
+            // Every alternative binds the same names against the same subject, so any one will do.
             case OrPattern { Patterns: [var first, ..] }:
                 foreach (var binding in CollectPatternBindings(first, subject))
                     yield return binding;
@@ -352,10 +349,8 @@ public sealed partial class LuauGenerator
 
             case OrPattern orPattern:
             {
-                // Only one alternative's runtime condition can hold, but the resolver requires every
-                // alternative to bind the same names against the same subject (see Resolver.Patterns.cs
-                // VisitOrPattern), so the first alternative's bindings stand in for whichever one
-                // actually matches.
+                // The resolver requires every alternative to bind the same names (Resolver.Patterns.cs
+                // VisitOrPattern), so the first alternative's bindings stand in for whichever one matches.
                 var alternativeConditions = new List<LuauExpression>();
                 List<LuauStatement>? representativeBindings = null;
                 foreach (var alternative in orPattern.Patterns)
