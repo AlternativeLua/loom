@@ -16,20 +16,8 @@ public static class Intrinsics
     private const string PluginSecurityFileName = "PluginSecurity.loom";
     private const string NonPluginRuntimeFileName = "None.loom";
 
-    // Compiling the intrinsic files below sends each one through the same Resolver pipeline as any
-    // regular source file, which unconditionally calls back into Register(). This flag breaks that
-    // recursion: the reentrant call sees no cached entry and returns immediately (see CompileIntrinsics),
-    // which is fine because intrinsic files reach each other through compilationUnit.Globals instead of
-    // ambient injection - see CompileCoreFile. Thread-local so one thread bootstrapping doesn't also
-    // suppress a genuine, unrelated Register() call happening concurrently on another thread.
-    [ThreadStatic]
-    private static bool _isBootstrapping;
-
-    // Keyed by ProjectType because PluginSecurity.loom and None.loom are only included for some project
-    // types (see IsIncludedFor) - a single unkeyed cache would serve one project type's intrinsics to
-    // every other project type compiled afterward in the same process.
+    [ThreadStatic] private static bool _isBootstrapping;
     private static readonly ConcurrentDictionary<ProjectType, HashSet<(Symbol, Type)>> _cache = new();
-
     public static readonly TupleMarkerType TupleMarker = new();
 
     public static readonly InterfaceType Range = new(
@@ -112,9 +100,7 @@ public static class Intrinsics
         var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
         var config = new LoomConfig
         {
-            ProjectType = ProjectType.Library,
-            NoEmit = true,
-            Files = new FilesConfig { SourceDirectory = $"{repositoryRoot}/Loom.Core/TypeChecking/Intrinsic" }
+            ProjectType = ProjectType.Library, NoEmit = true, Files = new FilesConfig { SourceDirectory = $"{repositoryRoot}/Loom.Core/TypeChecking/Intrinsic" }
         };
 
         return new CompilationUnit(config);
@@ -152,12 +138,12 @@ public static class Intrinsics
     {
         var intrinsicSymbols = new HashSet<(Symbol, Type)>();
         foreach (var compiledFile in compiledFiles)
-        foreach (var symbol in compiledFile.Tree.Statements.SelectMany(statement => compiledFile.SemanticModel.GetDeclarationSymbols(statement)))
-        {
-            symbol.IsIntrinsic = true;
-            symbol.IsGlobal = true;
-            intrinsicSymbols.Add((symbol, compiledFile.SemanticModel.GetType(symbol.Declaration)));
-        }
+            foreach (var symbol in compiledFile.Tree.Statements.SelectMany(statement => compiledFile.SemanticModel.GetDeclarationSymbols(statement)))
+            {
+                symbol.IsIntrinsic = true;
+                symbol.IsGlobal = true;
+                intrinsicSymbols.Add((symbol, compiledFile.SemanticModel.GetType(symbol.Declaration)));
+            }
 
         return intrinsicSymbols;
     }

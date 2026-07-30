@@ -1,5 +1,1 @@
-const function abc(...: boolean)
-  local foo = {...}
-  return nil
-end
-abc()
+const x = 1
