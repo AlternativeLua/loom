@@ -166,6 +166,14 @@ public class ParserTest
         Utility.AssertDiagnostic(diagnostics, code, expectedMessage, hint);
     }
 
+    [Fact]
+    public void ParseInterfaceBody_BadMember_StillConsumesClosingBrace_NoCascadingError()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("interface Foo { bar }");
+        var diagnostic = Assert.Single(diagnostics.Set);
+        Assert.Equal(InternalCodes.ExpectedInterfaceMemberType, diagnostic.Code);
+    }
+
     [Theory]
     [MemberData(nameof(SnapshotFiles))]
     public void Parser_Snapshots(string sourcePath, string snapshotPath)
