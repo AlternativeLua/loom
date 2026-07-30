@@ -100,10 +100,10 @@ public sealed class Lexer(SourceFile file, DiagnosticOptions? diagnosticOptions 
     private Token LexBlockComment(int start)
     {
         Advance(2);
-        while (!IsEof() && !IsEof(1) && Current() is not ':' && Peek(1) is not '#')
+        while (!IsEof() && !IsEof(1) && (Current() is not ':' || Peek(1) is not '#'))
             Advance();
 
-        if (Current() is not ':' && (IsEof(1) || Peek(1) is not '#'))
+        if (IsEof() || IsEof(1))
             _diagnostics.Error(GetSpan(start), InternalCodes.UnterminatedComment, "Unterminated block comment: expected closing ':#'.");
         else
             Advance(2);

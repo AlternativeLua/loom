@@ -184,6 +184,22 @@ public class LexerTest
     }
 
     [Fact]
+    public void BlockComment_ContainingLoneColonOrHash_ConsumesFullContent()
+    {
+        var tokens = Utility.GetTokens("#: ## nested-looking content :# true", true);
+        Assert.Equal(4, tokens.Count);
+        Assert.Equal(SyntaxKind.BlockComment, tokens[0].Kind);
+        Assert.Equal("#: ## nested-looking content :#", tokens[0].Text);
+        Assert.Equal(SyntaxKind.Whitespace, tokens[1].Kind);
+        Assert.Equal(SyntaxKind.TrueLiteral, tokens[2].Kind);
+        Assert.Equal(SyntaxKind.Eof, tokens[3].Kind);
+    }
+
+    [Fact]
+    public void BlockComment_ContainingLoneColonOrHash_NoDiagnostics() =>
+        Utility.AssertNoErrors(Utility.GetLexerDiagnostics("#: a:b c# :# true"));
+
+    [Fact]
     public void BlockComment_Tracks_Lines()
     {
         var tokens = Utility.GetTokens("#: line one\nline two\nline three :#", true);
