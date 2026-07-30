@@ -324,17 +324,11 @@ public sealed partial class TypeChecker
                     $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {pattern.Patterns.Count} were provided."
                 );
 
-                foreach (var element in pattern.Patterns)
-                    CheckPattern(element, PrimitiveType.Unknown);
-
-                BindType(pattern, inputType);
+                CheckTuplePatternElementsAsUnknown(pattern, inputType);
                 return;
             }
 
-            for (var i = 0; i < pattern.Patterns.Count; i++)
-                CheckPattern(pattern.Patterns[i], tupleType.ElementTypes[i]);
-
-            BindType(pattern, inputType);
+            CheckTuplePatternElements(pattern, inputType, tupleType.ElementTypes);
             return;
         }
 
@@ -348,15 +342,25 @@ public sealed partial class TypeChecker
                     $"Tuple pattern cannot match value of type '{inputType}'."
                 );
 
-            foreach (var element in pattern.Patterns)
-                CheckPattern(element, PrimitiveType.Unknown);
-
-            BindType(pattern, inputType);
+            CheckTuplePatternElementsAsUnknown(pattern, inputType);
             return;
         }
 
+        CheckTuplePatternElements(pattern, inputType, elementTypes);
+    }
+
+    private void CheckTuplePatternElements(TuplePattern pattern, Type inputType, List<Type> elementTypes)
+    {
         for (var i = 0; i < pattern.Patterns.Count; i++)
             CheckPattern(pattern.Patterns[i], elementTypes[i]);
+
+        BindType(pattern, inputType);
+    }
+
+    private void CheckTuplePatternElementsAsUnknown(TuplePattern pattern, Type inputType)
+    {
+        foreach (var element in pattern.Patterns)
+            CheckPattern(element, PrimitiveType.Unknown);
 
         BindType(pattern, inputType);
     }

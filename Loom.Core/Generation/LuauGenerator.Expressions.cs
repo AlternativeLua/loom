@@ -122,39 +122,13 @@ public sealed partial class LuauGenerator
             return GenerateBitwiseOperator(binaryOperator);
 
         if (binaryOperator.Operator.Kind == SyntaxKind.InKeyword)
-        {
-            var index = Visit(binaryOperator.Left);
-            var target = Visit(binaryOperator.Right);
-            LuauExpression access = index is StringLiteral literal
-                ? new Luau.AST.PropertyAccess(target, [literal.Value])
-                : new Luau.AST.ElementAccess(target, index);
+            return GenerateInOperator(binaryOperator);
 
-            return new Luau.AST.BinaryOperator(access, "~=", new NilLiteral());
-        }
-
-        // Unlike Luau's `or`, `??` must only substitute on nil, not on falsy `false` - the left side is
-        // hoisted to a local since it's referenced in both the nil check and the result.
         if (binaryOperator.Operator.Kind == SyntaxKind.QuestionQuestion)
-        {
-            var leftValue = _state.PushToVariable("_coalesce", Visit(binaryOperator.Left));
-            var condition = new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral());
-            return new IfExpression(condition, leftValue, [], Visit(binaryOperator.Right));
-        }
+            return GenerateNullCoalesce(binaryOperator);
 
-        // Luau has no &&=/||=/??= (unlike +=/-=/etc.), so desugar to a plain `left = left <op> right`.
         if (binaryOperator.Operator.Kind is SyntaxKind.AmpersandAmpersandEquals or SyntaxKind.PipePipeEquals or SyntaxKind.QuestionQuestionEquals)
-        {
-            var leftValue = Visit(binaryOperator.Left);
-            var rightValue = Visit(binaryOperator.Right);
-            LuauExpression desugaredValue = binaryOperator.Operator.Kind switch
-            {
-                SyntaxKind.AmpersandAmpersandEquals => new Luau.AST.BinaryOperator(leftValue, "and", rightValue),
-                SyntaxKind.PipePipeEquals => new Luau.AST.BinaryOperator(leftValue, "or", rightValue),
-                _ => new IfExpression(new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral()), leftValue, [], rightValue)
-            };
-
-            return new Luau.AST.BinaryOperator(leftValue, "=", desugaredValue);
-        }
+            return GenerateCompoundLogicalAssignment(binaryOperator);
 
         var op = binaryOperator.Operator.Text;
         var leftType = _semanticModel.GetType(binaryOperator.Left);
@@ -165,6 +139,41 @@ public sealed partial class LuauGenerator
         var right = Visit(binaryOperator.Right);
         var mappedOperator = isConcatenation ? op.Replace("+", "..") : LuauOperatorMap.BinaryOperator(op);
         return new Luau.AST.BinaryOperator(left, mappedOperator, right);
+    }
+
+    private LuauNode GenerateInOperator(BinaryOperator binaryOperator)
+    {
+        var index = Visit(binaryOperator.Left);
+        var target = Visit(binaryOperator.Right);
+        LuauExpression access = index is StringLiteral literal
+            ? new Luau.AST.PropertyAccess(target, [literal.Value])
+            : new Luau.AST.ElementAccess(target, index);
+
+        return new Luau.AST.BinaryOperator(access, "~=", new NilLiteral());
+    }
+
+    // Unlike Luau's `or`, `??` must only substitute on nil, not on falsy `false` - the left side is
+    // hoisted to a local since it's referenced in both the nil check and the result.
+    private LuauNode GenerateNullCoalesce(BinaryOperator binaryOperator)
+    {
+        var leftValue = _state.PushToVariable("_coalesce", Visit(binaryOperator.Left));
+        var condition = new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral());
+        return new IfExpression(condition, leftValue, [], Visit(binaryOperator.Right));
+    }
+
+    // Luau has no &&=/||=/??= (unlike +=/-=/etc.), so desugar to a plain `left = left <op> right`.
+    private LuauNode GenerateCompoundLogicalAssignment(BinaryOperator binaryOperator)
+    {
+        var leftValue = Visit(binaryOperator.Left);
+        var rightValue = Visit(binaryOperator.Right);
+        LuauExpression desugaredValue = binaryOperator.Operator.Kind switch
+        {
+            SyntaxKind.AmpersandAmpersandEquals => new Luau.AST.BinaryOperator(leftValue, "and", rightValue),
+            SyntaxKind.PipePipeEquals => new Luau.AST.BinaryOperator(leftValue, "or", rightValue),
+            _ => new IfExpression(new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral()), leftValue, [], rightValue)
+        };
+
+        return new Luau.AST.BinaryOperator(leftValue, "=", desugaredValue);
     }
 
     public override LuauNode VisitUnaryOperator(UnaryOperator unaryOperator)
