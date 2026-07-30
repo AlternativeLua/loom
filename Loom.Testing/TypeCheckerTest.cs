@@ -2987,6 +2987,66 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(diagnostics);
     }
 
+    [Theory]
+    [InlineData("mut n: number? = none; n = 69; print(n + 1)")]
+    [InlineData("mut n: number? = none; n ??= 69; print(n + 1)")]
+    [InlineData("mut n: number? = none; n = n ?? 69; print(n + 1)")]
+    public void Checks_Narrowing_AfterAssignment(string source) => Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+
+    [Fact]
+    public void Checks_Narrowing_AfterAssignment_DoesNotLeakIntoNextAssignmentsTargetType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            mut n: number? = none;
+            n ??= 69;
+            n = none;
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Checks_Narrowing_AfterAssignment_ReflectsTheNewlyAssignedValue()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            mut n: number? = none;
+            n ??= 69;
+            n = none;
+            print(n + 1)
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidBinaryOp,
+            "No binary operation for 'none' + 'number'.",
+            "expected left operand of type 'number', not 'none'"
+        );
+    }
+
+    [Fact]
+    public void Checks_Narrowing_AfterAssignment_DoesNotApplyToEventConnectionOperators()
+    {
+        const string source = """
+            interface EventObject {
+                event consumer(param: string);
+            }
+
+            fn on_consumer(p: string): void {
+                print(p)
+            }
+
+            let eo = none as never as EventObject;
+            eo.consumer += on_consumer;
+            eo.consumer -= on_consumer;
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+    }
+
     [Fact]
     public void Checks_GenericFunction_InferenceWithIntersectionParameter_AndSingleArgument()
     {
@@ -4834,6 +4894,29 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_RangeMemberAccess_Length()
+    {
+        var type = Utility.GetLastStatementType("(1..10).length");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_RangeMemberAccess_Clamp_ReturnsNumber()
+    {
+        var type = Utility.GetLastStatementType("(1..10).clamp(5)");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void ThrowsFor_RangeMemberAccess_Clamp_WrongArgumentType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("(1..10).clamp('abc')");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"abc\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
     public void Checks_RangeLiteral_ElementAccess()
     {
         var type = Utility.GetLastStatementType("let x = [1, 2, 3]; x[1..10]");
@@ -4898,6 +4981,16 @@ public class TypeCheckerTest
         Assert.Equal(PrimitiveTypeKind.Bool, primitive.Kind);
     }
 
+    [Theory]
+    [InlineData("()")]
+    [InlineData("(2)")]
+    public void Checks_StringMemberAccess_Byte_ReturnsOptionalNumber(string arguments)
+    {
+        var type = Utility.GetLastStatementType($"let s = 'abc'; s.byte{arguments}");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
     [Fact]
     public void Checks_StringMemberAccess_Split()
     {
@@ -4926,6 +5019,113 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_ArrayMemberAccess_Length()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.length");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Join_ReturnsString()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.join(', ')");
+        Assert.Equal(PrimitiveType.String, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_IndexOf_ReturnsOptionalNumber()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.index_of(2)");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Has_ReturnsBool()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.has(2)");
+        Assert.Equal(PrimitiveType.Bool, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Push_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.push(4)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Pop_ReturnsOptionalElement()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.pop()");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Insert_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.insert(0, 4)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Remove_ReturnsOptionalElement()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.remove(0)");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Theory]
+    [InlineData("a.pop()")]
+    [InlineData("a.insert(0, 4)")]
+    [InlineData("a.remove(0)")]
+    public void ThrowsFor_ImmutableArrayMemberAccess_Mutation(string call)
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics($"let a = [1, 2, 3]; {call}");
+        Assert.NotEmpty(diagnostics.Set);
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_String_ReturnsString()
+    {
+        var type = Utility.GetLastStatementType("string(69)");
+        Assert.Equal(PrimitiveType.String, type);
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_Number_ReturnsOptionalNumber()
+    {
+        var type = Utility.GetLastStatementType("number('69')");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_Number_WithRadix_ReturnsOptionalNumber()
+    {
+        var type = Utility.GetLastStatementType("number('ff', 16)");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void ThrowsFor_Intrinsic_Number_WrongRadixArgumentType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("number('ff', 'sixteen')");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"sixteen\"' is not assignable to type 'number?'.");
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_Print_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("print(1, 'two', true)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
     public void Checks_MathMemberAccess_Property()
     {
         var type = Utility.GetLastStatementType("math.pi");
@@ -4950,6 +5150,79 @@ public class TypeCheckerTest
             InternalCodes.InvalidAccess,
             "Expression of type '\"missing\"' cannot be used to index type 'MathLib'. Property 'missing' does not exist on type 'MathLib'."
         );
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_HugeProperty()
+    {
+        var type = Utility.GetLastStatementType("math.huge");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Theory]
+    [InlineData("math.abs(-1)")]
+    [InlineData("math.acos(1)")]
+    [InlineData("math.asin(1)")]
+    [InlineData("math.atan(1)")]
+    [InlineData("math.atan(1, 2)")]
+    [InlineData("math.atan2(1, 2)")]
+    [InlineData("math.ceil(1.2)")]
+    [InlineData("math.clamp(5, 0, 10)")]
+    [InlineData("math.cos(1)")]
+    [InlineData("math.cosh(1)")]
+    [InlineData("math.deg(1)")]
+    [InlineData("math.exp(1)")]
+    [InlineData("math.fmod(5, 2)")]
+    [InlineData("math.ldexp(1, 2)")]
+    [InlineData("math.log(8)")]
+    [InlineData("math.log(8, 2)")]
+    [InlineData("math.log10(100)")]
+    [InlineData("math.max(1, 2, 3)")]
+    [InlineData("math.min(1, 2, 3)")]
+    [InlineData("math.noise(1)")]
+    [InlineData("math.noise(1, 2, 3)")]
+    [InlineData("math.pow(2, 3)")]
+    [InlineData("math.rad(180)")]
+    [InlineData("math.random()")]
+    [InlineData("math.random(1, 6)")]
+    [InlineData("math.round(1.5)")]
+    [InlineData("math.sign(-5)")]
+    [InlineData("math.sin(1)")]
+    [InlineData("math.sinh(1)")]
+    [InlineData("math.sqrt(4)")]
+    [InlineData("math.tan(1)")]
+    [InlineData("math.tanh(1)")]
+    public void Checks_MathMemberAccess_Invocation_ReturnsNumber(string source)
+    {
+        var type = Utility.GetLastStatementType(source);
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Theory]
+    [InlineData("math.frexp(8)")]
+    [InlineData("math.modf(3.5)")]
+    public void Checks_MathMemberAccess_Invocation_ReturnsNumberTuple(string source)
+    {
+        var type = Utility.GetLastStatementType(source);
+        var tuple = Assert.IsType<TupleType>(type);
+        Assert.Equal(2, tuple.ElementTypes.Count);
+        Assert.All(tuple.ElementTypes, elementType => Assert.Equal(PrimitiveTypeKind.Number, Assert.IsType<PrimitiveType>(elementType).Kind));
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_RandomSeed_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("math.randomseed(1)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
+    public void ThrowsFor_MathMemberAccess_Invocation_WrongArgumentType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("math.floor('abc')");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"abc\"' is not assignable to type 'number'.");
     }
 
     [Fact]
@@ -6320,6 +6593,42 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_Match_TypePattern_BindsObjectFields()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Foo { field: number }
+            let x: Foo = new Foo { field: 1 };
+            match x {
+                Foo { field } -> field,
+                _ -> 0,
+            }
+            """
+        );
+
+        Assert.Equal(PrimitiveType.Number, type.Widen());
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_TypePattern_DoesNotBindOuterName()
+    {
+        // unlike a typed pattern ('f when Foo'), a bare type pattern captures nothing under a name of
+        // its own - the body has no binding to read the matched value back through
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { field: number }
+            let x: Foo = new Foo { field: 1 };
+            match x {
+                Foo {} -> f,
+                _ -> 0,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindSymbol, "Cannot find symbol for declaration of variable 'f'.");
+    }
+
+    [Fact]
     public void Allows_Match_ArrayAndRestBindings()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
@@ -6379,6 +6688,38 @@ public class TypeCheckerTest
                 n when n > 0 -> n,
                 _ -> 0,
             }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_Guard_OnArrayPattern_ReferencesElementBindings() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("match [1, 2] { [a, b] when a > b -> a, _ -> 0 }"));
+
+    [Fact]
+    public void Allows_Match_Guard_OnObjectPattern_ReferencesFieldBindings()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { x: number }
+            let value = new Foo { x: 5 };
+            match value { { x } when x > 0 -> x, _ -> 0 }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_NestedArrayInsideObjectInsideTypedPattern()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Foo { items: number[] }
+            let value = new Foo { items: [1, 2] };
+            match value { f when Foo { items: [first, ..rest] } -> first, _ -> 0 }
             """
         );
 
@@ -6455,6 +6796,54 @@ public class TypeCheckerTest
             InternalCodes.TypeMismatch,
             "Array pattern cannot match value of type '1'."
         );
+    }
+
+    [Fact]
+    public void Allows_Match_ArrayPattern_OnUnionOfArrays_NarrowsElementType()
+    {
+        const string source = """
+            let value: number[] | string[] = [1];
+            match value {
+                [n] -> n,
+                _ -> 0,
+            }
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_ArrayPattern_OnUnionWithNonArrayMember()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number[] | string = [1];
+            match value {
+                [n] -> n,
+                _ -> 0,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Array pattern cannot match value of type 'number[] | string'."
+        );
+    }
+
+    [Fact]
+    public void Allows_Match_TuplePattern_OnUnionOfSameArityTuples_NarrowsElementTypesPositionally()
+    {
+        const string source = """
+            let value: (string, number) | (bool, number) = ("abc", 1);
+            match value {
+                (a, b) -> b,
+                _ -> 0,
+            }
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
     }
 
     [Fact]
@@ -6620,6 +7009,69 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByEmptyObjectTypePatterns()
+    {
+        // an empty object sub-pattern imposes no constraint beyond the type check itself, so it should
+        // cover exactly as much as a bare type pattern with no object sub-pattern at all
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                A {} -> "a",
+                B {} -> "b",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Allows_Match_Exhaustive_UnionCoveredByEmptyObjectTypedPatterns()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                a when A {} -> "a",
+                b when B {} -> "b",
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_UnionPartiallyCoveredByNonEmptyObjectTypePattern()
+    {
+        // unlike an empty object sub-pattern, a field-constrained one only matches a subset of the type,
+        // so it must not be credited as full coverage of that union member
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface A { tag: string }
+            interface B { count: number }
+            let value: A | B = new A { tag: "a" };
+            match value {
+                A { tag: "a" } -> "a",
+                B {} -> "b",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_Match_NonExhaustive_UnionCoveredOnlyByLiterals()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
@@ -6679,6 +7131,69 @@ public class TypeCheckerTest
             let value: number | string = 5;
             match value {
                 n when number & n > 0 -> "positive",
+                s when string -> s,
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_ArrayPatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number[] | string[] = [1];
+            match value {
+                [n] -> "n",
+                [s] -> "s",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_TuplePatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: (string, number) | (bool, number) = ("abc", 1);
+            match value {
+                (a, b) -> "n",
+                (c, d) -> "s",
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NonExhaustiveMatch,
+            "Match expression is not exhaustive.",
+            "add a wildcard arm ('_ -> ...') or a binding arm to cover the remaining cases."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Match_NonExhaustive_RangePatternDoesNotCountAsCoverage()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let value: number | string = 5;
+            match value {
+                0..10 -> "n",
                 s when string -> s,
             }
             """

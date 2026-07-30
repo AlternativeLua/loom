@@ -235,9 +235,9 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
 
     private FlowState AnalyzeIf(If @if, FlowState state)
     {
-        AnalyzeExpression(@if.Condition, state);
-        var thenState = AnalyzeStatement(@if.ThenBranch, state);
-        var elseState = @if.ElseBranch != null ? AnalyzeStatement(@if.ElseBranch.Branch, state) : state;
+        var conditionState = AnalyzeExpression(@if.Condition, state);
+        var thenState = AnalyzeStatement(@if.ThenBranch, conditionState);
+        var elseState = @if.ElseBranch != null ? AnalyzeStatement(@if.ElseBranch.Branch, conditionState) : conditionState;
         return BindState(@if, MergeStates(thenState, elseState));
     }
 

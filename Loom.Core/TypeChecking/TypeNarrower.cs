@@ -43,6 +43,26 @@ public sealed class TypeNarrower
         return false;
     }
 
+    /// <summary>
+    ///     After `target = value` (including compound forms like `??=`), <paramref name="target" />'s
+    ///     runtime value is exactly whatever the assignment expression checked to, so its flow type can
+    ///     narrow to <paramref name="resultType" /> the same way a condition narrows one - most visibly
+    ///     for `mut n: number? = none; n ??= 69`, where `n` is definitely `number` afterward even though
+    ///     its declared type stays `number?`. No-ops for targets without a trackable flow address (e.g.
+    ///     destructuring targets).
+    /// </summary>
+    public FlowState? TryNarrowAfterAssignment(Expression target, Type resultType, FlowState current) =>
+        GetFlowAddress(target) is { } address ? current.WithNarrowedType(address, resultType) : null;
+
+    /// <summary>
+    ///     Strips any narrowing on <paramref name="target" /> from <paramref name="current" /> - used
+    ///     while resolving a plain `target = value` assignment's own target type, so a *prior* narrowing
+    ///     of `target` (e.g. from an earlier `??=`) doesn't leak into the type the new value is checked
+    ///     against; that check needs the variable's full declared type, not its narrowed-so-far one.
+    /// </summary>
+    public FlowState WithoutNarrowing(Expression target, FlowState current) =>
+        GetFlowAddress(target) is { } address ? current.WithoutNarrowedType(address) : current;
+
     public BranchStates ComputeBranchStates(Expression condition, FlowState current) =>
         condition switch
         {

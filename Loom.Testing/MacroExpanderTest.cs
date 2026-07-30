@@ -21,12 +21,12 @@ public class MacroExpanderTest
     }
 
     [Theory]
-    [InlineData("is_a")]
-    [InlineData("find_first_child_of_class")]
-    [InlineData("find_first_child_which_is_a")]
-    [InlineData("find_first_ancestor_of_class")]
-    [InlineData("find_first_ancestor_which_is_a")]
-    public void Generates_InstanceQuery(string methodName)
+    [InlineData("is_a", "IsA")]
+    [InlineData("find_first_child_of_class", "FindFirstChildOfClass")]
+    [InlineData("find_first_child_which_is_a", "FindFirstChildWhichIsA")]
+    [InlineData("find_first_ancestor_of_class", "FindFirstAncestorOfClass")]
+    [InlineData("find_first_ancestor_which_is_a", "FindFirstAncestorWhichIsA")]
+    public void Generates_InstanceQuery(string methodName, string luauMethodName)
     {
         var source = $"let x = get_service::<Workspace>().{methodName}::<Part>()";
         var luauTree = Utility.GetLuauAST(source, true);
@@ -34,6 +34,9 @@ public class MacroExpanderTest
 
         var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
         var call = Assert.IsType<Call>(variable.Initializer);
+        Assert.True(call.IsMethod);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal(luauMethodName, Assert.Single(callee.Names));
         Assert.Equal("Part", Assert.IsType<StringLiteral>(Assert.Single(call.Arguments)).Value);
     }
 
@@ -125,6 +128,40 @@ public class MacroExpanderTest
         var identifier = Assert.IsType<Identifier>(tostringCall.Callee);
         Assert.Equal("tostring", identifier.Name);
         Assert.IsType<NumberLiteral>(Assert.Single(tostringCall.Arguments));
+    }
+
+    [Fact]
+    public void Generates_GlobalInvocation_NewInstance()
+    {
+        const string source = "new_instance::<Part>()";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Single(luauTree.Statements);
+
+        var expressionStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(expressionStatement.Expression);
+        Assert.False(call.IsMethod);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("Instance", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("new", Assert.Single(callee.Names));
+        Assert.Equal("Part", Assert.IsType<StringLiteral>(Assert.Single(call.Arguments)).Value);
+    }
+
+    [Fact]
+    public void Generates_GlobalInvocation_GetService()
+    {
+        const string source = "get_service::<Workspace>()";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Single(luauTree.Statements);
+
+        var expressionStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(expressionStatement.Expression);
+        Assert.True(call.IsMethod);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("game", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("GetService", Assert.Single(callee.Names));
+        Assert.Equal("Workspace", Assert.IsType<StringLiteral>(Assert.Single(call.Arguments)).Value);
     }
 
     [Fact]
@@ -770,6 +807,23 @@ public class MacroExpanderTest
     }
 
     [Fact]
+    public void Generates_String_Byte_WithIndexArgument()
+    {
+        const string source = "let s = 'ab'; s.byte(2)";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("byte", Assert.Single(callee.Names));
+        Assert.Equal(2, call.Arguments.Count);
+        Assert.Equal("s", Assert.IsType<Identifier>(call.Arguments[0]).Name);
+        Assert.Equal(2, Assert.IsType<NumberLiteral>(call.Arguments[1]).Value);
+    }
+
+    [Fact]
     public void Generates_String_Trim()
     {
         const string source = "let s = '  ab  '; s.trim()";
@@ -886,23 +940,57 @@ public class MacroExpanderTest
         Assert.IsType<UnaryOperator>(subtraction.Right);
     }
 
-    [Fact]
-    public void Generates_Math_Property()
+    [Theory]
+    [InlineData("pi", "math.pi")]
+    [InlineData("huge", "math.huge")]
+    public void Generates_Math_Property(string propertyName, string source)
     {
-        const string source = "math.pi";
         var luauTree = Utility.GetLuauAST(source, true);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
         var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
         var access = Assert.IsType<PropertyAccess>(variable.Initializer);
         Assert.Equal("math", Assert.IsType<Identifier>(access.Target).Name);
-        Assert.Equal("pi", Assert.Single(access.Names));
+        Assert.Equal(propertyName, Assert.Single(access.Names));
     }
 
     [Theory]
     [InlineData("floor", "math.floor(1.5)")]
     [InlineData("sqrt", "math.sqrt(4)")]
     [InlineData("random", "math.random()")]
+    [InlineData("random", "math.random(1, 6)")]
+    [InlineData("abs", "math.abs(-1)")]
+    [InlineData("acos", "math.acos(1)")]
+    [InlineData("asin", "math.asin(1)")]
+    [InlineData("atan", "math.atan(1)")]
+    [InlineData("atan", "math.atan(1, 2)")]
+    [InlineData("atan2", "math.atan2(1, 2)")]
+    [InlineData("ceil", "math.ceil(1.2)")]
+    [InlineData("clamp", "math.clamp(5, 0, 10)")]
+    [InlineData("cos", "math.cos(1)")]
+    [InlineData("cosh", "math.cosh(1)")]
+    [InlineData("deg", "math.deg(1)")]
+    [InlineData("exp", "math.exp(1)")]
+    [InlineData("fmod", "math.fmod(5, 2)")]
+    [InlineData("frexp", "math.frexp(8)")]
+    [InlineData("ldexp", "math.ldexp(1, 2)")]
+    [InlineData("log", "math.log(8)")]
+    [InlineData("log", "math.log(8, 2)")]
+    [InlineData("log10", "math.log10(100)")]
+    [InlineData("max", "math.max(1, 2, 3)")]
+    [InlineData("min", "math.min(1, 2, 3)")]
+    [InlineData("modf", "math.modf(3.5)")]
+    [InlineData("noise", "math.noise(1)")]
+    [InlineData("noise", "math.noise(1, 2, 3)")]
+    [InlineData("pow", "math.pow(2, 3)")]
+    [InlineData("rad", "math.rad(180)")]
+    [InlineData("randomseed", "math.randomseed(1)")]
+    [InlineData("round", "math.round(1.5)")]
+    [InlineData("sign", "math.sign(-5)")]
+    [InlineData("sin", "math.sin(1)")]
+    [InlineData("sinh", "math.sinh(1)")]
+    [InlineData("tan", "math.tan(1)")]
+    [InlineData("tanh", "math.tanh(1)")]
     public void Generates_Math_Invocation(string functionName, string source)
     {
         var luauTree = Utility.GetLuauAST(source, true);

@@ -120,11 +120,11 @@ public sealed partial class Resolver
 
     private Symbol? LookupSymbol(string name, bool isType)
     {
-        var lookups = _scopes.Select(scope => isType ? scope.TypeLookup : scope.VariableLookup);
-        foreach (var lookup in lookups)
+        foreach (var scope in _scopes)
         {
-            if (!lookup.TryGetValue(name, out var symbols)) continue;
-            return symbols.First();
+            var lookup = isType ? scope.TypeLookup : scope.VariableLookup;
+            if (lookup.TryGetValue(name, out var symbols))
+                return symbols[0];
         }
 
         return null;

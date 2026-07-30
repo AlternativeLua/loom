@@ -36,8 +36,14 @@ internal sealed class LuauState
     {
         var captured = new LuauScope(Scope, isolated);
         Scope = captured;
-        callback();
-        Scope = Scope.Parent!;
+        try
+        {
+            callback();
+        }
+        finally
+        {
+            Scope = captured.Parent!;
+        }
 
         return captured;
     }

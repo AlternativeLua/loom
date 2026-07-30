@@ -81,12 +81,14 @@ public sealed partial class TypeChecker
             case LiteralPattern literalPattern:
                 return RemoveCoveredType(remaining, new LiteralType(literalPattern.Value));
 
-            // An attached object sub-pattern (e.g. `p when Point { x: 0 }`) only matches a subset of
-            // the type, so it can't be treated as covering the whole pattern type like a bare `p when Point` would.
-            case TypedPattern { ObjectPattern: null } typedPattern:
+            // An attached object sub-pattern with fields (e.g. `p when Point { x: 0 }`) only matches a
+            // subset of the type, so it can't be treated as covering the whole pattern type like a bare
+            // `p when Point` would - but an empty one (`p when Point { }`) imposes no such constraint, so
+            // it covers exactly as much as no object sub-pattern at all.
+            case TypedPattern { ObjectPattern: null or { Fields.Count: 0 } } typedPattern:
                 return RemoveCoveredType(remaining, _semanticModel.GetType(typedPattern.Type));
 
-            case TypePattern { ObjectPattern: null } typePattern:
+            case TypePattern { ObjectPattern: null or { Fields.Count: 0 } } typePattern:
                 return RemoveCoveredType(remaining, _semanticModel.GetType(typePattern.Type));
 
             default:
@@ -312,7 +314,26 @@ public sealed partial class TypeChecker
 
     private void CheckTuplePattern(TuplePattern pattern, Type inputType)
     {
-        if (inputType is not Types.TupleType tupleType)
+        if (inputType is Types.TupleType tupleType)
+        {
+            if (pattern.Patterns.Count != tupleType.ElementTypes.Count)
+            {
+                _diagnostics.Error(
+                    pattern,
+                    InternalCodes.TupleArityMismatch,
+                    $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {pattern.Patterns.Count} were provided."
+                );
+
+                CheckTuplePatternElementsAsUnknown(pattern, inputType);
+                return;
+            }
+
+            CheckTuplePatternElements(pattern, inputType, tupleType.ElementTypes);
+            return;
+        }
+
+        var elementTypes = GetTupleElementTypes(inputType, pattern.Patterns.Count);
+        if (elementTypes == null)
         {
             if (Type.IsNotUnknown(inputType) && Type.IsNotNever(inputType))
                 _diagnostics.Error(
@@ -321,32 +342,56 @@ public sealed partial class TypeChecker
                     $"Tuple pattern cannot match value of type '{inputType}'."
                 );
 
-            foreach (var element in pattern.Patterns)
-                CheckPattern(element, PrimitiveType.Unknown);
-
-            BindType(pattern, inputType);
+            CheckTuplePatternElementsAsUnknown(pattern, inputType);
             return;
         }
 
-        if (pattern.Patterns.Count != tupleType.ElementTypes.Count)
-        {
-            _diagnostics.Error(
-                pattern,
-                InternalCodes.TupleArityMismatch,
-                $"Tuple type '{tupleType}' expects {tupleType.ElementTypes.Count} element(s), but {pattern.Patterns.Count} were provided."
-            );
+        CheckTuplePatternElements(pattern, inputType, elementTypes);
+    }
 
-            foreach (var element in pattern.Patterns)
-                CheckPattern(element, PrimitiveType.Unknown);
-
-            BindType(pattern, inputType);
-            return;
-        }
-
+    private void CheckTuplePatternElements(TuplePattern pattern, Type inputType, List<Type> elementTypes)
+    {
         for (var i = 0; i < pattern.Patterns.Count; i++)
-            CheckPattern(pattern.Patterns[i], tupleType.ElementTypes[i]);
+            CheckPattern(pattern.Patterns[i], elementTypes[i]);
 
         BindType(pattern, inputType);
+    }
+
+    private void CheckTuplePatternElementsAsUnknown(TuplePattern pattern, Type inputType)
+    {
+        foreach (var element in pattern.Patterns)
+            CheckPattern(element, PrimitiveType.Unknown);
+
+        BindType(pattern, inputType);
+    }
+
+    // A union of tuples narrows per-position across every member matching the pattern's arity, mirroring
+    // GetArrayElementType's handling of unions of arrays.
+    private static List<Type>? GetTupleElementTypes(Type type, int arity)
+    {
+        if (type is Types.TupleType tuple)
+            return tuple.ElementTypes.Count == arity ? tuple.ElementTypes : null;
+
+        if (type is not UnionType union)
+            return null;
+
+        var perPosition = new List<Type>[arity];
+        for (var i = 0; i < arity; i++)
+            perPosition[i] = [];
+
+        var matchedAny = false;
+        foreach (var member in union.Types)
+        {
+            var memberElementTypes = GetTupleElementTypes(member, arity);
+            if (memberElementTypes == null)
+                continue;
+
+            matchedAny = true;
+            for (var i = 0; i < arity; i++)
+                perPosition[i].Add(memberElementTypes[i]);
+        }
+
+        return matchedAny ? perPosition.Select(types => TypeSimplifier.Simplify(new UnionType(types))).ToList() : null;
     }
 
     private void CheckRestPattern(RestPattern pattern, Type elementType)
@@ -376,12 +421,30 @@ public sealed partial class TypeChecker
         return patternType;
     }
 
+    // A union of arrays narrows to the union of each member's element type - unless some member isn't
+    // array-like at all, in which case the whole union can't be array-destructured.
     private static Type? GetArrayElementType(Type type)
     {
         if (type is InstantiatedType instantiated)
             type = instantiated.Expand();
 
-        return type is ArrayType array ? array.ElementType : null;
+        if (type is ArrayType array)
+            return array.ElementType;
+
+        if (type is not UnionType union)
+            return null;
+
+        var elementTypes = new List<Type>(union.Types.Count);
+        foreach (var member in union.Types)
+        {
+            var elementType = GetArrayElementType(member);
+            if (elementType == null)
+                return null;
+
+            elementTypes.Add(elementType);
+        }
+
+        return TypeSimplifier.Simplify(new UnionType(elementTypes));
     }
 
     /// <summary>

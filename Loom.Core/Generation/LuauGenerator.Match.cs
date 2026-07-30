@@ -14,11 +14,9 @@ namespace Loom.Core.Generation;
 
 public sealed partial class LuauGenerator
 {
-    // Set only while compiling a match arm's Guard expression, so a guard that references the arm's
-    // own pattern-bound name (e.g. `n when n > 0`) resolves to the match subject instead of the not-yet-
-    // declared local - the binding itself is only introduced inside the arm body, after the guard passes.
-    private string? _guardSubstitutionName;
-    private LuauExpression? _guardSubstitutionValue;
+    // Set while compiling a guard, so it sees the pattern's bound names as subject accesses instead of
+    // the not-yet-declared locals (those are only introduced in the arm body, after the guard passes).
+    private Dictionary<string, LuauExpression>? _guardSubstitutions;
 
     public override LuauNode VisitMatchExpression(MatchExpression matchExpression)
     {
@@ -91,29 +89,112 @@ public sealed partial class LuauGenerator
 
     private LuauExpression CompileGuard(Pattern pattern, Expression guard, LuauExpression subject)
     {
-        var substitutionName = pattern switch
-        {
-            IdentifierPattern identifierPattern => identifierPattern.Name.Text,
-            LetPattern letPattern => letPattern.Name.Text,
-            TypedPattern { ObjectPattern: null } typedPattern => typedPattern.Name.Text,
-            _ => null
-        };
-
-        if (substitutionName == null)
+        var substitutions = CollectPatternBindings(pattern, subject).ToDictionary(binding => binding.Name, binding => binding.Value);
+        if (substitutions.Count == 0)
             return Visit(guard);
 
-        var previousName = _guardSubstitutionName;
-        var previousValue = _guardSubstitutionValue;
-        _guardSubstitutionName = substitutionName;
-        _guardSubstitutionValue = subject;
+        var previous = _guardSubstitutions;
+        _guardSubstitutions = substitutions;
         try
         {
             return Visit(guard);
         }
         finally
         {
-            _guardSubstitutionName = previousName;
-            _guardSubstitutionValue = previousValue;
+            _guardSubstitutions = previous;
+        }
+    }
+
+    /// <summary>
+    ///     Mirrors the binding side of <see cref="TryCompilePattern" /> - without any of the runtime
+    ///     conditions - so a guard can reference names a compound pattern (array/object/tuple/typed/etc.)
+    ///     would bind, before those bindings are actually declared as locals in the arm body.
+    /// </summary>
+    private IEnumerable<(string Name, LuauExpression Value)> CollectPatternBindings(Pattern pattern, LuauExpression subject)
+    {
+        switch (pattern)
+        {
+            case IdentifierPattern identifierPattern:
+                yield return (identifierPattern.Name.Text, subject);
+
+                break;
+
+            case LetPattern letPattern:
+                yield return (letPattern.Name.Text, subject);
+
+                break;
+
+            case TypedPattern typedPattern:
+                yield return (typedPattern.Name.Text, subject);
+                if (typedPattern.ObjectPattern != null)
+                    foreach (var binding in CollectObjectPatternBindings(typedPattern.ObjectPattern, subject))
+                        yield return binding;
+
+                break;
+
+            case TypePattern { ObjectPattern: not null } typePattern:
+                foreach (var binding in CollectObjectPatternBindings(typePattern.ObjectPattern, subject))
+                    yield return binding;
+
+                break;
+
+            case ArrayPattern arrayPattern:
+                for (var i = 0; i < arrayPattern.Elements.Count; i++)
+                {
+                    var elementAccess = new Luau.AST.ElementAccess(subject, new NumberLiteral(i + 1));
+                    foreach (var binding in CollectPatternBindings(arrayPattern.Elements[i], elementAccess))
+                        yield return binding;
+                }
+
+                if (arrayPattern.Rest != null)
+                {
+                    var rest = BuildArrayRestSlice(subject, arrayPattern.Elements.Count);
+                    foreach (var binding in CollectPatternBindings(arrayPattern.Rest.Pattern, rest))
+                        yield return binding;
+                }
+
+                break;
+
+            case ObjectPattern objectPattern:
+                foreach (var binding in CollectObjectPatternBindings(objectPattern, subject))
+                    yield return binding;
+
+                break;
+
+            case TuplePattern tuplePattern:
+                for (var i = 0; i < tuplePattern.Patterns.Count; i++)
+                {
+                    var elementAccess = new Luau.AST.ElementAccess(subject, new NumberLiteral(i + 1));
+                    foreach (var binding in CollectPatternBindings(tuplePattern.Patterns[i], elementAccess))
+                        yield return binding;
+                }
+
+                break;
+
+            case AndPattern andPattern:
+                foreach (var binding in CollectPatternBindings(andPattern.Pattern, subject))
+                    yield return binding;
+
+                break;
+
+            // Every alternative binds the same names against the same subject, so any one will do.
+            case OrPattern { Patterns: [var first, ..] }:
+                foreach (var binding in CollectPatternBindings(first, subject))
+                    yield return binding;
+
+                break;
+        }
+    }
+
+    private IEnumerable<(string Name, LuauExpression Value)> CollectObjectPatternBindings(ObjectPattern objectPattern, LuauExpression subject)
+    {
+        var patternType = _semanticModel.GetType(objectPattern);
+        foreach (var field in objectPattern.Fields)
+        {
+            var name = GetRenamedPatternFieldName(patternType, field.Name.Text);
+            var propertyAccess = new Luau.AST.PropertyAccess(subject, [name]);
+            foreach (var binding in CollectPatternBindings(field.Pattern, propertyAccess))
+                yield return binding;
         }
     }
 
@@ -268,7 +349,10 @@ public sealed partial class LuauGenerator
 
             case OrPattern orPattern:
             {
+                // The resolver requires every alternative to bind the same names (Resolver.Patterns.cs
+                // VisitOrPattern), so the first alternative's bindings stand in for whichever one matches.
                 var alternativeConditions = new List<LuauExpression>();
+                List<LuauStatement>? representativeBindings = null;
                 foreach (var alternative in orPattern.Patterns)
                 {
                     var altConditions = new List<LuauExpression>();
@@ -279,8 +363,11 @@ public sealed partial class LuauGenerator
                         return false;
                     }
 
+                    representativeBindings ??= altBindings;
+
                     if (altIrrefutable)
                     {
+                        bindings.AddRange(representativeBindings);
                         isIrrefutable = true;
                         return true;
                     }
@@ -288,6 +375,7 @@ public sealed partial class LuauGenerator
                     alternativeConditions.Add(CombineWith(altConditions, "and"));
                 }
 
+                bindings.AddRange(representativeBindings!);
                 conditions.Add(CombineWith(alternativeConditions, "or"));
                 isIrrefutable = false;
                 return true;

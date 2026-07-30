@@ -24,6 +24,15 @@ public sealed record Diagnostic(LocationSpan Span, DiagnosticSeverity Severity, 
     private string GutterIndent => new(' ', LineDigits);
     private string Gutter => $"{Colors.Dim}{GutterIndent} │{Colors.Reset}";
 
+    // Explicit so the lazily-populated SourceLines/_severityStyle fields (record equality includes
+    // every instance field by default) can't change this Diagnostic's hash after it's in a HashSet.
+    public bool Equals(Diagnostic? other) =>
+        other is not null
+        && (ReferenceEquals(this, other)
+            || (Span.Equals(other.Span) && Severity == other.Severity && Code == other.Code && Message == other.Message && Hint == other.Hint));
+
+    public override int GetHashCode() => HashCode.Combine(Span, Severity, Code, Message, Hint);
+
     internal static string? FormatBinaryHint(BinaryOperator op, Type left, Type right, BinaryOperatorRule? suggestion)
     {
         if (suggestion == null)

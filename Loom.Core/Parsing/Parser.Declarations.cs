@@ -62,18 +62,18 @@ public sealed partial class Parser
             return null;
 
         var members = ParseInterfaceMembers();
-        if (members == null)
-            return null;
-
         var rightBrace = Expect(SyntaxKind.RBrace);
         return new InterfaceBody(leftBrace, rightBrace, members);
     }
 
-    private List<Statement>? ParseInterfaceMembers()
+    // A member that fails to parse is skipped rather than aborting the whole body, so parsing still
+    // reaches the closing '}' instead of leaving it unconsumed and cascading into an unrelated error.
+    private List<Statement> ParseInterfaceMembers()
     {
         var members = new List<Statement>();
         while (!IsEof() && Current() is not { Kind: SyntaxKind.RBrace })
         {
+            var previousPosition = _position;
             var token = Current();
             Statement? member;
             if (token.Kind != SyntaxKind.LBracket)
@@ -94,9 +94,11 @@ public sealed partial class Parser
                     : ParsePropertyDeclaration(Match(out var mutKeyword, SyntaxKind.MutKeyword) ? mutKeyword : null, attributes);
             }
 
-            if (member == null) return null;
-            members.Add(member);
+            if (member != null)
+                members.Add(member);
+
             Match(SyntaxKind.Comma, SyntaxKind.Semicolon);
+            EnsureProgress(previousPosition);
         }
 
         return members;

@@ -611,6 +611,15 @@ public class ResolverTest
     }
 
     [Fact]
+    public void ThrowsFor_MatchTypePattern_DoesNotBindOuterName()
+    {
+        // a bare type pattern ('Foo { ... }') captures nothing under a name of its own, unlike a typed
+        // pattern ('f when Foo') - only its object sub-pattern's own fields get bound
+        var diagnostics = Utility.GetSemanticModel("interface Foo {}; match 1 { Foo {} -> f }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'f'.");
+    }
+
+    [Fact]
     public void ThrowsFor_ExportMutable()
     {
         var diagnostics = Utility.GetSemanticModel("export mut x = 1;").Diagnostics;
@@ -1257,6 +1266,21 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Resolves_MatchTypePattern_ObjectFieldBinding()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("interface Foo { field: number }; match 1 { Foo { field } -> field }"));
+        var match = Assert.IsType<MatchExpression>(Assert.IsType<ExpressionStatement>(model.Tree.Statements[1]).Expression);
+        var arm = Assert.Single(match.Arms);
+        var typePattern = Assert.IsType<TypePattern>(arm.Pattern);
+        var field = Assert.Single(typePattern.ObjectPattern!.Fields);
+        var identifierPattern = Assert.IsType<IdentifierPattern>(field.Pattern);
+        var declaration = model.GetDeclarationSymbol(identifierPattern);
+        Assert.NotNull(declaration);
+        Assert.Equal("field", declaration.Name);
+        Assert.Equal(declaration, model.GetSymbol(Assert.IsType<Identifier>(arm.Body)));
+    }
+
+    [Fact]
     public void Resolves_MatchArrayRestBinding()
     {
         var model = Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { [head, ..rest] -> rest }"));
@@ -1317,6 +1341,40 @@ public class ResolverTest
         var outerDecl = Assert.IsType<VariableDeclaration>(statements[0]);
         var outerSymbol = model.GetDeclarationSymbol(outerDecl);
         Assert.NotEqual(declSymbol, outerSymbol);
+    }
+
+    [Fact]
+    public void ThrowsFor_ForLoop_DuplicateNames_DoesNotLeakScope()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            """
+            for x, x in [1, 2] { }
+            export let y = 1;
+            """
+        ).Diagnostics;
+
+        var diagnostic = Assert.Single(diagnostics.Set);
+        Assert.Equal(InternalCodes.DuplicateName, diagnostic.Code);
+    }
+
+    [Fact]
+    public void ThrowsFor_Implement_OtherMethodCollision_DoesNotLeakScope()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            """
+            trait A { fn shared(): void }
+            trait B { fn shared(): void }
+            trait C { fn go(): void }
+            interface Foo { }
+            implement A for Foo { fn shared() { } }
+            implement B for Foo { fn shared() { } }
+            implement C for Foo { fn go() { } }
+            export let y = 1;
+            """
+        ).Diagnostics;
+
+        var diagnostic = Assert.Single(diagnostics.Set);
+        Assert.Equal(InternalCodes.DuplicateName, diagnostic.Code);
     }
 
     [Fact]
@@ -1471,6 +1529,17 @@ public class ResolverTest
         );
 
     [Fact]
+    public void Allows_Match_NestedArrayInsideObjectInsideTypedPattern() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface Foo { items: number[] }
+                match 1 { f when Foo { items: [first, ..rest] } -> first, _ -> 0 }
+                """
+            )
+        );
+
+    [Fact]
     public void Allows_Match_ObjectShorthandBinding() => Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { { value } -> value }"));
 
     [Fact]
@@ -1479,6 +1548,16 @@ public class ResolverTest
     [Fact]
     public void Allows_Match_OrAndRangePatterns() =>
         Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { 2 | 3 | 4 -> true, 0..5 | 10..15 | 100 -> false, _ -> false }"));
+
+    [Fact]
+    public void Allows_Match_OrPattern_AlternativesSharingBindingName() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { let x | let x -> x, _ -> 0 }"));
+
+    [Fact]
+    public void Allows_Match_OrPattern_ObjectAlternativesSharingFieldBindingName() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel("interface Foo { x: number }; interface Bar { x: number }; match 1 { Foo { x } | Bar { x } -> x, _ -> 0 }")
+        );
 
     [Fact]
     public void Allows_Match_LetPatternBinding() => Utility.AssertNoErrors(Utility.GetSemanticModel("match 1 { let name -> name }"));

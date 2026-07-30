@@ -22,16 +22,17 @@ public sealed partial class Resolver
     {
         Visit(@for.CollectionExpression);
         PushScope();
-        if (@for.Names.Any(name => !DeclareVariable(name, name.Token.Text, SymbolKind.Variable)))
-            return false;
-
-        var lastContext = _context;
-        _context = ResolverContext.Loop;
-        Visit(@for.Body);
-        _context = lastContext;
+        var namesDeclared = !@for.Names.Any(name => !DeclareVariable(name, name.Token.Text, SymbolKind.Variable));
+        if (namesDeclared)
+        {
+            var lastContext = _context;
+            _context = ResolverContext.Loop;
+            Visit(@for.Body);
+            _context = lastContext;
+        }
 
         PopScope();
-        return true;
+        return namesDeclared;
     }
 
     public override bool VisitMatchExpression(MatchExpression matchExpression)

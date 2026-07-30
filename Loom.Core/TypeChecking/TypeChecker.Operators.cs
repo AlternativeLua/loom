@@ -11,12 +11,40 @@ public sealed partial class TypeChecker
 {
     public override Type VisitAssignmentOperator(AssignmentOperator assignmentOperator)
     {
+        Type resultType;
         if (assignmentOperator.Operator.Kind != SyntaxKind.Equals)
-            return VisitBinaryOperator(assignmentOperator);
+        {
+            resultType = VisitBinaryOperator(assignmentOperator);
+        }
+        else
+        {
+            // Without narrowing: checking a fresh value needs the target's full declared type, not
+            // whatever a prior `??=`/etc. last narrowed it to (else a legal `n = none` could wrongly fail).
+            var targetState = _narrower.WithoutNarrowing(assignmentOperator.Left, _flowState);
+            var targetType = Visit(assignmentOperator.Left, targetState);
+            var valueType = Check(assignmentOperator.Right, targetType);
+            resultType = CheckImmutableAssignmentTarget(assignmentOperator, valueType);
+        }
 
-        var targetType = Visit(assignmentOperator.Left);
-        var valueType = Check(assignmentOperator.Right, targetType);
-        return CheckImmutableAssignmentTarget(assignmentOperator, valueType);
+        NarrowAfterAssignment(assignmentOperator, resultType);
+        return resultType;
+    }
+
+    private void NarrowAfterAssignment(AssignmentOperator assignmentOperator, Type resultType)
+    {
+        // Only CheckStatements can thread a narrowed state forward via _exitStates, and only for an
+        // assignment that's its own statement - one nested in a larger expression has no entry to attach to.
+        if (assignmentOperator.Parent is not ExpressionStatement statement)
+            return;
+
+        // Skip if resultType isn't even assignable to the target's type - e.g. `handler += callback` on
+        // an event field returns a ScriptConnection, not a new value for `handler`.
+        var targetType = _semanticModel.GetType(assignmentOperator.Left);
+        if (!resultType.IsAssignableTo(targetType))
+            return;
+
+        if (_narrower.TryNarrowAfterAssignment(assignmentOperator.Left, resultType, _flowState) is { } narrowed)
+            _exitStates[statement] = narrowed;
     }
 
     private Type CheckImmutableAssignmentTarget(AssignmentOperator assignmentOperator, Type valueType)
