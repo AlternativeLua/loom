@@ -132,6 +132,18 @@ public sealed partial class LuauGenerator
             return new Luau.AST.BinaryOperator(access, "~=", new NilLiteral());
         }
 
+        // Luau's `or` treats `false` as absent, but `??` is specifically nil-only coalescing (it warns
+        // when the left side isn't optional - see TypeChecker.Check.cs CheckNullCoalesce), so `flag ??
+        // true` on a `bool?` holding `false` must keep `false`, not fall through to `true` the way `or`
+        // would. The left side is hoisted to a local first so it's only evaluated once, since it's
+        // referenced both in the nil check and (if non-nil) the result.
+        if (binaryOperator.Operator.Kind == SyntaxKind.QuestionQuestion)
+        {
+            var leftValue = _state.PushToVariable("_coalesce", Visit(binaryOperator.Left));
+            var condition = new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral());
+            return new IfExpression(condition, leftValue, [], Visit(binaryOperator.Right));
+        }
+
         var op = binaryOperator.Operator.Text;
         var leftType = _semanticModel.GetType(binaryOperator.Left);
         var rightType = _semanticModel.GetType(binaryOperator.Right);

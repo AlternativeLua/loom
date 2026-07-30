@@ -2778,7 +2778,6 @@ public class LuauGeneratorTest
     [InlineData("!=", "~=")]
     [InlineData("&&", "and")]
     [InlineData("||", "or")]
-    [InlineData("??", "or")]
     public void Generates_MappedBinaryOperators(string op, string? mappedOp = null)
     {
         var luauTree = Utility.GetLuauAST($"1 {op} 2");
@@ -2791,6 +2790,36 @@ public class LuauGeneratorTest
         Assert.Equal(1, left.Value);
         Assert.Equal(2, right.Value);
         Assert.Equal(mappedOp ?? op, binary.Operator);
+    }
+
+    [Fact]
+    public void Generates_NullCoalesce_AsNilCheck_NotOr()
+    {
+        var luauTree = Utility.GetLuauAST("let flag: bool? = false; let result = flag ?? true;", true);
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+
+        var condition = Assert.IsType<BinaryOperator>(ifExpression.Condition);
+        Assert.Equal("~=", condition.Operator);
+        Assert.IsType<NilLiteral>(condition.Right);
+        Assert.Equal("flag", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.Equal("flag", Assert.IsType<Identifier>(ifExpression.ThenBranch).Name);
+        Assert.True(Assert.IsType<BooleanLiteral>(ifExpression.ElseBranch).Value);
+    }
+
+    [Fact]
+    public void Generates_NullCoalesce_OnComplexLeftExpression_EvaluatesItOnce()
+    {
+        var luauTree = Utility.GetLuauAST("fn get(): bool? -> false; let result = get() ?? true;", true);
+        var binding = Assert.IsType<ConstVariable>(luauTree.Statements[1]);
+        Assert.Equal("_coalesce", binding.Name);
+        Assert.IsType<Call>(binding.Initializer);
+
+        var result = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        var ifExpression = Assert.IsType<IfExpression>(result.Initializer);
+        var condition = Assert.IsType<BinaryOperator>(ifExpression.Condition);
+        Assert.Equal("_coalesce", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.Equal("_coalesce", Assert.IsType<Identifier>(ifExpression.ThenBranch).Name);
     }
 
     [Fact]

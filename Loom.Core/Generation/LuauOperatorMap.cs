@@ -32,7 +32,7 @@ internal static class LuauOperatorMap
         op switch
         {
             "&&" => "and",
-            "||" or "??" => "or",
+            "||" => "or",
             "!=" => "~=",
             _ => op
         };
