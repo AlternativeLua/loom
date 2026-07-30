@@ -2822,6 +2822,37 @@ public class LuauGeneratorTest
         Assert.Equal("_coalesce", Assert.IsType<Identifier>(ifExpression.ThenBranch).Name);
     }
 
+    [Theory]
+    [InlineData("&&=", "and")]
+    [InlineData("||=", "or")]
+    public void Generates_CompoundLogicalAssignment_DesugarsToPlainAssignment(string op, string mappedOp)
+    {
+        var luauTree = Utility.GetLuauAST($"mut a: bool = true; a {op} false;");
+        var assignment = Assert.IsType<Luau.AST.BinaryOperator>(
+            Assert.IsType<ExpressionStatement>(luauTree.Statements[1]).Expression
+        );
+        Assert.Equal("=", assignment.Operator);
+
+        var value = Assert.IsType<Luau.AST.BinaryOperator>(assignment.Right);
+        Assert.Equal(mappedOp, value.Operator);
+        Assert.Equal("a", Assert.IsType<Identifier>(value.Left).Name);
+    }
+
+    [Fact]
+    public void Generates_CompoundNullCoalesceAssignment_DesugarsToNilCheck()
+    {
+        var luauTree = Utility.GetLuauAST("mut a: bool? = true; a ??= false;", true);
+        var assignment = Assert.IsType<Luau.AST.BinaryOperator>(
+            Assert.IsType<ExpressionStatement>(luauTree.Statements[1]).Expression
+        );
+        Assert.Equal("=", assignment.Operator);
+
+        var ifExpression = Assert.IsType<IfExpression>(assignment.Right);
+        var condition = Assert.IsType<Luau.AST.BinaryOperator>(ifExpression.Condition);
+        Assert.Equal("~=", condition.Operator);
+        Assert.IsType<NilLiteral>(condition.Right);
+    }
+
     [Fact]
     public void Generates_InOperator_IdentifierKey_AsDirectPropertyAccess()
     {

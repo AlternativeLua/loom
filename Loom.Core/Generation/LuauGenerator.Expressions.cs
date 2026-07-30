@@ -144,6 +144,24 @@ public sealed partial class LuauGenerator
             return new IfExpression(condition, leftValue, [], Visit(binaryOperator.Right));
         }
 
+        // Luau's augmented assignment only covers arithmetic/concat operators (+=, -=, etc.), so those
+        // pass straight through unchanged below - but it has no &&=/||=/??= at all, and no &&/|| tokens
+        // to build them from either, so those three need to desugar into a plain `left = left <op>
+        // right` assignment using the same and/or/nil-check translation the non-compound forms use.
+        if (binaryOperator.Operator.Kind is SyntaxKind.AmpersandAmpersandEquals or SyntaxKind.PipePipeEquals or SyntaxKind.QuestionQuestionEquals)
+        {
+            var leftValue = Visit(binaryOperator.Left);
+            var rightValue = Visit(binaryOperator.Right);
+            LuauExpression desugaredValue = binaryOperator.Operator.Kind switch
+            {
+                SyntaxKind.AmpersandAmpersandEquals => new Luau.AST.BinaryOperator(leftValue, "and", rightValue),
+                SyntaxKind.PipePipeEquals => new Luau.AST.BinaryOperator(leftValue, "or", rightValue),
+                _ => new IfExpression(new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral()), leftValue, [], rightValue)
+            };
+
+            return new Luau.AST.BinaryOperator(leftValue, "=", desugaredValue);
+        }
+
         var op = binaryOperator.Operator.Text;
         var leftType = _semanticModel.GetType(binaryOperator.Left);
         var rightType = _semanticModel.GetType(binaryOperator.Right);
