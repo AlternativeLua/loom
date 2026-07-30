@@ -121,6 +121,23 @@ public class ExportListTest
         );
 
     [Fact]
+    public void Exports_AnEvent_AsARuntimeValue() =>
+        WithModule(
+            """
+            event message(text: string);
+            export { message }
+            """,
+            (result, exports) =>
+            {
+                Utility.AssertNoErrors(result);
+
+                var export = Assert.Single(exports);
+                Assert.Equal(SymbolKind.Event, export.Symbol.Kind);
+                Assert.True(export.EmitsRuntimeBinding);
+            }
+        );
+
+    [Fact]
     public void Reports_ExportOfAnUndeclaredName() =>
         WithModule(
             "export { nope }",

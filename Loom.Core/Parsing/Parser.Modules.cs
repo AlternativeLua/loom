@@ -74,7 +74,7 @@ public sealed partial class Parser
         _diagnostics.Error(
             Current(),
             InternalCodes.ExpectedExportableDeclaration,
-            $"Only 'fn', 'let', 'type', 'interface', 'enum', and 'trait' declarations can be exported, got {SafeTokenText(Current())}."
+            $"Only 'fn', 'let', 'type', 'interface', 'enum', 'trait', and 'event' declarations can be exported, got {SafeTokenText(Current())}."
         );
 
         return new NullStatement(exportKeyword);

@@ -3155,6 +3155,45 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_ExportedEventConnect_ThroughAStore_AndDisconnectThroughTheRuntime()
+    {
+        // an exported event's connections are shared with every module that imports it, so they go in
+        // the store that travels with it rather than in a local only this file can see
+        const string source = """
+            export event abc;
+            fn handler(): void { }
+            abc += handler;
+            abc -= handler;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_abc_connections", store.Name);
+        Assert.Empty(Assert.IsType<Table>(store.Initializer).Initializers);
+
+        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[3]);
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_abc_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+        Assert.Equal("handler", Assert.IsType<Identifier>(connectionSlot.Index).Name);
+
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[4]);
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectCallee = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("disconnect_event", Assert.Single(disconnectCallee.Names));
+        Assert.Equal("Loom", Assert.IsType<Identifier>(disconnectCallee.Target).Name);
+        Assert.Equal(["_abc_connections", "handler"], disconnectCall.Arguments.Select(argument => Assert.IsType<Identifier>(argument).Name));
+
+        var exports = Assert.IsType<Return>(luauTree.Statements[5]);
+        var exportTable = Assert.IsType<Table>(exports.Expression);
+        Assert.Equal(
+            ["abc", "_abc_connections"],
+            exportTable.Initializers.Select(initializer => Assert.IsType<PropertyTableInitializer>(initializer).PropertyName)
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_EventDisconnect_WhenFunctionRequiresAnonymousWrapper()
     {
         const string source = """

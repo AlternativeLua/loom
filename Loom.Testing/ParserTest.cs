@@ -52,15 +52,9 @@ public class ParserTest
         new("declare fn foo(a): void", InternalCodes.MissingDeclareFnParameterType, "Parameters must have types in declared function signatures.", null),
         new("declare 123", InternalCodes.ExpectedDeclarationSignature, "Expected declaration signature, got '123'.", null),
         new(
-            "export event Foo()",
-            InternalCodes.ExpectedExportableDeclaration,
-            "Only 'fn', 'let', 'type', 'interface', 'enum', and 'trait' declarations can be exported, got 'event'.",
-            null
-        ),
-        new(
             "export 123",
             InternalCodes.ExpectedExportableDeclaration,
-            "Only 'fn', 'let', 'type', 'interface', 'enum', and 'trait' declarations can be exported, got '123'.",
+            "Only 'fn', 'let', 'type', 'interface', 'enum', 'trait', and 'event' declarations can be exported, got '123'.",
             null
         ),
         new(

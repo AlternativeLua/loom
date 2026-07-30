@@ -105,7 +105,7 @@ public sealed partial class Resolver
         // the symbol stands for the required table, so unlike a named import it is declared on this node
         var symbol = new Symbol(import, SymbolKind.Variable, name);
         DeclareSymbol(symbol);
-        _semanticModel.AddNamespaceImport(new NamespaceImportBinding(import, symbol, module));
+        _semanticModel.AddNamespaceImport(new NamespaceImportBinding(import, symbol, module, moduleModel));
         _semanticModel.TypeSolver.SetType(import, GetNamespaceType(moduleModel));
 
         return true;
