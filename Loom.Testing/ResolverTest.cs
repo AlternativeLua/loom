@@ -1344,6 +1344,40 @@ public class ResolverTest
     }
 
     [Fact]
+    public void ThrowsFor_ForLoop_DuplicateNames_DoesNotLeakScope()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            """
+            for x, x in [1, 2] { }
+            export let y = 1;
+            """
+        ).Diagnostics;
+
+        var diagnostic = Assert.Single(diagnostics.Set);
+        Assert.Equal(InternalCodes.DuplicateName, diagnostic.Code);
+    }
+
+    [Fact]
+    public void ThrowsFor_Implement_OtherMethodCollision_DoesNotLeakScope()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            """
+            trait A { fn shared(): void }
+            trait B { fn shared(): void }
+            trait C { fn go(): void }
+            interface Foo { }
+            implement A for Foo { fn shared() { } }
+            implement B for Foo { fn shared() { } }
+            implement C for Foo { fn go() { } }
+            export let y = 1;
+            """
+        ).Diagnostics;
+
+        var diagnostic = Assert.Single(diagnostics.Set);
+        Assert.Equal(InternalCodes.DuplicateName, diagnostic.Code);
+    }
+
+    [Fact]
     public void Allows_InvokingIntrinsicInterfaces() => Utility.AssertNoErrors(Utility.GetSemanticModel("new Record::<string, bool> {}"));
 
     [Fact]
