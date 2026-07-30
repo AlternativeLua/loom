@@ -18,11 +18,22 @@ internal static class EventConnectionScopeAnalyzer
         if (semanticModel.GetSymbol(left) is { Kind: SymbolKind.Event } globalEventSymbol)
             return new EventTarget(null, globalEventSymbol);
 
+        if (semanticModel.GetNamespaceMemberSymbol(left) is { Kind: SymbolKind.Event } namespaceEventSymbol)
+            return new EventTarget(null, namespaceEventSymbol);
+
         if (semanticModel.GetPropertySymbol(left) is not { Kind: SymbolKind.Event } propertySymbol)
             return null;
 
         return new EventTarget(GetInstanceKey(semanticModel, left), propertySymbol);
     }
+
+    /// <summary>
+    ///     The function a '+='/'-=' connects or disconnects, whether it is named directly or read off a
+    ///     namespace import - both name one function object, which is what a connection is tracked by. A
+    ///     member of anything else is not one: it becomes a fresh closure at every connection.
+    /// </summary>
+    public static Symbol? ResolveConnectionFunction(SemanticModel semanticModel, Expression function) =>
+        function is Identifier identifier ? semanticModel.GetSymbol(identifier) : semanticModel.GetNamespaceMemberSymbol(function);
 
     private static object? GetInstanceKey(SemanticModel semanticModel, Expression left) =>
         left switch
@@ -48,7 +59,7 @@ internal static class EventConnectionScopeAnalyzer
         {
             if (assignment.Operator.Kind is not (SyntaxKind.PlusEquals or SyntaxKind.MinusEquals)) continue;
             if (ResolveEventTarget(semanticModel, assignment.Left) is not { } target) continue;
-            if (assignment.Right is not Identifier identifier || semanticModel.GetSymbol(identifier) is not { } functionSymbol) continue;
+            if (ResolveConnectionFunction(semanticModel, assignment.Right) is not { } functionSymbol) continue;
 
             var key = (target, functionSymbol);
             var bucket = assignment.Operator.Kind == SyntaxKind.PlusEquals ? connectsByKey : disconnectsByKey;

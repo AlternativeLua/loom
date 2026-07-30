@@ -1,5 +1,9 @@
+using Loom.Core.Diagnostics;
+using Loom.Core.Generation.Events;
 using Loom.Core.Generation.Macros;
 using Loom.Core.Parsing.AST;
+using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
 using Loom.Core.TypeChecking;
 using Loom.Core.TypeChecking.Types;
@@ -41,12 +45,43 @@ public sealed partial class LuauGenerator
 
         {
             var initializers = valueExports.ConvertAll(TableInitializer (export) => new PropertyTableInitializer(export.Name, _moduleGenerator.GenerateExportedValue(export)));
+            initializers.AddRange(GenerateConnectionStoreExports(valueExports));
 
             statements.Add(new Luau.AST.Return(new Table(initializers)));
         }
 
         return new LuauTree(statements);
     }
+
+    private List<TableInitializer> GenerateConnectionStoreExports(List<ExportBinding> valueExports)
+    {
+        var exportedNames = valueExports.Select(export => export.Name).ToHashSet();
+        var initializers = new List<TableInitializer>();
+        foreach (var export in valueExports.Where(export => export.Symbol.Kind == SymbolKind.Event))
+        {
+            var storeName = EventConnectionTracker.StoreExportName(export.Name);
+            if (!exportedNames.Add(storeName))
+            {
+                _diagnostics.Error(
+                    (Node?)export.Export ?? export.Symbol.Declaration,
+                    InternalCodes.EventStoreExportCollision,
+                    $"Exporting event '{export.Name}' also exports its connections as '{storeName}', which is already exported.",
+                    $"rename the '{storeName}' export"
+                );
+
+                continue;
+            }
+
+            initializers.Add(new PropertyTableInitializer(storeName, GenerateExportedConnectionStore(export)));
+        }
+
+        return initializers;
+    }
+
+    private LuauExpression GenerateExportedConnectionStore(ExportBinding export) =>
+        export.Module == null
+            ? GetConnectionStore(new EventTarget(null, export.Symbol))
+            : _moduleGenerator.GenerateModuleMember(export.Module, EventConnectionTracker.StoreExportName(export.SourceName));
 
     public override Do VisitBlock(Block block) => new(GenerateChunk(block));
     public override LuauNode VisitBreak(Break @break) => new Luau.AST.Break();

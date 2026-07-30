@@ -56,6 +56,22 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
 
     public List<ExportBinding> FindExports(string name) => ExportsByName.GetValueOrDefault(name, []);
 
+    public Symbol? GetNamespaceMemberSymbol(Expression expression)
+    {
+        var (namespaceExpression, memberName) = expression switch
+        {
+            QualifiedName { Names: [{ } member] } qualified => ((Expression?)qualified.Identifier, member.Name.Text),
+            PropertyAccess { Names: [{ } member] } propertyAccess => (propertyAccess.Expression, member.Name.Text),
+            _ => (null, "")
+        };
+
+        if (namespaceExpression == null || GetSymbol(namespaceExpression) is not { } namespaceSymbol)
+            return null;
+
+        var binding = NamespaceImports.Find(namespaceImport => namespaceImport.Symbol == namespaceSymbol);
+        return binding?.ModuleModel.FindExports(memberName).Find(export => !export.Symbol.IsTypeSymbol)?.Symbol;
+    }
+
     internal void AddImportBinding(ImportBinding binding)
     {
         ImportBindings.Add(binding);
