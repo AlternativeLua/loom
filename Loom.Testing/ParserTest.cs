@@ -1040,20 +1040,6 @@ public class ParserTest
         Assert.Equal(["one", "two"], target.Elements.Select(e => e.Name.Text));
     }
 
-    [Theory]
-    [InlineData(@"""a\nb""", "a\nb")]
-    [InlineData(@"""a\tb""", "a\tb")]
-    [InlineData(@"""a\\b""", "a\\b")]
-    [InlineData(@"""a\""b""", "a\"b")]
-    [InlineData(@"'a\'b'", "a'b")]
-    [InlineData(@"""a\qb""", "a\\qb")]
-    public void Parses_StringLiteral_DecodesEscapeSequences(string source, string expectedValue)
-    {
-        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(Utility.AssertNoErrors(Utility.Parse(source)).Tree.Statements));
-        var literal = Assert.IsType<Literal>(expressionStatement.Expression);
-        Assert.Equal(expectedValue, literal.Value);
-    }
-
     [Fact]
     public void Parses_TuplePattern_InMatch()
     {

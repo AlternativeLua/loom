@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text;
 
 namespace Loom.Core.Text;
 
@@ -11,59 +10,11 @@ public static class LiteralUtility
             SyntaxKind.NumberLiteral => ResolveNumber(token),
 
             // synthesized tokens from failed parses carry no quotes to strip
-            SyntaxKind.StringLiteral => token.Text.Length < 2 ? null : DecodeEscapes(token.Text[1..^1]),
+            SyntaxKind.StringLiteral => token.Text.Length < 2 ? null : token.Text[1..^1],
             SyntaxKind.TrueLiteral => true,
             SyntaxKind.FalseLiteral => false,
             _ => null
         };
-
-    // The lexer only tracks where a backslash escapes the following character (so it doesn't mistake
-    // an escaped quote for the string's terminator) without interpreting it - so a literal's Value
-    // still carries raw two-character sequences like `\n` here. Left undecoded, that raw backslash
-    // then gets re-escaped by RenderState.Escape when rendering to Luau, turning `\n` into `\\n` (a
-    // literal backslash-n, not a newline) instead of a real control character round-tripping through.
-    private static string DecodeEscapes(string text)
-    {
-        if (!text.Contains('\\'))
-            return text;
-
-        var builder = new StringBuilder(text.Length);
-        for (var i = 0; i < text.Length; i++)
-        {
-            if (text[i] != '\\' || i == text.Length - 1)
-            {
-                builder.Append(text[i]);
-                continue;
-            }
-
-            char? decoded = text[i + 1] switch
-            {
-                'n' => '\n',
-                'r' => '\r',
-                't' => '\t',
-                '0' => '\0',
-                'a' => '\a',
-                'b' => '\b',
-                'f' => '\f',
-                'v' => '\v',
-                '\\' => '\\',
-                '"' => '"',
-                '\'' => '\'',
-                _ => null
-            };
-
-            if (decoded == null)
-            {
-                builder.Append(text[i]);
-                continue;
-            }
-
-            builder.Append(decoded.Value);
-            i++;
-        }
-
-        return builder.ToString();
-    }
 
 #pragma warning disable CA1859
     private static object ResolveNumber(Token token)
