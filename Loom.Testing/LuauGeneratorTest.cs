@@ -1638,6 +1638,16 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_StringLiteral_EscapeSequences_RoundTripCorrectly()
+    {
+        var luauTree = Utility.GetLuauAST(@"let x = ""a\tb\\c"";");
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        var literal = Assert.IsType<StringLiteral>(variable.Initializer);
+        Assert.Equal("a\tb\\c", literal.Value);
+        Assert.Equal(@"""a\tb\\c""", literal.Render());
+    }
+
+    [Fact]
     public void Generates_Unusable_LiteralType()
     {
         var luauTree = Utility.GetLuauAST("mut x: 42069;");

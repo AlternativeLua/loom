@@ -4,7 +4,11 @@ type JsonUser = {
   read tags: { string },
 }
 const function stringify(user: JsonUser): string
-  return "{\\n" .. "  name: '" .. user.name .. "',\\n" .. "  age: " .. tostring(user.age) .. ",\\n" .. "  tags: [" .. table.concat(user.tags, ", ") .. "]\\n" .. "}"
+  return [[{
+  ]] .. "  name: '" .. user.name .. [[',
+  ]] .. "  age: " .. tostring(user.age) .. [[,
+  ]] .. "  tags: [" .. table.concat(user.tags, ", ") .. [[]
+  ]] .. "}"
 end
 const user = { name = "Alice", age = 20, tags = {"admin", "staff"} }
 print(stringify(user))
