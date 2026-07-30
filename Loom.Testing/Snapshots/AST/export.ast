@@ -41,3 +41,28 @@ ExportDeclaration(
     Name: Token(Identifier, "do_something")
   )
 )
+ExportDeclaration(
+  ExportKeyword: Token(ExportKeyword, "export")
+  Declaration: EventDeclaration(
+    Parameters(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ParameterList: [
+        Parameter(
+          DotDot: null
+          ColonTypeClause(
+            ColonToken: Token(Colon, ":")
+            Type: PrimitiveType(
+              Kind: String
+            )
+          )
+          EqualsValueClause: null
+          Name: Token(Identifier, "text")
+        )
+      ]
+    )
+    Attributes: null
+    TypeParameters: null
+    Name: Token(Identifier, "message")
+  )
+)

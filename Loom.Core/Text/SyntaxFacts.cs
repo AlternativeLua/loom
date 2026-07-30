@@ -124,7 +124,8 @@ public static class SyntaxFacts
         SyntaxKind.InterfaceKeyword,
         SyntaxKind.SealedKeyword,
         SyntaxKind.EnumKeyword,
-        SyntaxKind.TraitKeyword
+        SyntaxKind.TraitKeyword,
+        SyntaxKind.EventKeyword
     ];
     private static readonly HashSet<SyntaxKind> _assignmentOperators =
     [

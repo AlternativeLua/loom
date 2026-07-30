@@ -16,7 +16,9 @@ public class Symbol(Node declaration, SymbolKind kind, string name, bool isMutab
     public bool IsTypeSymbol { get; } = IsTypeKind(kind);
     public bool IsValueSymbol { get; } = IsValueKind(kind);
 
-    public bool EmitsRuntimeBinding => Declaration is VariableDeclaration or FunctionDeclaration;
+    // an event is a runtime value like any other, so it crosses a module boundary through the export
+    // table - the generator sends its connection store across alongside it (see EventConnectionTracker)
+    public bool EmitsRuntimeBinding => Declaration is VariableDeclaration or FunctionDeclaration or EventDeclaration;
 
     internal static bool IsTypeKind(SymbolKind kind) => kind is SymbolKind.Interface or SymbolKind.Type or SymbolKind.EnumType or SymbolKind.Trait;
 

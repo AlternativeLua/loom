@@ -99,6 +99,8 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
     private static TypeAlias GenerateTypeImport(ImportBinding binding, string moduleName) =>
         GenerateTypeAlias(binding.LocalName, binding.ExportedName, binding.Symbol, moduleName, false);
 
+    public LuauExpression GenerateModuleMember(SourceFile module, string name) => new PropertyAccess(new Identifier(_moduleLocals[module]), [name]);
+
     public LuauExpression GenerateExportedValue(ExportBinding export) =>
         export.Module == null
             ? new Identifier(export.SourceName)

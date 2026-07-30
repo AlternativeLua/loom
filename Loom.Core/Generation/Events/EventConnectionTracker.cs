@@ -33,21 +33,20 @@ internal sealed class EventConnectionTracker
 
     public List<LuauStatement> StoreDeclarations { get; } = [];
 
-    /// <summary>
-    ///     Returns the identifier of the hidden table backing connections for <paramref name="target" />,
-    ///     declaring it (via <paramref name="allocateName" />) the first time this target is seen.
-    /// </summary>
-    public Identifier GetOrCreateStore(EventTarget target, Func<string> allocateName)
+    public Identifier GetOrCreateStore(EventTarget target, Func<(string Name, LuauExpression Value)> declare)
     {
         if (_stores.TryGetValue(target, out var existing))
             return existing;
 
-        var identifier = new Identifier(allocateName());
+        var (name, value) = declare();
+        var identifier = new Identifier(name);
         _stores[target] = identifier;
-        StoreDeclarations.Add(new ConstVariable(identifier.Name, null, Table.Empty));
+        StoreDeclarations.Add(new ConstVariable(identifier.Name, null, value));
 
         return identifier;
     }
+
+    public static string StoreExportName(string eventName) => $"_{eventName}_connections";
 
     public void TrackLocalConnection(EventTarget target, Symbol function, Identifier connectionVariable) =>
         _localConnections[(target, function)] = connectionVariable;

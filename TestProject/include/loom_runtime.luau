@@ -16,6 +16,16 @@ export type EventConnection = Event.Connection
 
 Loom.Event = Event
 
+function Loom.disconnect_event(connections: { [any]: Event.Connection }, fn: any)
+	const connection = connections[fn]
+	if connection == nil then
+		return
+	end
+
+	connections[fn] = nil
+	connection:Disconnect()
+end
+
 function Loom.merge_meta(...: {})
 	const parents = { ... }
 	const mt = {}

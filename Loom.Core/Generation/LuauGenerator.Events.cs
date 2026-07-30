@@ -22,6 +22,12 @@ public sealed partial class LuauGenerator
             _diagnostics.NotImplemented(eventDeclaration.TypeParameters, "Generic event declarations are not yet supported.");
 
         _semanticModel.RuntimeReferences += 2;
+
+        // an exported event's store goes out with it whether or not this module ever connects to it,
+        // since the module that does connect reaches the connections through this one's export table
+        if (_semanticModel.GetDeclarationSymbol(eventDeclaration) is { } eventSymbol && IsSharedEvent(new EventTarget(null, eventSymbol)))
+            GetConnectionStore(new EventTarget(null, eventSymbol));
+
         var parameterTypes = eventDeclaration.Parameters?.ParameterList.ConvertAll(p => Visit(p.ColonTypeClause!.Type)) ?? [];
         var eventType = LuauFactory.QualifyRuntimeType(new TypeName("Event", parameterTypes));
         return new ConstVariable(eventDeclaration.Name.Text, eventType, LuauFactory.RuntimeLibraryCall(["Event", "new"], []));
@@ -46,11 +52,14 @@ public sealed partial class LuauGenerator
         var function = assignmentOperator.Right;
         var luauFunction = WrapAnonymousFunction(function, Visit(function), new UnitType());
         var connect = new Call(new Luau.AST.PropertyAccess(connectionTarget, ["Connect"]), [luauFunction], true);
-        if (luauFunction is AnonymousFunction || function is not Identifier identifier || _semanticModel.GetSymbol(identifier) is not { } functionSymbol)
+        if (luauFunction is AnonymousFunction || EventConnectionScopeAnalyzer.ResolveConnectionFunction(_semanticModel, function) is not { } functionSymbol)
             return connect;
 
         _eventConnections.MarkConnected(eventTarget, functionSymbol);
-        if (_localSafeConnections.Value.Contains((eventTarget, functionSymbol)))
+
+        // a shared event's connections have to land in the store every module reads, since the '-=' that
+        // rebinds this connection may well be in another one - a local here would be invisible to it
+        if (!IsSharedEvent(eventTarget) && _localSafeConnections.Value.Contains((eventTarget, functionSymbol)))
         {
             if (assignmentOperator.Parent is EqualsValueClause { Parent: VariableDeclaration declaration })
             {
@@ -58,7 +67,7 @@ public sealed partial class LuauGenerator
                 return connect;
             }
 
-            var connectionVariable = _state.PushToVariable($"{identifier.Name.Text}_conn", connect);
+            var connectionVariable = _state.PushToVariable($"{functionSymbol.Name}_conn", connect);
             _eventConnections.TrackLocalConnection(eventTarget, functionSymbol, connectionVariable);
             return connectionVariable;
         }
@@ -76,10 +85,18 @@ public sealed partial class LuauGenerator
     private LuauExpression GenerateEventDisconnect(AssignmentOperator assignmentOperator, EventTarget eventTarget)
     {
         var function = assignmentOperator.Right;
-        if (function is Identifier identifier
-            && _semanticModel.GetSymbol(identifier) is { } functionSymbol
-            && _eventConnections.IsConnected(eventTarget, functionSymbol))
+        var isShared = IsSharedEvent(eventTarget);
+        if (EventConnectionScopeAnalyzer.ResolveConnectionFunction(_semanticModel, function) is { } functionSymbol
+            && (isShared || _eventConnections.IsConnected(eventTarget, functionSymbol)))
         {
+            // whether a shared event's store holds a connection for this function is only known at
+            // runtime - the '+=' that filled the slot can live in a module compiled on its own
+            if (isShared)
+            {
+                _semanticModel.RuntimeReferences += 1;
+                return LuauFactory.RuntimeLibraryCall(["disconnect_event"], [GetConnectionStore(eventTarget), Visit(function)]);
+            }
+
             LuauExpression connection = _eventConnections.TryGetLocalConnection(eventTarget, functionSymbol, out var localConnection)
                 ? localConnection
                 : new ElementAccess(GetConnectionStore(eventTarget), Visit(function));
@@ -109,10 +126,58 @@ public sealed partial class LuauGenerator
     }
 
     private Luau.AST.Identifier GetConnectionStore(EventTarget eventTarget) =>
-        _eventConnections.GetOrCreateStore(eventTarget, () => _state.Scope.AddIdentifier(ConnectionStoreBaseName(eventTarget)));
+        _eventConnections.GetOrCreateStore(eventTarget, () => DeclareConnectionStore(eventTarget));
+
+    /// <summary>
+    ///     Names the local backing <paramref name="eventTarget" />'s connections and says what it holds: an
+    ///     event this module imported reads the exporting module's store, so both ends of a connection made
+    ///     here and broken there (or the other way round) work off one table; anything else starts empty.
+    /// </summary>
+    private (string Name, LuauExpression Value) DeclareConnectionStore(EventTarget eventTarget)
+    {
+        if (FindImportedEventStore(eventTarget.Event) is not { } imported)
+            return (_state.Scope.AddIdentifier(ConnectionStoreBaseName(eventTarget)), Table.Empty);
+
+        return (_state.Scope.AddIdentifier(imported.LocalName), imported.Value);
+    }
+
+    private (string LocalName, LuauExpression Value)? FindImportedEventStore(Symbol eventSymbol)
+    {
+        if (_semanticModel.ImportBindings.Find(binding => binding.Symbol == eventSymbol) is { } importBinding)
+            return (
+                EventConnectionTracker.StoreExportName(importBinding.LocalName),
+                _moduleGenerator.GenerateModuleMember(importBinding.Module, EventConnectionTracker.StoreExportName(importBinding.ExportedName))
+            );
+
+        foreach (var namespaceImport in _semanticModel.NamespaceImports)
+            if (namespaceImport.ModuleModel.Exports.Find(export => export.Symbol == eventSymbol) is { } export)
+                return (
+                    EventConnectionTracker.StoreExportName(export.Name),
+                    _moduleGenerator.GenerateModuleMember(namespaceImport.Module, EventConnectionTracker.StoreExportName(export.Name))
+                );
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Whether other modules can see this event, which they can once it is exported or imported. Their
+    ///     connections and this module's share one store, and neither end can tell statically what the other
+    ///     has connected.
+    /// </summary>
+    private bool IsSharedEvent(EventTarget eventTarget) => eventTarget.Instance == null && SharedEventSymbols.Contains(eventTarget.Event);
+
+    private HashSet<Symbol> SharedEventSymbols =>
+        field ??=
+        [
+            .._semanticModel.Exports.Where(export => export.Symbol.Kind == SymbolKind.Event).Select(export => export.Symbol),
+            .._semanticModel.ImportBindings.Where(binding => binding.Symbol.Kind == SymbolKind.Event).Select(binding => binding.Symbol),
+            .._semanticModel.NamespaceImports.SelectMany(namespaceImport => namespaceImport.ModuleModel.Exports)
+                .Where(export => export.Symbol.Kind == SymbolKind.Event)
+                .Select(export => export.Symbol)
+        ];
 
     private static string ConnectionStoreBaseName(EventTarget eventTarget) =>
         eventTarget.Instance is Symbol instanceSymbol
-            ? $"_{instanceSymbol.Name}_{eventTarget.Event.Name}_connections"
-            : $"_{eventTarget.Event.Name}_connections";
+            ? EventConnectionTracker.StoreExportName($"{instanceSymbol.Name}_{eventTarget.Event.Name}")
+            : EventConnectionTracker.StoreExportName(eventTarget.Event.Name);
 }
