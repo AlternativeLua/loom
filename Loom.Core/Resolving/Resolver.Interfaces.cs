@@ -18,6 +18,9 @@ public sealed partial class Resolver
         }
 
         AddReference(implement.TraitName, traitSymbol);
+        if (implement.TraitName.TypeArguments != null
+            && implement.TraitName.TypeArguments.ArgumentsList.Any(typeArgument => !Visit(typeArgument)))
+            return false;
 
         var interfaceNameSymbol = LookupTypeSymbol(implement.InterfaceName.Name.Text);
         if (interfaceNameSymbol is not InterfaceSymbol interfaceSymbol)
@@ -38,6 +41,9 @@ public sealed partial class Resolver
         }
 
         AddReference(implement.InterfaceName, interfaceSymbol);
+        if (implement.InterfaceName.TypeArguments != null
+            && implement.InterfaceName.TypeArguments.ArgumentsList.Any(typeArgument => !Visit(typeArgument)))
+            return false;
 
         if (interfaceSymbol.Implements.Contains(traitSymbol))
         {

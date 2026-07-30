@@ -803,6 +803,35 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Resolves_TraitTypeArgument_ReferencingUserDefinedInterface()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface Bar { name: string }
+
+                trait Serialize<T> {
+                    fn serialize: T;
+                }
+
+                interface Foo { name: string }
+
+                implement Serialize<Bar> for Foo {
+                    fn serialize -> new Bar { name: "hi" }
+                }
+                """
+            )
+        );
+
+        var bar = Assert.IsType<InterfaceDeclaration>(model.Tree.Statements[0]);
+        var barSymbol = Assert.IsType<InterfaceSymbol>(model.GetDeclarationSymbol(bar, SymbolKind.Interface));
+
+        var implement = Assert.IsType<Implement>(model.Tree.Statements[3]);
+        var typeArgument = Assert.Single(implement.TraitName.TypeArguments!.ArgumentsList);
+        Assert.Same(barSymbol, model.GetSymbol(typeArgument));
+    }
+
+    [Fact]
     public void ThrowsFor_SelfExpression_OutsideImplementation()
     {
         var diagnostics = Utility.GetSemanticModel("let x = @;").Diagnostics;

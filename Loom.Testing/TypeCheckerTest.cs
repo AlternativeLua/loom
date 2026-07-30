@@ -321,16 +321,17 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(
                 """
+                interface Widget { label: string }
                 trait HasKind<T> {
                     fn is_kind(): @ is T;
                 }
-                interface Foo { name: string }
-                implement HasKind<number> for Foo {
+                interface Container { name: string }
+                implement HasKind<Widget> for Container {
                     fn is_kind() -> true;
                 }
-                let x = new Foo { name: "test" };
-                if x.is_kind() {
-                    x + 1
+                let c = new Container { name: "box" };
+                if c.is_kind() {
+                    c.label
                 }
                 """
             )
