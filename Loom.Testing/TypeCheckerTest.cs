@@ -4896,6 +4896,29 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_RangeMemberAccess_Length()
+    {
+        var type = Utility.GetLastStatementType("(1..10).length");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_RangeMemberAccess_Clamp_ReturnsNumber()
+    {
+        var type = Utility.GetLastStatementType("(1..10).clamp(5)");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void ThrowsFor_RangeMemberAccess_Clamp_WrongArgumentType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("(1..10).clamp('abc')");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"abc\"' is not assignable to type 'number'.");
+    }
+
+    [Fact]
     public void Checks_RangeLiteral_ElementAccess()
     {
         var type = Utility.GetLastStatementType("let x = [1, 2, 3]; x[1..10]");
@@ -4960,6 +4983,16 @@ public class TypeCheckerTest
         Assert.Equal(PrimitiveTypeKind.Bool, primitive.Kind);
     }
 
+    [Theory]
+    [InlineData("()")]
+    [InlineData("(2)")]
+    public void Checks_StringMemberAccess_Byte_ReturnsOptionalNumber(string arguments)
+    {
+        var type = Utility.GetLastStatementType($"let s = 'abc'; s.byte{arguments}");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
     [Fact]
     public void Checks_StringMemberAccess_Split()
     {
@@ -4988,6 +5021,113 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_ArrayMemberAccess_Length()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.length");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Join_ReturnsString()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.join(', ')");
+        Assert.Equal(PrimitiveType.String, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_IndexOf_ReturnsOptionalNumber()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.index_of(2)");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Has_ReturnsBool()
+    {
+        var type = Utility.GetLastStatementType("let a = [1, 2, 3]; a.has(2)");
+        Assert.Equal(PrimitiveType.Bool, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Push_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.push(4)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Pop_ReturnsOptionalElement()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.pop()");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Insert_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.insert(0, 4)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
+    public void Checks_ArrayMemberAccess_Remove_ReturnsOptionalElement()
+    {
+        var type = Utility.GetLastStatementType("let a = mut [1, 2, 3]; a.remove(0)");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Theory]
+    [InlineData("a.pop()")]
+    [InlineData("a.insert(0, 4)")]
+    [InlineData("a.remove(0)")]
+    public void ThrowsFor_ImmutableArrayMemberAccess_Mutation(string call)
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics($"let a = [1, 2, 3]; {call}");
+        Assert.NotEmpty(diagnostics.Set);
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_String_ReturnsString()
+    {
+        var type = Utility.GetLastStatementType("string(69)");
+        Assert.Equal(PrimitiveType.String, type);
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_Number_ReturnsOptionalNumber()
+    {
+        var type = Utility.GetLastStatementType("number('69')");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_Number_WithRadix_ReturnsOptionalNumber()
+    {
+        var type = Utility.GetLastStatementType("number('ff', 16)");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void ThrowsFor_Intrinsic_Number_WrongRadixArgumentType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("number('ff', 'sixteen')");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"sixteen\"' is not assignable to type 'number?'.");
+    }
+
+    [Fact]
+    public void Checks_Intrinsic_Print_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("print(1, 'two', true)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
     public void Checks_MathMemberAccess_Property()
     {
         var type = Utility.GetLastStatementType("math.pi");
@@ -5012,6 +5152,79 @@ public class TypeCheckerTest
             InternalCodes.InvalidAccess,
             "Expression of type '\"missing\"' cannot be used to index type 'MathLib'. Property 'missing' does not exist on type 'MathLib'."
         );
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_HugeProperty()
+    {
+        var type = Utility.GetLastStatementType("math.huge");
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Theory]
+    [InlineData("math.abs(-1)")]
+    [InlineData("math.acos(1)")]
+    [InlineData("math.asin(1)")]
+    [InlineData("math.atan(1)")]
+    [InlineData("math.atan(1, 2)")]
+    [InlineData("math.atan2(1, 2)")]
+    [InlineData("math.ceil(1.2)")]
+    [InlineData("math.clamp(5, 0, 10)")]
+    [InlineData("math.cos(1)")]
+    [InlineData("math.cosh(1)")]
+    [InlineData("math.deg(1)")]
+    [InlineData("math.exp(1)")]
+    [InlineData("math.fmod(5, 2)")]
+    [InlineData("math.ldexp(1, 2)")]
+    [InlineData("math.log(8)")]
+    [InlineData("math.log(8, 2)")]
+    [InlineData("math.log10(100)")]
+    [InlineData("math.max(1, 2, 3)")]
+    [InlineData("math.min(1, 2, 3)")]
+    [InlineData("math.noise(1)")]
+    [InlineData("math.noise(1, 2, 3)")]
+    [InlineData("math.pow(2, 3)")]
+    [InlineData("math.rad(180)")]
+    [InlineData("math.random()")]
+    [InlineData("math.random(1, 6)")]
+    [InlineData("math.round(1.5)")]
+    [InlineData("math.sign(-5)")]
+    [InlineData("math.sin(1)")]
+    [InlineData("math.sinh(1)")]
+    [InlineData("math.sqrt(4)")]
+    [InlineData("math.tan(1)")]
+    [InlineData("math.tanh(1)")]
+    public void Checks_MathMemberAccess_Invocation_ReturnsNumber(string source)
+    {
+        var type = Utility.GetLastStatementType(source);
+        var primitive = Assert.IsType<PrimitiveType>(type);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
+
+    [Theory]
+    [InlineData("math.frexp(8)")]
+    [InlineData("math.modf(3.5)")]
+    public void Checks_MathMemberAccess_Invocation_ReturnsNumberTuple(string source)
+    {
+        var type = Utility.GetLastStatementType(source);
+        var tuple = Assert.IsType<TupleType>(type);
+        Assert.Equal(2, tuple.ElementTypes.Count);
+        Assert.All(tuple.ElementTypes, elementType => Assert.Equal(PrimitiveTypeKind.Number, Assert.IsType<PrimitiveType>(elementType).Kind));
+    }
+
+    [Fact]
+    public void Checks_MathMemberAccess_RandomSeed_ReturnsVoid()
+    {
+        var type = Utility.GetLastStatementType("math.randomseed(1)");
+        Assert.Equal(PrimitiveType.Void, type);
+    }
+
+    [Fact]
+    public void ThrowsFor_MathMemberAccess_Invocation_WrongArgumentType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("math.floor('abc')");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"abc\"' is not assignable to type 'number'.");
     }
 
     [Fact]
