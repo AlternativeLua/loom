@@ -1243,6 +1243,28 @@ public class TypesTest
     }
 
     [Fact]
+    public void UnionType_Equality_SubsetIsNotEqual()
+    {
+        var smaller = new UnionType([Number, String]);
+        var larger = new UnionType([Number, String, Bool]);
+
+        Assert.False(smaller.Equals(larger));
+        Assert.False(larger.Equals(smaller));
+        Assert.NotEqual(smaller.GetHashCode(), larger.GetHashCode());
+    }
+
+    [Fact]
+    public void IntersectionType_Equality_SubsetIsNotEqual()
+    {
+        var smaller = new IntersectionType([Number, String]);
+        var larger = new IntersectionType([Number, String, Bool]);
+
+        Assert.False(smaller.Equals(larger));
+        Assert.False(larger.Equals(smaller));
+        Assert.NotEqual(smaller.GetHashCode(), larger.GetHashCode());
+    }
+
+    [Fact]
     public void Literal_Equality()
     {
         var a = new LiteralType(69);
