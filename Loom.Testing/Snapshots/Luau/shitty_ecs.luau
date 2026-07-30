@@ -1,4 +1,3 @@
-const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
 type Component = {
   read name: string,
 }
@@ -44,6 +43,6 @@ function World_for_WorldData.query(self: WorldData, entity, name)
   end
   return result :: never
 end
-const world = setmetatable({ component_storage = {} }, Loom.merge_meta(World_for_WorldData)) :: WorldData
+const world = setmetatable({ component_storage = {} }, World_for_WorldData) :: WorldData
 const player = world:spawn({{ name = "Position", x = 69, y = 420 }})
 print(world:query(player, "Position"))

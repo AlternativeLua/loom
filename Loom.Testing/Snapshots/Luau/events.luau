@@ -13,7 +13,7 @@ Execute_for_Foo = Execute_for_Foo :: Foo
 function Execute_for_Foo.execute(self: Foo, p)
   return print(p)
 end
-const foo = setmetatable({}, Loom.merge_meta(Execute_for_Foo)) :: Foo
+const foo = setmetatable({}, Execute_for_Foo) :: Foo
 my_event:Connect(function(...): ()
   foo:execute(...)
 end)

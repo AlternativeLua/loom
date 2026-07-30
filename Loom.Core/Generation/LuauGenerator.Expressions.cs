@@ -265,9 +265,19 @@ public sealed partial class LuauGenerator
         if (interfaceSymbol.Implements.Count == 0)
             return table;
 
-        _semanticModel.RuntimeReferences += 1; // merge_meta;
         var metaNames = interfaceSymbol.Implementations.ConvertAll(LuauExpression (i) => new Luau.AST.Identifier(GetImplementationMetaName(i)));
-        var call = LuauFactory.SetMetatableCall(table, LuauFactory.RuntimeLibraryCall(["merge_meta"], metaNames));
+        LuauExpression meta;
+        if (metaNames.Count == 1)
+        {
+            meta = metaNames[0];
+        }
+        else
+        {
+            _semanticModel.RuntimeReferences += 1;
+            meta = LuauFactory.RuntimeLibraryCall(["merge_meta"], metaNames);
+        }
+
+        var call = LuauFactory.SetMetatableCall(table, meta);
         return new TypeCast(call, new Luau.AST.TypeName(interfaceInvocation.Name.Token.Text));
     }
 

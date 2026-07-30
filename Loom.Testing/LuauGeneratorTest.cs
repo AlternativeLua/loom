@@ -651,6 +651,28 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_InterfaceInvocation_WithSingleImplementation_OmitsMergeMeta()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            trait Serialize<T> { fn serialize: T }
+            interface User { name: string, age: number }
+            implement Serialize<string> for User {
+                fn serialize -> name + ", " + string(age)
+            }
+            let user = new User { name: "Runic", age: 21 };
+            """,
+            true
+        );
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var cast = Assert.IsType<TypeCast>(variable.Initializer);
+        var setmetatableCall = Assert.IsType<Call>(cast.Expression);
+        Assert.Equal(2, setmetatableCall.Arguments.Count);
+        Assert.Equal("Serialize_string_for_User", Assert.IsType<Identifier>(setmetatableCall.Arguments[1]).Name);
+    }
+
+    [Fact]
     public void Generates_Implement_Basic()
     {
         var luauTree = Utility.GetLuauAST(
@@ -751,11 +773,7 @@ public class LuauGeneratorTest
         Assert.Equal(2, setmetatableCall.Arguments.Count);
         Assert.IsType<Table>(setmetatableCall.Arguments.First());
 
-        var mergeCall = Assert.IsType<Call>(setmetatableCall.Arguments.Last());
-        var loomMerge = Assert.IsType<PropertyAccess>(mergeCall.Callee);
-        Assert.Equal(LuauFactory.RuntimeImportName, Assert.IsType<Identifier>(loomMerge.Target).Name);
-        Assert.Equal("merge_meta", Assert.Single(loomMerge.Names));
-        Assert.Equal(metaName, Assert.IsType<Identifier>(Assert.Single(mergeCall.Arguments)).Name);
+        Assert.Equal(metaName, Assert.IsType<Identifier>(setmetatableCall.Arguments.Last()).Name);
 
         var methodCallStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements[7]);
         var methodCall = Assert.IsType<Call>(methodCallStatement.Expression);
