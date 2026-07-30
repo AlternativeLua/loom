@@ -13,6 +13,7 @@ using Expression = Loom.Core.Parsing.AST.Expression;
 using ExpressionStatement = Loom.Luau.AST.ExpressionStatement;
 using FunctionDeclaration = Loom.Core.Parsing.AST.FunctionDeclaration;
 using Identifier = Loom.Luau.AST.Identifier;
+using Parameter = Loom.Core.Parsing.AST.Parameter;
 using Return = Loom.Luau.AST.Return;
 using Statement = Loom.Core.Parsing.AST.Statement;
 using TypeExpression = Loom.Core.Parsing.AST.TypeExpression;
@@ -28,7 +29,7 @@ public sealed partial class LuauGenerator
     private readonly Lazy<HashSet<(EventTarget Target, Symbol Function)>> _localSafeConnections;
     private readonly MacroExpander _macroExpander;
     private readonly ModuleImportExportGenerator _moduleGenerator;
-    private readonly ModuleRequirePathResolver? _moduleRequirePaths;
+    // private readonly ModuleRequirePathResolver? _moduleRequirePaths;
     private readonly RuntimeImport _runtimeImport;
     private readonly SemanticModel _semanticModel;
     private readonly LuauState _state = new();
@@ -39,7 +40,7 @@ public sealed partial class LuauGenerator
         _semanticModel = semanticModel;
         _diagnostics = new DiagnosticBag(options: semanticModel.Diagnostics.Options);
         _runtimeImport = runtimeImport ?? RuntimeImport.Default;
-        _moduleRequirePaths = moduleRequirePaths;
+        // _moduleRequirePaths = moduleRequirePaths;
         _macroExpander = new MacroExpander(semanticModel, _state, _diagnostics);
         _moduleGenerator = new ModuleImportExportGenerator(semanticModel, _diagnostics, moduleRequirePaths);
         _localSafeConnections = new Lazy<HashSet<(EventTarget Target, Symbol Function)>>(
@@ -74,14 +75,12 @@ public sealed partial class LuauGenerator
 
     private Chunk GenerateFunctionBody(FunctionDeclaration functionDeclaration)
     {
-        var (chunk, _) = _state.CaptureIsolated(() =>
+        var chunk = _state.CaptureIsolated(() =>
             functionDeclaration.Body is ExpressionBody expressionBody
                 ? new Chunk(GenerateStatements(expressionBody.Expression))
                 : GenerateChunk(functionDeclaration.Body)
         );
-
-        // Luau has no default-parameter syntax, so `param = 69` compiles to a nil-check prepended to
-        // the body instead - a rest parameter's table is never nil, so it's never guarded here.
+        
         var defaultGuards = (functionDeclaration.Parameters?.ParameterList ?? [])
             .Where(parameter => parameter.DotDot == null && parameter.EqualsValueClause != null)
             .Select(GenerateParameterDefaultGuard)
@@ -93,7 +92,7 @@ public sealed partial class LuauGenerator
         return chunk;
     }
 
-    private IfStatement GenerateParameterDefaultGuard(Loom.Core.Parsing.AST.Parameter parameter)
+    private IfStatement GenerateParameterDefaultGuard(Parameter parameter)
     {
         var identifier = new Identifier(parameter.Name.Text);
         var condition = new BinaryOperator(identifier, "==", new NilLiteral());
@@ -192,10 +191,7 @@ public sealed partial class LuauGenerator
         nameLiteral = stringLiteral;
         return true;
     }
-
-    // a node only generates something of the wrong kind where an earlier stage could not make sense of it
-    // and said so — a malformed expression, a name that resolves to nothing. Standing in for it keeps the
-    // rest of the file generating, since output is never written while the file has errors anyway.
+    
     private LuauType Visit(TypeExpression node) => node.Accept(this) as LuauType ?? UnknownType;
     private LuauExpression Visit(Expression node) => node.Accept(this) as LuauExpression ?? new NilLiteral();
     private LuauStatement Visit(Statement node) => node.Accept(this) as LuauStatement ?? new NoOpStatement();

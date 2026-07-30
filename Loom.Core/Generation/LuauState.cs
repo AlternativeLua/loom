@@ -23,13 +23,15 @@ internal sealed class LuauState
         return (value, scope);
     }
 
-    // Used specifically where a new Luau function body begins, so its locals don't compare
-    // against - and don't get seen by - anything outside that function.
-    public (T Node, LuauScope Scope) CaptureIsolated<T>(Func<T> callback)
+    /// <summary>
+    /// Used specifically where a new Luau function body begins, so its locals don't compare
+    /// against (and don't get seen by) anything outside that function.
+    /// </summary>
+    public T CaptureIsolated<T>(Func<T> callback)
     {
         T value = default!;
-        var scope = CaptureScope(() => value = callback(), isolated: true);
-        return (value, scope);
+        CaptureScope(() => value = callback(), isolated: true);
+        return value;
     }
 
     private LuauScope CaptureScope(Action callback, bool isolated)

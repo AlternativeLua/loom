@@ -23,7 +23,7 @@ public sealed partial class LuauGenerator
 
         _semanticModel.RuntimeReferences += 2;
 
-        // an exported event's store goes out with it whether or not this module ever connects to it,
+        // an exported event's store goes out with it whether this module ever connects to it or not,
         // since the module that does connect reaches the connections through this one's export table
         if (_semanticModel.GetDeclarationSymbol(eventDeclaration) is { } eventSymbol && IsSharedEvent(new EventTarget(null, eventSymbol)))
             GetConnectionStore(new EventTarget(null, eventSymbol));
@@ -150,7 +150,7 @@ public sealed partial class LuauGenerator
             );
 
         foreach (var namespaceImport in _semanticModel.NamespaceImports)
-            if (namespaceImport.ModuleModel.Exports.Find(export => export.Symbol == eventSymbol) is { } export)
+            if (namespaceImport.ModuleModel.Exports.Find(e => e.Symbol == eventSymbol) is { } export)
                 return (
                     EventConnectionTracker.StoreExportName(export.Name),
                     _moduleGenerator.GenerateModuleMember(namespaceImport.Module, EventConnectionTracker.StoreExportName(export.Name))

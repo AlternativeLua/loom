@@ -61,7 +61,7 @@ public sealed partial class TypeChecker
         };
 
         var expressionType = _semanticModel.GetType(expression);
-        if (expressionType is Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.String })
+        if (expressionType is Types.PrimitiveType { Kind: PrimitiveTypeKind.String })
             expressionType = Intrinsics.StringMembers;
 
         var indexType = assignmentOperator.Left switch
