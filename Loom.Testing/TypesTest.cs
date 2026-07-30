@@ -1285,6 +1285,38 @@ public class TypesTest
     }
 
     [Fact]
+    public void TypePredicate_Equality()
+    {
+        var a = new TypePredicateType(0, Number);
+        var b = new TypePredicateType(0, Number);
+        var c = new TypePredicateType(1, Number);
+        var d = new TypePredicateType(0, String);
+        Assert.True(a.Equals(a));
+        Assert.True(a.Equals(b));
+        Assert.False(a.Equals(c));
+        Assert.False(a.Equals(d));
+        Assert.Equal(a.GetHashCode(), b.GetHashCode());
+    }
+
+    [Fact]
+    public void TypePredicate_DoesNotEqualPlainBool()
+    {
+        var predicate = new TypePredicateType(0, Number);
+        Assert.False(Bool.Equals(predicate));
+        Assert.False(predicate.Equals(Bool));
+    }
+
+    [Fact]
+    public void TypePredicate_IsAssignableToBool()
+    {
+        var predicate = new TypePredicateType(0, Number);
+        Assert.True(predicate.IsAssignableTo(Bool));
+    }
+
+    [Fact]
+    public void TypePredicate_ToString_RendersAsBool() => Assert.Equal("bool", new TypePredicateType(0, Number).ToString());
+
+    [Fact]
     public void IsNever_ReturnsTrueForNever() => Assert.True(Type.IsNever(Never));
 
     [Fact]

@@ -806,7 +806,25 @@ public class ResolverTest
     public void ThrowsFor_SelfExpression_OutsideImplementation()
     {
         var diagnostics = Utility.GetSemanticModel("let x = @;").Diagnostics;
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.SelfOutsideImplementation, "'@' can only be used inside an implemented trait method.");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.SelfOutsideImplementation,
+            "'@' can only be used inside an implemented trait method or as a type predicate subject on an interface or trait member."
+        );
+    }
+
+    [Fact]
+    public void Resolves_SelfExpression_AsInterfaceTypePredicateSubject()
+    {
+        var diagnostics = Utility.GetSemanticModel("interface Container { is_kind: fn<T>(): @ is T }").Diagnostics;
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Resolves_SelfExpression_AsTraitTypePredicateSubject()
+    {
+        var diagnostics = Utility.GetSemanticModel("trait HasKind<T> { fn is_kind(): @ is T; }").Diagnostics;
+        Utility.AssertNoErrors(diagnostics);
     }
 
     [Fact]

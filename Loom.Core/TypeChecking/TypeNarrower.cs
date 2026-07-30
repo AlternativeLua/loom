@@ -7,6 +7,7 @@ using Loom.Core.Text;
 using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
+using TypePredicateType = Loom.Core.TypeChecking.Types.TypePredicateType;
 using UnionType = Loom.Core.TypeChecking.Types.UnionType;
 
 namespace Loom.Core.TypeChecking;
@@ -72,6 +73,7 @@ public sealed class TypeNarrower
             BinaryOperator { Operator.Kind: SyntaxKind.InKeyword, Left: Literal { Value: string } } inOp => NarrowInOperator(inOp, current),
             UnaryOperator { Operator.Kind: SyntaxKind.Bang } not => NarrowLogicalNot(not, current),
             Parenthesized p => ComputeBranchStates(p.Expression, current),
+            Invocation invocation => NarrowTypePredicate(invocation, current),
             _ => NarrowBooleanCondition(condition, current)
         };
 
@@ -98,6 +100,61 @@ public sealed class TypeNarrower
         var falseBuilder = current.ToBuilder();
         trueBuilder.NarrowedTypes[fieldAddress] = propertyType.NonNullable();
         falseBuilder.NarrowedTypes[fieldAddress] = PrimitiveType.None;
+
+        return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
+    }
+
+    private BranchStates NarrowTypePredicate(Invocation invocation, FlowState current)
+    {
+        if (_semanticModel.GetType(invocation) is not TypePredicateType predicate)
+            return new BranchStates(current, current);
+
+        FlowAddress? address;
+        Type? baseType;
+        if (predicate.ParameterIndex is int index)
+        {
+            var argument = invocation.Arguments.ArgumentList.ElementAtOrDefault(index);
+            if (argument == null)
+                return new BranchStates(current, current);
+
+            address = GetFlowAddress(argument);
+            baseType = address != null ? GetBaseExpressionType(argument, current) : null;
+        }
+        else
+        {
+            Expression? baseExpression;
+            List<DotName> names;
+            switch (invocation.Expression)
+            {
+                case PropertyAccess { Names.Count: > 0 } propertyAccess:
+                    baseExpression = propertyAccess.Expression;
+                    names = propertyAccess.Names[..^1];
+                    break;
+                case QualifiedName { Names.Count: > 0 } qualifiedName:
+                    baseExpression = qualifiedName.Identifier;
+                    names = qualifiedName.Names[..^1];
+                    break;
+                default:
+                    baseExpression = null;
+                    names = [];
+                    break;
+            }
+
+            if (baseExpression == null)
+                return new BranchStates(current, current);
+
+            address = BuildFieldChain(baseExpression, names);
+            baseType = GetBaseExpressionType(baseExpression, current) is { } root ? GetTypeAtPath(root, names.ConvertAll(n => n.Name.Text)) : null;
+        }
+
+        if (address == null)
+            return new BranchStates(current, current);
+
+        var trueBuilder = current.ToBuilder();
+        var falseBuilder = current.ToBuilder();
+        trueBuilder.NarrowedTypes[address] = predicate.TargetType;
+        if (baseType != null)
+            falseBuilder.NarrowedTypes[address] = RemoveType(baseType, predicate.TargetType);
 
         return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
     }

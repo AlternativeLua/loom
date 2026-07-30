@@ -9,6 +9,7 @@ using IntersectionType = Loom.Core.TypeChecking.Types.IntersectionType;
 using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
+using TypePredicateType = Loom.Core.Parsing.AST.TypePredicateType;
 
 namespace Loom.Core.TypeChecking;
 
@@ -57,7 +58,13 @@ public sealed partial class TypeChecker
     {
         var implement = selfExpression.FirstAncestorOfType<Implement>();
         if (implement == null)
+        {
+            if (selfExpression.Parent is TypePredicateType
+                && (selfExpression.FirstAncestorOfType<InterfaceDeclaration>() != null || selfExpression.FirstAncestorOfType<TraitDeclaration>() != null))
+                return BindType(selfExpression, PrimitiveType.Unknown);
+
             return BindType(selfExpression, PrimitiveType.Never);
+        }
 
         var interfaceType = _semanticModel.GetType(implement.InterfaceName);
         if (interfaceType is not InterfaceType nonGenericInterfaceType

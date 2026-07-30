@@ -7,7 +7,23 @@ namespace Loom.Core.Parsing;
 
 public sealed partial class Parser
 {
-    private TypeExpression ParseType() => ParseUnionType();
+    private TypeExpression ParseType() =>
+        Current().Kind is SyntaxKind.Identifier or SyntaxKind.At && PeekKind(1) == SyntaxKind.IsKeyword
+            ? ParseTypePredicateType()
+            : ParseUnionType();
+
+    private TypeExpression ParseTypePredicateType()
+    {
+        Expression subject;
+        if (Match(out var atToken, SyntaxKind.At))
+            subject = new SelfExpression(atToken);
+        else
+            subject = new Identifier(Expect(SyntaxKind.Identifier));
+
+        var isKeyword = Expect(SyntaxKind.IsKeyword);
+        var type = ParseType();
+        return new TypePredicateType(subject, isKeyword, type);
+    }
 
     private TypeExpression ParseUnionType() => ParseChainedType(ParseIntersectionType, SyntaxKind.Pipe, (separators, types) => new UnionType(separators, types));
 

@@ -11,6 +11,7 @@ using OptionalType = Loom.Core.Parsing.AST.OptionalType;
 using PrimitiveType = Loom.Core.Parsing.AST.PrimitiveType;
 using TypeName = Loom.Core.Parsing.AST.TypeName;
 using TypeParameter = Loom.Core.Parsing.AST.TypeParameter;
+using TypePredicateType = Loom.Core.Parsing.AST.TypePredicateType;
 using UnionType = Loom.Core.Parsing.AST.UnionType;
 
 namespace Loom.Core.TypeChecking;
@@ -60,6 +61,33 @@ public sealed partial class TypeChecker
     }
 
     public override Type VisitTypeOf(TypeOf typeOf) => BindType(typeOf, Visit(typeOf.Expression));
+
+    public override Type VisitTypePredicateType(TypePredicateType typePredicateType)
+    {
+        Visit(typePredicateType.Subject);
+        int? parameterIndex = null;
+        if (typePredicateType.Subject is Identifier subjectIdentifier)
+        {
+            var symbol = _semanticModel.GetSymbol(subjectIdentifier);
+            var parameters = typePredicateType.FirstAncestorOfType<DeclareFunctionSignature>()?.Parameters?.ParameterList;
+            var index = parameters?.FindIndex(p => _semanticModel.GetDeclarationSymbol(p, SymbolKind.Parameter) == symbol) ?? -1;
+            if (index < 0)
+            {
+                _diagnostics.Error(
+                    typePredicateType,
+                    InternalCodes.InvalidTypePredicateSubject,
+                    "Type predicate subject must be a parameter of the enclosing function."
+                );
+
+                return BindType(typePredicateType, Types.PrimitiveType.Bool);
+            }
+
+            parameterIndex = index;
+        }
+
+        var targetType = Visit(typePredicateType.Type);
+        return BindType(typePredicateType, new Types.TypePredicateType(parameterIndex, targetType));
+    }
 
     public override Type VisitIndexedType(IndexedType indexedType)
     {

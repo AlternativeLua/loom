@@ -9,6 +9,7 @@ using IntersectionType = Loom.Core.TypeChecking.Types.IntersectionType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
 using TypeParameter = Loom.Core.TypeChecking.Types.TypeParameter;
+using TypePredicateType = Loom.Core.TypeChecking.Types.TypePredicateType;
 using UnionType = Loom.Core.TypeChecking.Types.UnionType;
 
 namespace Loom.Core.TypeChecking;
@@ -87,6 +88,7 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
                 fn(functionType.ReturnType),
                 functionType.HasRestParameter
             ),
+            TypePredicateType predicate => new TypePredicateType(predicate.ParameterIndex, fn(predicate.TargetType)),
             GenericType genericType => new GenericType(
                 genericType.Declaration,
                 genericType.Parameters,

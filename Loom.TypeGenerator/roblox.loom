@@ -37,7 +37,7 @@ declare interface Object {
 	[luau_name("GetPropertyChangedSignal"), luau_method]
 	get_property_changed_signal: fn(property: string): ScriptSignal;
 	[luau_name("IsA"), luau_method]
-	is_a: fn<T: Instance>: bool;
+	is_a: fn<T: Instance>: @ is T;
 }
 
 declare interface Instance: Object {

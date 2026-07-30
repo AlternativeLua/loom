@@ -103,17 +103,43 @@ public sealed partial class Resolver
     public override bool VisitSelfExpression(SelfExpression selfExpression)
     {
         var implement = selfExpression.FirstAncestorOfType<Implement>();
-        if (implement == null)
+        if (implement != null)
         {
-            _diagnostics.Error(selfExpression, InternalCodes.SelfOutsideImplementation, "'@' can only be used inside an implemented trait method.");
-            return false;
+            if (_semanticModel.GetSymbol(implement.InterfaceName) is not InterfaceSymbol interfaceSymbol)
+                return false;
+
+            AddReference(selfExpression, interfaceSymbol);
+            return true;
         }
 
-        if (_semanticModel.GetSymbol(implement.InterfaceName) is not InterfaceSymbol interfaceSymbol)
-            return false;
+        if (selfExpression.Parent is TypePredicateType)
+        {
+            if (selfExpression.FirstAncestorOfType<InterfaceDeclaration>() is { } interfaceDeclaration)
+            {
+                if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol interfaceSymbol)
+                    return false;
 
-        AddReference(selfExpression, interfaceSymbol);
-        return true;
+                AddReference(selfExpression, interfaceSymbol);
+                return true;
+            }
+
+            if (selfExpression.FirstAncestorOfType<TraitDeclaration>() is { } traitDeclaration)
+            {
+                if (_semanticModel.GetDeclarationSymbol(traitDeclaration, SymbolKind.Trait) is not TraitSymbol traitSymbol)
+                    return false;
+
+                AddReference(selfExpression, traitSymbol);
+                return true;
+            }
+        }
+
+        _diagnostics.Error(
+            selfExpression,
+            InternalCodes.SelfOutsideImplementation,
+            "'@' can only be used inside an implemented trait method or as a type predicate subject on an interface or trait member."
+        );
+
+        return false;
     }
 
     public override bool VisitTraitDeclaration(TraitDeclaration traitDeclaration)

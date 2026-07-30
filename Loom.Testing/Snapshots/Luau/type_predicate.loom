@@ -1,0 +1,11 @@
+fn is_number(value: unknown): value is number {
+    return match value {
+        n when number -> true,
+        _ -> false,
+    };
+}
+
+let v = 420 as unknown;
+if is_number(v) {
+    print(v + 69);
+}

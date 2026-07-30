@@ -38,7 +38,7 @@ declare interface Object {
 	[luau_name("GetPropertyChangedSignal"), luau_method]
 	get_property_changed_signal: fn(property: string): ScriptSignal;
 	[luau_name("IsA"), luau_method]
-	is_a: fn<T: Instance>: bool;
+	is_a: fn<T: Instance>: @ is T;
 }
 
 declare interface Instance: Object {
@@ -1098,6 +1098,11 @@ declare interface EnumAppUpdateStatus {
 	AvailableBetaProgram: EnumItem<"AppUpdateStatus">;
 }
 
+declare interface EnumApplyShadowMode {
+	Shape: EnumItem<"ApplyShadowMode">;
+	Text: EnumItem<"ApplyShadowMode">;
+}
+
 declare interface EnumApplyStrokeMode {
 	Contextual: EnumItem<"ApplyStrokeMode">;
 	Border: EnumItem<"ApplyStrokeMode">;
@@ -1189,7 +1194,6 @@ declare interface EnumAssetType {
 	FaceMakeup: EnumItem<"AssetType">;
 	LipMakeup: EnumItem<"AssetType">;
 	EyeMakeup: EnumItem<"AssetType">;
-	VoxelFragment: EnumItem<"AssetType">;
 	AvatarBackground: EnumItem<"AssetType">;
 	TextDocument: EnumItem<"AssetType">;
 }
@@ -2777,6 +2781,12 @@ declare interface EnumGearType {
 	Transport: EnumItem<"GearType">;
 }
 
+declare interface EnumGenerateMomentTextResult {
+	Success: EnumItem<"GenerateMomentTextResult">;
+	Pending: EnumItem<"GenerateMomentTextResult">;
+	Failed: EnumItem<"GenerateMomentTextResult">;
+}
+
 declare interface EnumGenre {
 	All: EnumItem<"Genre">;
 	TownAndCity: EnumItem<"Genre">;
@@ -3086,6 +3096,7 @@ declare interface EnumInternalVideoUsage {
 	Default: EnumItem<"InternalVideoUsage">;
 	WatchPage: EnumItem<"InternalVideoUsage">;
 	HomeCarousel: EnumItem<"InternalVideoUsage">;
+	FeatureTileAd: EnumItem<"InternalVideoUsage">;
 }
 
 declare interface EnumInterpolationThrottlingMode {
@@ -3643,6 +3654,14 @@ declare interface EnumMembershipType {
 	TurboBuildersClub: EnumItem<"MembershipType">;
 	OutrageousBuildersClub: EnumItem<"MembershipType">;
 	Premium: EnumItem<"MembershipType">;
+}
+
+declare interface EnumMeshAttribute {
+	Vertex: EnumItem<"MeshAttribute">;
+	Normal: EnumItem<"MeshAttribute">;
+	Color: EnumItem<"MeshAttribute">;
+	UV: EnumItem<"MeshAttribute">;
+	Face: EnumItem<"MeshAttribute">;
 }
 
 declare interface EnumMeshPartDetailLevel {
@@ -5762,6 +5781,12 @@ declare interface EnumUserInputType {
 	None: EnumItem<"UserInputType">;
 }
 
+declare interface EnumUserNewReturningStatus {
+	Unknown: EnumItem<"UserNewReturningStatus">;
+	New: EnumItem<"UserNewReturningStatus">;
+	Returning: EnumItem<"UserNewReturningStatus">;
+}
+
 declare interface EnumUserReturnStatus {
 	Unknown: EnumItem<"UserReturnStatus">;
 	New: EnumItem<"UserReturnStatus">;
@@ -6121,6 +6146,7 @@ declare interface EnumStatic {
 	AppShellActionType: EnumAppShellActionType;
 	AppShellFeature: EnumAppShellFeature;
 	AppUpdateStatus: EnumAppUpdateStatus;
+	ApplyShadowMode: EnumApplyShadowMode;
 	ApplyStrokeMode: EnumApplyStrokeMode;
 	AspectType: EnumAspectType;
 	AssetCreatorType: EnumAssetCreatorType;
@@ -6312,6 +6338,7 @@ declare interface EnumStatic {
 	GamepadType: EnumGamepadType;
 	GearGenreSetting: EnumGearGenreSetting;
 	GearType: EnumGearType;
+	GenerateMomentTextResult: EnumGenerateMomentTextResult;
 	Genre: EnumGenre;
 	GradientTileMode: EnumGradientTileMode;
 	GradientType: EnumGradientType;
@@ -6387,6 +6414,7 @@ declare interface EnumStatic {
 	Material: EnumMaterial;
 	MaterialPattern: EnumMaterialPattern;
 	MembershipType: EnumMembershipType;
+	MeshAttribute: EnumMeshAttribute;
 	MeshPartDetailLevel: EnumMeshPartDetailLevel;
 	MeshPartHeadsAndAccessories: EnumMeshPartHeadsAndAccessories;
 	MeshScaleUnit: EnumMeshScaleUnit;
@@ -6639,6 +6667,7 @@ declare interface EnumStatic {
 	UserIdMode: EnumUserIdMode;
 	UserInputState: EnumUserInputState;
 	UserInputType: EnumUserInputType;
+	UserNewReturningStatus: EnumUserNewReturningStatus;
 	UserReturnStatus: EnumUserReturnStatus;
 	VRComfortSetting: EnumVRComfortSetting;
 	VRControllerModelMode: EnumVRControllerModelMode;
@@ -6731,6 +6760,7 @@ declare interface Enum {
 	AppShellActionType: EnumItem<"AppShellActionType">;
 	AppShellFeature: EnumItem<"AppShellFeature">;
 	AppUpdateStatus: EnumItem<"AppUpdateStatus">;
+	ApplyShadowMode: EnumItem<"ApplyShadowMode">;
 	ApplyStrokeMode: EnumItem<"ApplyStrokeMode">;
 	AspectType: EnumItem<"AspectType">;
 	AssetCreatorType: EnumItem<"AssetCreatorType">;
@@ -6922,6 +6952,7 @@ declare interface Enum {
 	GamepadType: EnumItem<"GamepadType">;
 	GearGenreSetting: EnumItem<"GearGenreSetting">;
 	GearType: EnumItem<"GearType">;
+	GenerateMomentTextResult: EnumItem<"GenerateMomentTextResult">;
 	Genre: EnumItem<"Genre">;
 	GradientTileMode: EnumItem<"GradientTileMode">;
 	GradientType: EnumItem<"GradientType">;
@@ -6997,6 +7028,7 @@ declare interface Enum {
 	Material: EnumItem<"Material">;
 	MaterialPattern: EnumItem<"MaterialPattern">;
 	MembershipType: EnumItem<"MembershipType">;
+	MeshAttribute: EnumItem<"MeshAttribute">;
 	MeshPartDetailLevel: EnumItem<"MeshPartDetailLevel">;
 	MeshPartHeadsAndAccessories: EnumItem<"MeshPartHeadsAndAccessories">;
 	MeshScaleUnit: EnumItem<"MeshScaleUnit">;
@@ -7249,6 +7281,7 @@ declare interface Enum {
 	UserIdMode: EnumItem<"UserIdMode">;
 	UserInputState: EnumItem<"UserInputState">;
 	UserInputType: EnumItem<"UserInputType">;
+	UserNewReturningStatus: EnumItem<"UserNewReturningStatus">;
 	UserReturnStatus: EnumItem<"UserReturnStatus">;
 	VRComfortSetting: EnumItem<"VRComfortSetting">;
 	VRControllerModelMode: EnumItem<"VRControllerModelMode">;
@@ -7370,6 +7403,24 @@ declare interface EditableMesh: Object {
 	add_uv: fn(uv: Vector2): number;
 	[luau_name("AddVertex"), luau_method]
 	add_vertex: fn(p: Vector3): number;
+	[luau_name("BatchAdd"), luau_method]
+	batch_add: fn(attr: Enum["MeshAttribute"], data: unknown[]): unknown[];
+	[luau_name("BatchGetFaceAttributes"), luau_method]
+	batch_get_face_attributes: fn(attr: Enum["MeshAttribute"], faceIds: unknown[]): unknown[];
+	[luau_name("BatchGetValues"), luau_method]
+	batch_get_values: fn(ids: unknown[]): unknown;
+	[luau_name("BatchGetVertexAttributes"), luau_method]
+	batch_get_vertex_attributes: fn(attr: Enum["MeshAttribute"], vertexIds: unknown[]): unknown[];
+	[luau_name("BatchGetVertexFaceAttributes"), luau_method]
+	batch_get_vertex_face_attributes: fn(attr: Enum["MeshAttribute"], vertexIds: unknown[], faceIds: unknown[]): unknown[];
+	[luau_name("BatchRemove"), luau_method]
+	batch_remove: fn(ids: unknown[]): void;
+	[luau_name("BatchSetFaceAttributes"), luau_method]
+	batch_set_face_attributes: fn(faceIds: unknown[], attrIdArrays: unknown[]): void;
+	[luau_name("BatchSetValues"), luau_method]
+	batch_set_values: fn(ids: unknown[], values: unknown[]): void;
+	[luau_name("BatchSetVertexFaceAttributes"), luau_method]
+	batch_set_vertex_face_attributes: fn(vertexIds: unknown[], faceIds: unknown[], attrIds: unknown[]): void;
 	[luau_name("Clear"), luau_method]
 	clear: fn: void;
 	[luau_name("Destroy"), luau_method]
@@ -8720,6 +8771,8 @@ declare interface AvatarCreationService: Instance {
 	event avatar_asset_moderation_completed(assetId: number, moderationStatus: Enum["ModerationStatus"]);
 	[luau_name("AvatarModerationCompleted")]
 	event avatar_moderation_completed(outfitId: number, moderationStatus: Enum["ModerationStatus"]);
+	[luau_name("AvatarOutfitModerationCompleted")]
+	event avatar_outfit_moderation_completed(outfitId: number, moderationStatus: Enum["ModerationStatus"], outfitType: Enum["OutfitType"]);
 }
 
 declare interface AvatarEditorService: Instance {
@@ -8894,16 +8947,26 @@ declare interface JointImportData: BaseImportData;
 declare interface MaterialImportData: BaseImportData {
 	[luau_name("DiffuseFilePath")]
 	mut diffuse_file_path: string;
+	[luau_name("DiffuseVersionedAssetId")]
+	mut diffuse_versioned_asset_id: number;
 	[luau_name("EmissiveFilePath")]
 	mut emissive_file_path: string;
+	[luau_name("EmissiveVersionedAssetId")]
+	mut emissive_versioned_asset_id: number;
 	[luau_name("IsPbr")]
 	is_pbr: bool;
 	[luau_name("MetalnessFilePath")]
 	mut metalness_file_path: string;
+	[luau_name("MetalnessVersionedAssetId")]
+	mut metalness_versioned_asset_id: number;
 	[luau_name("NormalFilePath")]
 	mut normal_file_path: string;
+	[luau_name("NormalVersionedAssetId")]
+	mut normal_versioned_asset_id: number;
 	[luau_name("RoughnessFilePath")]
 	mut roughness_file_path: string;
+	[luau_name("RoughnessVersionedAssetId")]
+	mut roughness_versioned_asset_id: number;
 }
 
 declare interface MeshImportData: BaseImportData {
@@ -8947,6 +9010,8 @@ declare interface MeshImportData: BaseImportData {
 	polygon_count: number;
 	[luau_name("UseImportedPivot")]
 	mut use_imported_pivot: bool;
+	[luau_name("VersionedAssetId")]
+	mut versioned_asset_id: number;
 }
 
 declare interface RootImportData: BaseImportData {
@@ -11399,6 +11464,34 @@ declare interface TextLabel: GuiLabel {
 	mut text_truncate: Enum["TextTruncate"];
 	[luau_name("TextWrap")]
 	mut text_wrap: bool;
+	[luau_name("TextWrapped")]
+	mut text_wrapped: bool;
+	[luau_name("TextXAlignment")]
+	mut text_x_alignment: Enum["TextXAlignment"];
+	[luau_name("TextYAlignment")]
+	mut text_y_alignment: Enum["TextYAlignment"];
+}
+
+declare interface InputActionLabel: GuiObject {
+	_is_creatable: true;
+	[luau_name("FontFace")]
+	mut font_face: Font;
+	[luau_name("ImageColor3")]
+	mut image_color3: Color3;
+	[luau_name("ImageTransparency")]
+	mut image_transparency: number;
+	[luau_name("InputAction")]
+	mut input_action: InputAction?;
+	[luau_name("ResolvedImageContent")]
+	resolved_image_content: Content;
+	[luau_name("ResolvedText")]
+	resolved_text: string;
+	[luau_name("TextColor3")]
+	mut text_color3: Color3;
+	[luau_name("TextSize")]
+	mut text_size: number;
+	[luau_name("TextTransparency")]
+	mut text_transparency: number;
 	[luau_name("TextWrapped")]
 	mut text_wrapped: bool;
 	[luau_name("TextXAlignment")]
@@ -17132,6 +17225,8 @@ declare interface UIShadow: UIComponent {
 	mut color: Color3;
 	[luau_name("Enabled")]
 	mut enabled: bool;
+	[luau_name("Mode")]
+	mut mode: Enum["ApplyShadowMode"];
 	[luau_name("Offset")]
 	mut offset: UDim2;
 	[luau_name("Spread")]

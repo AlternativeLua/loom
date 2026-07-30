@@ -590,4 +590,136 @@ public class TypeNarrowerTest
         Assert.True(trueState.NarrowedTypes.IsEmpty);
         Assert.True(falseState.NarrowedTypes.IsEmpty);
     }
+
+    [Fact]
+    public void ComputeBranchStates_TypePredicate_ParameterSubject_NarrowsArgument()
+    {
+        const string source = """
+            fn is_number(value: unknown): value is number {
+                return true;
+            }
+            let v: number | string = 420;
+            if is_number(v) {
+                v
+            }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var invocation = Assert.IsType<Invocation>(condition);
+        var argument = invocation.Arguments.ArgumentList[0];
+        var (trueState, falseState) = narrower.ComputeBranchStates(condition, current);
+
+        var narrowed = narrower.TryGetNarrowedType(argument, trueState, out var trueType);
+        Assert.True(narrowed);
+        var truePrimitive = Assert.IsType<PrimitiveType>(trueType);
+        Assert.Equal(PrimitiveTypeKind.Number, truePrimitive.Kind);
+
+        narrowed = narrower.TryGetNarrowedType(argument, falseState, out var falseType);
+        Assert.True(narrowed);
+        var falsePrimitive = Assert.IsType<PrimitiveType>(falseType);
+        Assert.Equal(PrimitiveTypeKind.String, falsePrimitive.Kind);
+    }
+
+    [Fact]
+    public void ComputeBranchStates_TypePredicate_SelfReceiver_NarrowsReceiver()
+    {
+        const string source = """
+            interface Widget { label: string }
+            interface Container { is_kind: fn<T>(): @ is T }
+            let c = none as never as Container;
+            if c.is_kind::<Widget>() {
+                c
+            }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var invocation = Assert.IsType<Invocation>(condition);
+        var receiver = Assert.IsType<QualifiedName>(invocation.Expression).Identifier;
+        var (trueState, _) = narrower.ComputeBranchStates(condition, current);
+
+        var narrowed = narrower.TryGetNarrowedType(receiver, trueState, out var trueType);
+        Assert.True(narrowed);
+        var interfaceType = Assert.IsType<InterfaceType>(trueType);
+        Assert.Equal("Widget", interfaceType.Name);
+    }
+
+    [Fact]
+    public void ComputeBranchStates_TypePredicate_SelfReceiver_MultiSegment_NarrowsNestedReceiver()
+    {
+        const string source = """
+            interface Widget { label: string }
+            interface Container { is_kind: fn<T>(): @ is T }
+            interface Wrapper { inner: Container }
+            let w = none as never as Wrapper;
+            if w.inner.is_kind::<Widget>() {
+                w
+            }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var invocation = Assert.IsType<Invocation>(condition);
+        var callee = Assert.IsType<QualifiedName>(invocation.Expression);
+        var receiver = new QualifiedName(callee.Identifier, callee.Names[..^1]);
+        var (trueState, _) = narrower.ComputeBranchStates(condition, current);
+
+        var narrowed = narrower.TryGetNarrowedType(receiver, trueState, out var trueType);
+        Assert.True(narrowed);
+        var interfaceType = Assert.IsType<InterfaceType>(trueType);
+        Assert.Equal("Widget", interfaceType.Name);
+    }
+
+    [Fact]
+    public void ComputeBranchStates_NonPredicateInvocation_DoesNotNarrow()
+    {
+        const string source = """
+            fn foo(): bool -> true;
+            if foo() { }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var (trueState, falseState) = narrower.ComputeBranchStates(condition, current);
+
+        Assert.True(trueState.NarrowedTypes.IsEmpty);
+        Assert.True(falseState.NarrowedTypes.IsEmpty);
+    }
+
+    [Fact]
+    public void ComputeBranchStates_TypePredicate_ComposesWithLogicalAnd()
+    {
+        const string source = """
+            fn is_number(value: unknown): value is number {
+                return true;
+            }
+            let v: number | string = 420;
+            if is_number(v) && true {
+                v
+            }
+            """;
+
+        var (model, condition) = GetCondition(source);
+        var narrower = new TypeNarrower(model);
+        var current = new FlowState();
+
+        var andOp = Assert.IsType<BinaryOperator>(condition);
+        var invocation = Assert.IsType<Invocation>(andOp.Left);
+        var argument = invocation.Arguments.ArgumentList[0];
+        var (trueState, _) = narrower.ComputeBranchStates(condition, current);
+
+        var narrowed = narrower.TryGetNarrowedType(argument, trueState, out var trueType);
+        Assert.True(narrowed);
+        var primitive = Assert.IsType<PrimitiveType>(trueType);
+        Assert.Equal(PrimitiveTypeKind.Number, primitive.Kind);
+    }
 }

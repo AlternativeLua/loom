@@ -38,7 +38,7 @@ declare interface Object {
 	[luau_name("GetPropertyChangedSignal"), luau_method]
 	get_property_changed_signal: fn(property: string): ScriptSignal;
 	[luau_name("IsA"), luau_method]
-	is_a: fn<T: Instance>: bool;
+	is_a: fn<T: Instance>: @ is T;
 }
 
 declare interface Instance: Object {
@@ -1098,6 +1098,11 @@ declare interface EnumAppUpdateStatus {
 	AvailableBetaProgram: EnumItem<"AppUpdateStatus">;
 }
 
+declare interface EnumApplyShadowMode {
+	Shape: EnumItem<"ApplyShadowMode">;
+	Text: EnumItem<"ApplyShadowMode">;
+}
+
 declare interface EnumApplyStrokeMode {
 	Contextual: EnumItem<"ApplyStrokeMode">;
 	Border: EnumItem<"ApplyStrokeMode">;
@@ -1189,7 +1194,6 @@ declare interface EnumAssetType {
 	FaceMakeup: EnumItem<"AssetType">;
 	LipMakeup: EnumItem<"AssetType">;
 	EyeMakeup: EnumItem<"AssetType">;
-	VoxelFragment: EnumItem<"AssetType">;
 	AvatarBackground: EnumItem<"AssetType">;
 	TextDocument: EnumItem<"AssetType">;
 }
@@ -2777,6 +2781,12 @@ declare interface EnumGearType {
 	Transport: EnumItem<"GearType">;
 }
 
+declare interface EnumGenerateMomentTextResult {
+	Success: EnumItem<"GenerateMomentTextResult">;
+	Pending: EnumItem<"GenerateMomentTextResult">;
+	Failed: EnumItem<"GenerateMomentTextResult">;
+}
+
 declare interface EnumGenre {
 	All: EnumItem<"Genre">;
 	TownAndCity: EnumItem<"Genre">;
@@ -3086,6 +3096,7 @@ declare interface EnumInternalVideoUsage {
 	Default: EnumItem<"InternalVideoUsage">;
 	WatchPage: EnumItem<"InternalVideoUsage">;
 	HomeCarousel: EnumItem<"InternalVideoUsage">;
+	FeatureTileAd: EnumItem<"InternalVideoUsage">;
 }
 
 declare interface EnumInterpolationThrottlingMode {
@@ -3643,6 +3654,14 @@ declare interface EnumMembershipType {
 	TurboBuildersClub: EnumItem<"MembershipType">;
 	OutrageousBuildersClub: EnumItem<"MembershipType">;
 	Premium: EnumItem<"MembershipType">;
+}
+
+declare interface EnumMeshAttribute {
+	Vertex: EnumItem<"MeshAttribute">;
+	Normal: EnumItem<"MeshAttribute">;
+	Color: EnumItem<"MeshAttribute">;
+	UV: EnumItem<"MeshAttribute">;
+	Face: EnumItem<"MeshAttribute">;
 }
 
 declare interface EnumMeshPartDetailLevel {
@@ -5762,6 +5781,12 @@ declare interface EnumUserInputType {
 	None: EnumItem<"UserInputType">;
 }
 
+declare interface EnumUserNewReturningStatus {
+	Unknown: EnumItem<"UserNewReturningStatus">;
+	New: EnumItem<"UserNewReturningStatus">;
+	Returning: EnumItem<"UserNewReturningStatus">;
+}
+
 declare interface EnumUserReturnStatus {
 	Unknown: EnumItem<"UserReturnStatus">;
 	New: EnumItem<"UserReturnStatus">;
@@ -6121,6 +6146,7 @@ declare interface EnumStatic {
 	AppShellActionType: EnumAppShellActionType;
 	AppShellFeature: EnumAppShellFeature;
 	AppUpdateStatus: EnumAppUpdateStatus;
+	ApplyShadowMode: EnumApplyShadowMode;
 	ApplyStrokeMode: EnumApplyStrokeMode;
 	AspectType: EnumAspectType;
 	AssetCreatorType: EnumAssetCreatorType;
@@ -6312,6 +6338,7 @@ declare interface EnumStatic {
 	GamepadType: EnumGamepadType;
 	GearGenreSetting: EnumGearGenreSetting;
 	GearType: EnumGearType;
+	GenerateMomentTextResult: EnumGenerateMomentTextResult;
 	Genre: EnumGenre;
 	GradientTileMode: EnumGradientTileMode;
 	GradientType: EnumGradientType;
@@ -6387,6 +6414,7 @@ declare interface EnumStatic {
 	Material: EnumMaterial;
 	MaterialPattern: EnumMaterialPattern;
 	MembershipType: EnumMembershipType;
+	MeshAttribute: EnumMeshAttribute;
 	MeshPartDetailLevel: EnumMeshPartDetailLevel;
 	MeshPartHeadsAndAccessories: EnumMeshPartHeadsAndAccessories;
 	MeshScaleUnit: EnumMeshScaleUnit;
@@ -6639,6 +6667,7 @@ declare interface EnumStatic {
 	UserIdMode: EnumUserIdMode;
 	UserInputState: EnumUserInputState;
 	UserInputType: EnumUserInputType;
+	UserNewReturningStatus: EnumUserNewReturningStatus;
 	UserReturnStatus: EnumUserReturnStatus;
 	VRComfortSetting: EnumVRComfortSetting;
 	VRControllerModelMode: EnumVRControllerModelMode;
@@ -6731,6 +6760,7 @@ declare interface Enum {
 	AppShellActionType: EnumItem<"AppShellActionType">;
 	AppShellFeature: EnumItem<"AppShellFeature">;
 	AppUpdateStatus: EnumItem<"AppUpdateStatus">;
+	ApplyShadowMode: EnumItem<"ApplyShadowMode">;
 	ApplyStrokeMode: EnumItem<"ApplyStrokeMode">;
 	AspectType: EnumItem<"AspectType">;
 	AssetCreatorType: EnumItem<"AssetCreatorType">;
@@ -6922,6 +6952,7 @@ declare interface Enum {
 	GamepadType: EnumItem<"GamepadType">;
 	GearGenreSetting: EnumItem<"GearGenreSetting">;
 	GearType: EnumItem<"GearType">;
+	GenerateMomentTextResult: EnumItem<"GenerateMomentTextResult">;
 	Genre: EnumItem<"Genre">;
 	GradientTileMode: EnumItem<"GradientTileMode">;
 	GradientType: EnumItem<"GradientType">;
@@ -6997,6 +7028,7 @@ declare interface Enum {
 	Material: EnumItem<"Material">;
 	MaterialPattern: EnumItem<"MaterialPattern">;
 	MembershipType: EnumItem<"MembershipType">;
+	MeshAttribute: EnumItem<"MeshAttribute">;
 	MeshPartDetailLevel: EnumItem<"MeshPartDetailLevel">;
 	MeshPartHeadsAndAccessories: EnumItem<"MeshPartHeadsAndAccessories">;
 	MeshScaleUnit: EnumItem<"MeshScaleUnit">;
@@ -7249,6 +7281,7 @@ declare interface Enum {
 	UserIdMode: EnumItem<"UserIdMode">;
 	UserInputState: EnumItem<"UserInputState">;
 	UserInputType: EnumItem<"UserInputType">;
+	UserNewReturningStatus: EnumItem<"UserNewReturningStatus">;
 	UserReturnStatus: EnumItem<"UserReturnStatus">;
 	VRComfortSetting: EnumItem<"VRComfortSetting">;
 	VRControllerModelMode: EnumItem<"VRControllerModelMode">;
@@ -8356,6 +8389,10 @@ declare interface TextLabel: GuiLabel {
 	_is_creatable: true;
 }
 
+declare interface InputActionLabel: GuiObject {
+	_is_creatable: true;
+}
+
 declare interface ScrollingFrame: GuiObject {
 	_is_creatable: true;
 }
@@ -8941,6 +8978,7 @@ declare interface Workspace: WorldRoot {
 	zoom_to_extents: fn: void;
 }
 
+declare interface WorldModel: WorldRoot;
 declare interface PackageLink: Instance;
 declare interface PackageService: Instance {
 	_is_service: true;
@@ -10195,8 +10233,10 @@ declare interface TestService: Instance {
 	is_feature_enabled: fn(name: string): bool;
 	[luau_name("CaptureScreenshotAsync"), luau_method]
 	capture_screenshot_async: fn(artifactName: string, options: UnknownRecord?): unknown;
+	[luau_name("FetchTestControlsAsync"), luau_method]
+	fetch_test_controls_async: fn(category: string): unknown;
 	[luau_name("RequestValidationAsync"), luau_method]
-	request_validation_async: fn(artifactType: string, artifactName: string): unknown;
+	request_validation_async: fn(artifactType: string, artifactName: string, timeoutSeconds: number?): unknown;
 	[luau_name("Run"), luau_method]
 	run: fn: void;
 	[luau_name("RunAsync"), luau_method]

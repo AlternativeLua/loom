@@ -271,6 +271,72 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Narrows_ParameterType_FromTypePredicate() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn is_number(value: unknown): value is number {
+                    return true;
+                }
+                let v = 420 as unknown;
+                if is_number(v) {
+                    v + 69
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_TypePredicate_SubjectNotEnclosingParameter()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let outer: unknown = 1;
+            fn f(x: unknown): outer is number {
+                return true;
+            }
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Code == InternalCodes.InvalidTypePredicateSubject);
+    }
+
+    [Fact]
+    public void Checks_SelfTypePredicate_OnPlainInterfaceMember() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                interface Widget { label: string }
+                interface Container { is_kind: fn<T>(): @ is T }
+                let c = none as never as Container;
+                if c.is_kind::<Widget>() {
+                    c.label
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Narrows_ReceiverType_FromTraitMethodTypePredicate() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                trait HasKind<T> {
+                    fn is_kind(): @ is T;
+                }
+                interface Foo { name: string }
+                implement HasKind<number> for Foo {
+                    fn is_kind() -> true;
+                }
+                let x = new Foo { name: "test" };
+                if x.is_kind() {
+                    x + 1
+                }
+                """
+            )
+        );
+
+    [Fact]
     public void ThrowsFor_NonGenericFunctionCall_ArgumentTypeMismatch()
     {
         const string source = """

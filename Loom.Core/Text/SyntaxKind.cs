@@ -99,6 +99,7 @@ public enum SyntaxKind : ushort
     ImplementKeyword,
     MatchKeyword,
     WhenKeyword,
+    IsKeyword,
     Identifier,
     Eof
 }
