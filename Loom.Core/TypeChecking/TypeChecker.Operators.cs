@@ -11,12 +11,43 @@ public sealed partial class TypeChecker
 {
     public override Type VisitAssignmentOperator(AssignmentOperator assignmentOperator)
     {
+        Type resultType;
         if (assignmentOperator.Operator.Kind != SyntaxKind.Equals)
-            return VisitBinaryOperator(assignmentOperator);
+        {
+            resultType = VisitBinaryOperator(assignmentOperator);
+        }
+        else
+        {
+            // Resolved without any narrowing on the target still in effect - a prior `??=`/etc. narrows
+            // what *reading* the variable sees, but checking a fresh value against it needs the full
+            // declared type, or a legal `n = none` after `n` was narrowed to `number` would wrongly fail.
+            var targetState = _narrower.WithoutNarrowing(assignmentOperator.Left, _flowState);
+            var targetType = Visit(assignmentOperator.Left, targetState);
+            var valueType = Check(assignmentOperator.Right, targetType);
+            resultType = CheckImmutableAssignmentTarget(assignmentOperator, valueType);
+        }
 
-        var targetType = Visit(assignmentOperator.Left);
-        var valueType = Check(assignmentOperator.Right, targetType);
-        return CheckImmutableAssignmentTarget(assignmentOperator, valueType);
+        NarrowAfterAssignment(assignmentOperator, resultType);
+        return resultType;
+    }
+
+    // Only handled when the assignment is its own statement (the overwhelmingly common case, and the
+    // one CheckStatements can actually thread forward via _exitStates) - an assignment nested inside a
+    // larger expression doesn't get its own entry in the statement list to attach a narrowed exit state
+    // to. Also skipped when resultType isn't even assignable to the target's own type, since that means
+    // the "assignment" isn't really storing a new value into the target at all - e.g. `handler +=
+    // callback` on an event field returns a ScriptConnection, not a new value for `handler`.
+    private void NarrowAfterAssignment(AssignmentOperator assignmentOperator, Type resultType)
+    {
+        if (assignmentOperator.Parent is not ExpressionStatement statement)
+            return;
+
+        var targetType = _semanticModel.GetType(assignmentOperator.Left);
+        if (!resultType.IsAssignableTo(targetType))
+            return;
+
+        if (_narrower.TryNarrowAfterAssignment(assignmentOperator.Left, resultType, _flowState) is { } narrowed)
+            _exitStates[statement] = narrowed;
     }
 
     private Type CheckImmutableAssignmentTarget(AssignmentOperator assignmentOperator, Type valueType)

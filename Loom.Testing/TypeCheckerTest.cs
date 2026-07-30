@@ -2987,6 +2987,68 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(diagnostics);
     }
 
+    [Theory]
+    [InlineData("mut n: number? = none; n = 69; print(n + 1)")]
+    [InlineData("mut n: number? = none; n ??= 69; print(n + 1)")]
+    [InlineData("mut n: number? = none; n = n ?? 69; print(n + 1)")]
+    public void Checks_Narrowing_AfterAssignment(string source) => Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+
+    [Fact]
+    public void Checks_Narrowing_AfterAssignment_DoesNotLeakIntoNextAssignmentsTargetType()
+    {
+        // a prior narrowing of `n` must not restrict what a later assignment to `n` itself can accept -
+        // that check needs n's full declared type ('number?'), not whatever it was last narrowed to.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            mut n: number? = none;
+            n ??= 69;
+            n = none;
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void Checks_Narrowing_AfterAssignment_ReflectsTheNewlyAssignedValue()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            mut n: number? = none;
+            n ??= 69;
+            n = none;
+            print(n + 1)
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidBinaryOp,
+            "No binary operation for 'none' + 'number'.",
+            "expected left operand of type 'number', not 'none'"
+        );
+    }
+
+    [Fact]
+    public void Checks_Narrowing_AfterAssignment_DoesNotApplyToEventConnectionOperators()
+    {
+        const string source = """
+            interface EventObject {
+                event consumer(param: string);
+            }
+
+            fn on_consumer(p: string): void {
+                print(p)
+            }
+
+            let eo = none as never as EventObject;
+            eo.consumer += on_consumer;
+            eo.consumer -= on_consumer;
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+    }
+
     [Fact]
     public void Checks_GenericFunction_InferenceWithIntersectionParameter_AndSingleArgument()
     {

@@ -36,6 +36,14 @@ public sealed class FlowState(
     public FlowState WithInitialized(Symbol symbol) =>
         new(this) { DefinitelyInitialized = DefinitelyInitialized.Add(symbol), MaybeInitialized = MaybeInitialized.Add(symbol) };
 
+    /// <summary>Returns a new state with <paramref name="address" /> narrowed to <paramref name="type" />.</summary>
+    public FlowState WithNarrowedType(FlowAddress address, Type type) =>
+        new(DefinitelyInitialized, MaybeInitialized, IsUnreachable, NarrowedTypes.SetItem(address, type));
+
+    /// <summary>Returns a new state with any narrowing on <paramref name="address" /> removed.</summary>
+    public FlowState WithoutNarrowedType(FlowAddress address) =>
+        NarrowedTypes.ContainsKey(address) ? new(DefinitelyInitialized, MaybeInitialized, IsUnreachable, NarrowedTypes.Remove(address)) : this;
+
     /// <summary>Batch form of <see cref="WithInitialized(Symbol)" /> for parameter lists, tuple patterns, etc.</summary>
     public FlowState WithInitialized(IEnumerable<Symbol> symbols)
     {

@@ -157,9 +157,8 @@ public sealed partial class TypeChecker
     private FlowState GetStatementExitState(Statement statement, FlowState entryState) =>
         statement switch
         {
-            Block or If or While or For or After => _exitStates.GetValueOrDefault(statement, entryState),
             Return or Break or Continue => new FlowState(entryState) { IsUnreachable = true },
-            _ => entryState
+            _ => _exitStates.GetValueOrDefault(statement, entryState)
         };
 
     private void AssignLoopExitState(Node node)
