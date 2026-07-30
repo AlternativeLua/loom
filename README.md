@@ -1,7 +1,7 @@
 # Loom
 
 [![CI Status](https://github.com/rbx-loom/loom/actions/workflows/ci.yml/badge.svg)](https://github.com/rbx-loom/loom/workflows)
-[![Coverage Status](https://coveralls.io/repos/github/R-unic/loom/badge.svg?branch=master)](https://coveralls.io/github/R-unic/loom)
+[![Coverage Status](https://coveralls.io/repos/github/rbx-loom/loom/badge.svg?branch=master)](https://coveralls.io/github/rbx-loom/loom)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-yellow.svg)](https://opensource.org/licenses/apache-2.0)
 
 ### A domain-specific language for Roblox that transpiles to Luau.
@@ -66,6 +66,11 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
   - [Result Pattern](#result-pattern)
   - [Array.join()](#arrayjoin)
   - [Range.clamp()](#rangeclamp)
+  - [String Methods](#string-methods)
+  - [Pattern Matching](#pattern-matching)
+  - [Discriminated Unions](#discriminated-unions)
+  - [Optional Chaining](#optional-chaining)
+  - [Instance Helpers](#instance-helpers)
   - [string() & number()](#string--number)
   - [Traits & implementations](#traits--implementations)
   - [typeof](#typeof)
@@ -86,25 +91,38 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
 - **Extended number literals** – Automatic math for units of time and frequency, as well as binary/octal/hex support
 - **Range expressions** – `1..10` for slicing and bounds
 - **`nameof` operator** – Get names as strings at compile time. See [example](#nameof).
-- **Flow-sensitive typing** - Loom supports discriminated unions and narrowing to the correct union member based on a common property
+- **Flow-sensitive typing** - Loom supports discriminated unions and narrowing to the correct union member based on a common property. See
+  [example](#discriminated-unions).
+- **Pattern matching** – `match` expressions with literal, range, guard, or-pattern, and destructuring arms, plus exhaustiveness checking over unions. See
+  [example](#pattern-matching).
+- **Optional chaining** – `?.` short-circuits through nullable member and index access instead of throwing. See [example](#optional-chaining).
+- **Default parameter values** – Omit trailing arguments at the call site and fall back to a default. See [example](#functions).
 - **Generic functions and types** – Full support for type parameters including constraints and defaults
 - **Result pattern for errors** – Error handling uses the result pattern from Rust, no more `pcall`s. See [example](#result-pattern).
 - **Events** – Built-in user events with shorthand syntax. See [example](#events).
-- **Traits** – Define reusable behavior that interfaces can implement, enabling shared APIs and generic constraints that reflect behavior
+- **Traits** – Define reusable behavior that interfaces can implement, enabling shared APIs and generic constraints that reflect behavior, including an
+  explicit `@` self receiver inside implementations. See [example](#traits--implementations).
 - **Named imports/exports** - See [example](#exports)
 - **Indices starting at one** – Same as Luau for familiarity
 - **Zero-cost abstractions** – Transpiles to idiomatic Luau with minimal overhead
-- **Batteries included** - Comes with a set of built-in compile-time macros included with data types such as [Array.join()](#arrayjoin)
-  or [Range.clamp()](#rangeclamp)
+- **Batteries included** - Comes with a set of built-in compile-time macros included with data types such as [Array.join()](#arrayjoin),
+  [Range.clamp()](#rangeclamp), or [String Methods](#string-methods), fully-typed standard libraries like `math`, and Roblox-specific
+  [Instance Helpers](#instance-helpers)
 - **Destructuring** – Bind array elements or object fields straight out of a value, including renaming a field on bind. See [example](#destructuring).
 - **Tuple types** – Fixed-arity, positional types with their own literal, indexing, destructuring, and `match` pattern syntax, plus a `Tuple` generic
   constraint for variadic-tuple rest parameters. See [example](#tuples).
 
 ## Upcoming Features
 
-- Standard libraries (math, string, buffer, etc.)
-- `defer` statements
-- Explicit `self` receiver for trait implementations
+- `declare event` & `declare enum` – type declarations for events and enums (#46)
+- User decorators (#138)
+- `is` operator (#128)
+- Pipe operator (#64)
+- `defer` statements (#73)
+- `every` statements (#141)
+- Generic `event` declarations (#132)
+- Package management & installation pipeline (#111 & #112 respectively)
+- LSP implementation (#47)
 
 ---
 
@@ -122,7 +140,7 @@ let x: bool = false;
 const x: boolean = false
 ```
 
-##
+---
 
 ```rs
 mut x = 1;
@@ -131,7 +149,7 @@ mut x = 1;
 ```luau
 local x = 1
 ```
-
+---
 ### Operators
 
 ```rs
@@ -142,7 +160,7 @@ let s = "abc" + "def";
 local s = "abc" .. "def"
 ```
 
-##
+---
 
 ```rs
 let x = 1 & 2 & 3;
@@ -151,7 +169,7 @@ let x = 1 & 2 & 3;
 ```luau
 local x = bit32.band(1, 2, 3)
 ```
-
+---
 ### Generic Types
 
 ```rs
@@ -163,7 +181,7 @@ let x: Union<bool, string> = false;
 type Union<A, B> = A | B
 const x: Union<boolean, string> = false
 ```
-
+---
 ### Number Literals
 
 Loom supports extended number literals that let you do boilerplate math to convert to a specific unit instantaneously.
@@ -191,7 +209,7 @@ const hex = 61453
 const binary = 25
 const octal = 256
 ```
-
+---
 ### Reassignment & Chained Assignment
 
 ```rs
@@ -204,7 +222,7 @@ local x = 69
 x = 420
 ```
 
-##
+---
 
 ```rs
 mut x = 69;
@@ -219,7 +237,7 @@ y = 1
 x = y
 const z = x
 ```
-
+---
 ### Functions
 
 Loom supports shorthand function bodies that return single expressions.
@@ -234,7 +252,7 @@ const function one()
 end
 ```
 
-##
+---
 
 ```rs
 fn id<T>(value: T) -> value;
@@ -246,7 +264,7 @@ const function id<T>(value: T)
 end
 ```
 
-##
+---
 
 ```rs
 fn id<T: number>(value: T): T {
@@ -262,6 +280,28 @@ end
 id(69)
 ```
 
+---
+
+Trailing parameters can declare a default value, used whenever the argument is omitted at the call site.
+
+```rs
+fn greet(name: string, greeting: string = "Hello") -> print(greeting + ", " + name + "!");
+
+greet("Ada");
+greet("Ada", "Hi");
+```
+
+```luau
+const function greet(name: string, greeting: string?)
+	if greeting == nil then
+		greeting = "Hello"
+	end
+	return print(greeting .. ", " .. name .. "!")
+end
+greet("Ada")
+greet("Ada", "Hi")
+```
+---
 ### Arrays
 
 ```rs
@@ -272,7 +312,7 @@ let arr: number[] = [1, 2, 3];
 const arr: { number } = {1, 2, 3}
 ```
 
-##
+---
 
 Arrays are immutable by default, but can be declared as mutable.
 
@@ -284,7 +324,7 @@ let arr: number[mut] = mut [1, 2, 3];
 const arr: { number } = {1, 2, 3}
 ```
 
-##
+---
 
 Assignments are expressions in loom.
 
@@ -298,7 +338,7 @@ const arr: { number } = {1, 2, 3}
 const x = 69
 arr[1] = x
 ```
-
+---
 ## Destructuring
 
 Bind array elements or object fields directly out of a value.
@@ -314,7 +354,7 @@ const first = array[1]
 const second = array[2]
 ```
 
-##
+---
 
 ```rs
 interface User { name: string, age: number }
@@ -332,7 +372,7 @@ const name = user.name
 const age = user.age
 ```
 
-##
+---
 
 A field can be bound under a different name.
 
@@ -343,7 +383,7 @@ let { age: userAge } = user;
 ```luau
 const userAge = user.age
 ```
-
+---
 ## Tuples
 
 Tuples are a fixed-arity type with a positional type per element, distinct from arrays.
@@ -360,7 +400,7 @@ print(my_tuple[1])
 print(my_tuple[2])
 ```
 
-##
+---
 
 Returning a tuple literal directly returns the raw values - no table is ever built.
 
@@ -376,7 +416,7 @@ const function returns_tuple(): (string, number)
 end
 ```
 
-##
+---
 
 Returning a tuple-typed value that already lives in a table unpacks it instead.
 
@@ -397,7 +437,7 @@ end
 const one, two = returns_tuple()
 ```
 
-##
+---
 
 Tuples can also be matched positionally.
 
@@ -422,7 +462,7 @@ end
 const result = _match
 ```
 
-##
+---
 
 The `Tuple` generic constraint expands a rest parameter into positional arguments matching the tuple's arity.
 
@@ -434,7 +474,7 @@ something::<(string, number)>("abc", 420);
 ```luau
 something("abc", 420)
 ```
-
+---
 ## nameof
 
 The `nameof` operator can be used to read the tokens of `Name` expressions as a string.
@@ -449,7 +489,7 @@ const abc = 69;
 const name = "abc"
 ```
 
-##
+---
 
 ```rs
 let range = 1..10;
@@ -460,7 +500,7 @@ let name = nameof(range.minimum);
 const range = { minimum = 1, maximum = 10 }
 const name = "range.minimum"
 ```
-
+---
 ### Ranges
 
 Ranges are constructs that represent a minimum and a maximum number.
@@ -473,7 +513,7 @@ let range = 1..10;
 const range = { minimum = 1, maximum = 10 }
 ```
 
-##
+---
 
 They can be used to slice arrays.
 
@@ -490,7 +530,7 @@ const _length = #arr
 const slice = table.move(arr, math.clamp(range.minimum, 1, _length), math.clamp(range.maximum, 1, _length), 1, {})
 ```
 
-##
+---
 
 ```rs
 let arr = [1, 2, 3, 4, 5];
@@ -503,7 +543,7 @@ const _length = #arr
 const slice = table.move(arr, math.clamp(1, 1, _length), math.clamp(3, 1, _length), 1, {})
 ```
 
-##
+---
 
 As well as strings.
 
@@ -517,7 +557,7 @@ const s = "abcdef"
 const slice = string.sub(s, 1, 3)
 ```
 
-##
+---
 
 ```rs
 let s = "abcdef";
@@ -529,7 +569,7 @@ const s = "abcdef"
 const char = string.sub(s, 1, 1)
 ```
 
-##
+---
 
 ```rs
 let min = (1..10).minimum;
@@ -538,7 +578,7 @@ let min = (1..10).minimum;
 ```luau
 const min = ({ minimum = 1, maximum = 10 }).minimum
 ```
-
+---
 ### Enums
 
 Enums are named compile-time constants.
@@ -557,7 +597,7 @@ const b = 69
 const c = 70
 ```
 
-##
+---
 
 They can also be used with strings.
 
@@ -573,7 +613,7 @@ let tag = Tag.Lava
 type Tag = "lava" | "something"
 const tag = "lava"
 ```
-
+---
 ### Control Flow
 
 ```rs
@@ -591,7 +631,7 @@ elseif 69 == 69 then
 	const yes = "yes"
 end
 ```
-
+---
 ### Declare Statements & Casting
 
 Declare statements allow you to declare types for symbols that may not exist in your file but you know exist in your environment.
@@ -605,7 +645,7 @@ print("hello, world!");
 print("hello, world!")
 ```
 
-##
+---
 
 ```ts
 declare let x: number;
@@ -616,7 +656,7 @@ let y = x + 1;
 const y = x + 1
 ```
 
-##
+---
 
 ```rs
 let unknown = 69 as unknown;
@@ -625,7 +665,7 @@ let unknown = 69 as unknown;
 ```luau
 const unknown = (69 :: unknown)
 ```
-
+---
 ### Function Types
 
 ```rs
@@ -635,7 +675,7 @@ type Callback = fn(): void
 ```luau
 type Callback = () -> ()
 ```
-
+---
 ### Interfaces
 
 ```ts
@@ -664,7 +704,7 @@ type Person = HasName & HasAge & {
 }
 ```
 
-##
+---
 
 ```ts
 interface ImmutRecord<K, V> {
@@ -676,7 +716,7 @@ interface ImmutRecord<K, V> {
 type ImmutRecord<K, V> = { read [K]: V }
 ```
 
-##
+---
 
 In this example `S` resolves to `string`.
 
@@ -695,7 +735,7 @@ type Foo = {
 type S = index<Foo, "bar">
 ```
 
-##
+---
 
 ```ts
 interface Person {
@@ -716,7 +756,7 @@ type Person = {
 const runic = { name = "Runic", age = 21 }
 runic.age = 69
 ```
-
+---
 ### While Loops
 
 ```rs
@@ -734,7 +774,7 @@ while i < 10 do
 end
 print(i)
 ```
-
+---
 ### Sealed & Declared Interfaces
 
 In this example Foo is only a type and cannot be instantiated.
@@ -751,7 +791,7 @@ type Foo = {
 }
 ```
 
-##
+---
 
 In this example Foo cannot be used as a constraint to other interfaces.
 
@@ -764,7 +804,7 @@ type Foo = {
 	read bar: string
 }
 ```
-
+---
 ### `after` Statements
 
 After statements are a shorthand to `task.delay`. They **never yield**.
@@ -779,6 +819,7 @@ after 100ms {
 task.delay(0.1, print, "done!")
 ```
 
+---
 ```cs
 after 250ms {
     let computed = 69 + 420;
@@ -792,7 +833,7 @@ task.delay(0.25, function(): ()
 	print(computed)
 end)
 ```
-
+---
 ### For Loops
 
 ```ts
@@ -811,7 +852,7 @@ for i, v in collection do
 end
 ```
 
-##
+---
 
 ```rs
 for n : 1. .10
@@ -824,7 +865,7 @@ for n in 1, 10 do
 end
 ```
 
-##
+---
 
 ```rs
 for n : 10..1
@@ -836,7 +877,7 @@ for n in 10, 1, -1 do
 	print(n)
 end
 ```
-
+---
 ### Ternary Operator
 
 ```ts
@@ -848,7 +889,7 @@ let value = condition ? 69 : none;
 const condition = true
 const value = if condition then 69 else nil
 ```
-
+---
 ### keyof
 
 In this example `K` resolves to `number | "bar" | "baz"`.
@@ -871,7 +912,7 @@ type Foo = {
 }
 type K = keyof<Foo>
 ```
-
+---
 ## Result Pattern
 
 ```rs
@@ -889,7 +930,7 @@ end
 const result = unsafe_function(true)
 print(if result.ok then result.value else result.error)
 ```
-
+---
 ## Array.join()
 
 ```ts
@@ -904,7 +945,7 @@ print(table.concat(arr))
 print(table.concat(arr, ", "))
 ```
 
-##
+---
 
 ```ts
 let arr = [1, 2, 3, 4];
@@ -916,7 +957,7 @@ const arr = {1, 2, 3, 4}
 print(#arr)
 ```
 
-##
+---
 
 Mutable arrays support in-place methods (`push`, `pop`, `insert`, `remove`), and every array supports `index_of` and `has`.
 
@@ -939,7 +980,7 @@ table.remove(arr, 1)
 print(table.find(arr, 2))
 print(table.find(arr, 2) ~= nil)
 ```
-
+---
 ## Range.length
 
 ```rs
@@ -950,7 +991,7 @@ print((1..10).length)
 print(10)
 ```
 
-##
+---
 
 ```rs
 let range = 1..10;
@@ -961,7 +1002,7 @@ print(range.length)
 const range = { minimum = 1, maximum = 10 }
 print(1 + math.abs(range.maximum - range.minimum))
 ```
-
+---
 ## Range.clamp()
 
 ```rs
@@ -976,7 +1017,7 @@ print(1)
 print(10)
 ```
 
-##
+---
 
 ```rs
 let range = 1..10;
@@ -987,7 +1028,161 @@ print(range.clamp(69))
 const range = { minimum = 1, maximum = 10 }
 print(math.clamp(69, range.minimum, range.maximum))
 ```
+---
+## String Methods
 
+Strings come with a set of built-in methods, compiling straight down to Luau's `string` library with no runtime overhead.
+
+```rs
+let s = "  Hello, World!  ";
+print(s.trim());
+print(s.upper());
+print(s.lower());
+print(s.split(", "));
+print(s.has("World"));
+print(s.starts_with("  Hello"));
+print(s.ends_with("!  "));
+print(s.length);
+```
+
+```luau
+const s = "  Hello, World!  "
+print((string.gsub(s, "^%s*(.-)%s*$", "%1")))
+print(string.upper(s))
+print(string.lower(s))
+print(string.split(s, ", "))
+print(string.find(s, "World", 1, true) ~= nil)
+const _prefix = "  Hello"
+print(string.sub(s, 1, #_prefix) == _prefix)
+const _suffix = "!  "
+print(string.sub(s, #s - #_suffix + 1) == _suffix)
+print(#s)
+```
+
+`reverse`, `repeat`, `byte`, and `replace` are also available. Fully-typed versions of Luau's built-in libraries, like `math`, are usable as-is with no
+import required.
+---
+## Pattern Matching
+
+`match` expressions support literal, range, guard (`when`), or-pattern (`|`), and destructuring arms, compiling to a chain of `if`/`elseif` with no runtime
+matcher.
+
+```rs
+fn describe(n: number): string -> match n {
+    0 | 1 -> "zero or one",
+    2..10 -> "small",
+    m when m > 0 -> "positive",
+    _ -> "other",
+};
+
+print(describe(1));
+print(describe(5));
+print(describe(50));
+print(describe(-1));
+```
+
+```luau
+const function describe(n: number): string
+	local _match
+	if n == 0 or n == 1 then
+		_match = "zero or one"
+	elseif typeof(n) == "number" and n >= 2 and n <= 10 then
+		_match = "small"
+	elseif n > 0 then
+		const m = n
+		_match = "positive"
+	else
+		_match = "other"
+	end
+	return _match
+end
+print(describe(1))
+print(describe(5))
+print(describe(50))
+print(describe(-1))
+```
+---
+## Discriminated Unions
+
+Interfaces sharing a common literal-typed property form a discriminated union. Narrowing on that property inside a branch gives you safe access to the
+member's other fields, without a `match`.
+
+```rs
+interface Circle { kind: "circle", radius: number }
+interface Square { kind: "square", side: number }
+
+type Shape = Circle | Square;
+
+fn area(shape: Shape): number ->
+    shape.kind == "circle" ? math.pi * shape.radius * shape.radius : shape.side * shape.side;
+```
+
+```luau
+type Circle = {
+	read kind: "circle",
+	read radius: number,
+}
+type Square = {
+	read kind: "square",
+	read side: number,
+}
+type Shape = Circle | Square
+const function area(shape: Shape): number
+	return if shape.kind == "circle" then math.pi * shape.radius * shape.radius else shape.side * shape.side
+end
+```
+---
+## Optional Chaining
+
+`?.` short-circuits to `nil` the moment any link in the chain is `nil`, instead of erroring.
+
+```rs
+interface Inner { c: number }
+interface Outer { b: Inner? }
+
+let a: Outer? = none;
+let x = a?.b?.c;
+```
+
+```luau
+type Inner = {
+	read c: number,
+}
+type Outer = {
+	read b: Inner?,
+}
+const a: Outer? = nil
+const x = if a ~= nil then if a.b ~= nil then a.b.c else nil else nil
+```
+---
+## Instance Helpers
+
+Roblox `Instance`s get typed helpers for common patterns, with generic type arguments compiling to `IsA` checks.
+
+```rs
+fn on_touch(part: Part): void {
+    if part.is_a::<Part>() {
+        print(part.get_children::<Part>());
+    }
+}
+```
+
+```luau
+const function on_touch(part: Part): ()
+	if part:IsA("Part") then
+		const _result: { Part } = {}
+		for _, child in part:GetChildren() do
+			if not child:IsA("Part") then continue end
+			table.insert(_result, child)
+		end
+		print(_result)
+	end
+end
+```
+
+`get_descendants`, `find_first_child_of_class`, `find_first_child_which_is_a`, `find_first_ancestor_of_class`, and `find_first_ancestor_which_is_a` follow the
+same pattern.
+---
 ## string() & number()
 
 ```rs
@@ -1000,7 +1195,7 @@ const digits = tostring(69420)
 const n = tonumber(digits)
 ```
 
-##
+---
 
 ```rs
 let n = number("F00D", 16)
@@ -1009,7 +1204,7 @@ let n = number("F00D", 16)
 ```luau
 const n = tonumber("F00D", 16)
 ```
-
+---
 ## Traits & implementations
 
 Traits let you define reusable behavior independently of an interface's data. An implement block attaches a trait to an interface, making its methods available
@@ -1053,7 +1248,7 @@ const user = setmetatable({ name = "Runic", age = 21 }, Loom.merge_meta(ToString
 print(user:to_string())
 ```
 
-##
+---
 
 Traits can also be implemented per generic instantiation. Multiple implementations of the same trait with different type arguments will result in an error.
 
@@ -1068,7 +1263,7 @@ interface User {
 }
 
 implement Serialize<string> for User {
-    fn serialize -> name + ", " + string(age)
+    fn serialize -> $"{name}, {age}"
 }
 
 let user = new User { name: "Runic", age: 21 };
@@ -1088,12 +1283,49 @@ local Serialize_string_for_User = {}
 Serialize_string_for_User.__index = Serialize_string_for_User
 Serialize_string_for_User = Serialize_string_for_User :: User
 function Serialize_string_for_User.serialize(self: User)
-	return self.name .. ", " .. tostring(self.age)
+	return `{self.name}, {self.age}`
 end
 const user = setmetatable({ name = "Runic", age = 21 }, Loom.merge_meta(Serialize_string_for_User)) :: User
 print(user:serialize())
 ```
 
+---
+
+Bare names resolve to the implementing interface's members automatically, but `@` is available as an explicit self receiver when you want it.
+
+```rs
+trait FlagContainer {
+    fn has_flag(flag: number): bool;
+}
+
+interface Flags {
+    [number]: bool;
+}
+
+implement FlagContainer for Flags {
+    fn has_flag(flag) -> flag in @;
+}
+
+let flags = new Flags { [69]: true, [420]: true };
+print(person.has_flag(69));
+```
+
+```luau
+const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
+type FlagContainer = {
+	has_flag: (number) -> boolean,
+}
+type Flags = { [number]: boolean } & FlagContainer
+local FlagContainer_for_Flags = {}
+FlagContainer_for_Flags.__index = FlagContainer_for_Flags
+FlagContainer_for_Flags = FlagContainer_for_Flags :: Flags
+function FlagContainer_for_Flags.has_flag(self: Flags, flag)
+	return self[flag] ~= nil
+end
+const flags = setmetatable({ [69] = true, [420] = true }, Loom.merge_meta(FlagContainer_for_Flags)) :: Flags
+print(flags:has_flag(69))
+```
+---
 ## typeof
 
 Inspect types of dynamic expressions.
@@ -1109,7 +1341,7 @@ local my_number = 69
 type NumberType = typeof(my_number)
 const x: NumberType = 420
 ```
-
+---
 ## Events
 
 Built-in syntaxes for creating, connecting, and disconnecting.
@@ -1162,6 +1394,8 @@ return { pi = pi, square = square }
 
 `double` is still emitted, but only the exported members (`pi`, `square`) appear in the returned table, so only they are visible to other modules.
 
+---
+
 ## `in` operator
 
 Check if a key/index exists within a collection
@@ -1177,7 +1411,7 @@ type Object = { field: number? }
 const object = { field = 69 }
 print(object.field ~= nil)
 ```
-
+---
 ## Destructuring
 
 Bind names directly to elements of collections or fields of objects.
@@ -1199,7 +1433,7 @@ const c = 3
 const name = person.name
 const age = person.age
 ```
-
+---
 ## Tuples
 
 Fixed-length collections that can be assigned to names or returned by functions directly and not create an intermediate table.
