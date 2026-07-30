@@ -1,0 +1,4 @@
+let v = 69 as unknown;
+if type_is(v, "number") {
+    print(v + 1);
+}

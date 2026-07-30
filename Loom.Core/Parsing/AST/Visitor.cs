@@ -101,6 +101,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
             [
                 VisitWithDefault(declareFunctionSignature.TypeParameters),
                 VisitWithDefault(declareFunctionSignature.Parameters),
+                VisitWithDefault(declareFunctionSignature.Attributes),
                 Visit(declareFunctionSignature.ReturnType)
             ]
         );

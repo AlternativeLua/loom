@@ -207,13 +207,16 @@ public sealed partial class TypeChecker
         return BindType(declare, type);
     }
 
-    public override Type VisitDeclareFunctionSignature(DeclareFunctionSignature declareFunctionSignature) =>
-        new Types.FunctionType(
+    public override Type VisitDeclareFunctionSignature(DeclareFunctionSignature declareFunctionSignature)
+    {
+        MaybeVisit(declareFunctionSignature.Attributes);
+        return new Types.FunctionType(
             declareFunctionSignature.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter) ?? [],
             declareFunctionSignature.Parameters?.ParameterList.ConvertAll(Visit) ?? [],
             Visit(declareFunctionSignature.ReturnType),
             HasRestParameter(declareFunctionSignature.Parameters)
         );
+    }
 
     private static bool HasRestParameter(Parameters? parameters) => parameters?.ParameterList is [.., { DotDot: not null }];
 

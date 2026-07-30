@@ -45,12 +45,20 @@ public sealed partial class Parser
         if (IsEof())
             return new ExpressionStatement(ParseExpression());
 
-        if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBeforeEvent())
+        if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBefore(SyntaxKind.EventKeyword))
         {
             var leftBracket = Advance();
             var attributes = ParseAttributes(leftBracket);
             var eventKeyword = Expect(SyntaxKind.EventKeyword);
             return ParseEventDeclaration(eventKeyword, attributes);
+        }
+
+        if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBefore(SyntaxKind.DeclareKeyword))
+        {
+            var leftBracket = Advance();
+            var attributes = ParseAttributes(leftBracket);
+            var declareKeyword = Expect(SyntaxKind.DeclareKeyword);
+            return ParseDeclare(declareKeyword, attributes);
         }
 
         var token = Advance();
@@ -62,10 +70,10 @@ public sealed partial class Parser
         return new ExpressionStatement(ParseExpression());
     }
 
-    private bool LooksLikeAttributesBeforeEvent()
+    private bool LooksLikeAttributesBefore(SyntaxKind keyword)
     {
         var end = OffsetAfterBrackets();
-        return end != null && PeekKind(end.Value + 1) == SyntaxKind.EventKeyword;
+        return end != null && PeekKind(end.Value + 1) == keyword;
     }
 
     private Block ParseBlock(Token leftBrace)

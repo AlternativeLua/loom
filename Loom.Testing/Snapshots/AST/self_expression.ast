@@ -58,6 +58,7 @@
             )
           ]
         )
+        Attributes: null
         TypeParameters: null
         Name: Token(Identifier, "get_value")
       )
@@ -118,6 +119,7 @@ Implement(
           RightParen: Token(RParen, ")")
           ParameterList: []
         )
+        Attributes: null
         TypeParameters: null
         Name: Token(Identifier, "display")
       )

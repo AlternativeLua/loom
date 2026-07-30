@@ -49,6 +49,7 @@
     ]
   )
   Parameters: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "returns_tuple")
 )

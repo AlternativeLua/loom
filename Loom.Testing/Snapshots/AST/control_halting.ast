@@ -40,6 +40,7 @@ Declare(
         Kind: Void
       )
     )
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "foo")
   )
@@ -159,6 +160,7 @@ FunctionDeclaration(
     Statements: []
   )
   Parameters: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "foo")
 )

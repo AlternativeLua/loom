@@ -338,6 +338,73 @@ public class TypeCheckerTest
         );
 
     [Fact]
+    public void Checks_TypeOf_ReturnsString() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                let v = 69 as unknown;
+                let kind: string = type_of(v);
+                """
+            )
+        );
+
+    [Fact]
+    public void Narrows_ParameterType_FromTypeIs_BasePrimitive() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                let v = 69 as unknown;
+                if type_is(v, "number") {
+                    v + 1
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Narrows_ParameterType_FromTypeIs_RobloxDataType() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                let v = none as never as unknown;
+                if type_is(v, "Vector3") {
+                    v.x
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_TypeIs_NonLiteralTypeNameArgument()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let v = 69 as unknown;
+            mut type_name = "number";
+            if type_is(v, type_name) {
+                v + 1
+            }
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void ThrowsFor_DeclareFunctionSignature_NonFunctionAttribute()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let not_a_function = 69;
+            [not_a_function]
+            declare fn foo(): void;
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Code == InternalCodes.NonFunctionAttribute);
+    }
+
+    [Fact]
     public void ThrowsFor_NonGenericFunctionCall_ArgumentTypeMismatch()
     {
         const string source = """

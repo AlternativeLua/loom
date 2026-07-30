@@ -226,11 +226,16 @@ public sealed partial class LuauGenerator
         if (_guardSubstitutions != null && _guardSubstitutions.TryGetValue(identifier.Name.Text, out var substitution))
             return substitution;
 
+        var symbol = _semanticModel.GetSymbol(identifier);
+        if (symbol is PropertySymbol propertySymbol
+            && propertySymbol.TryGetIntrinsicAttribute("luau_name", out var luauNameAttribute)
+            && ValidateLuauNameAttribute(luauNameAttribute, out var nameLiteral))
+            return new Luau.AST.Identifier(nameLiteral.Value);
+
         var luauIdentifier = new Luau.AST.Identifier(identifier.Name.Text);
         if (_macroExpander.TryGetInvocationMacroReference(identifier, luauIdentifier, out var referenceReplacement))
             return referenceReplacement;
 
-        var symbol = _semanticModel.GetSymbol(identifier);
         return symbol is { Kind: SymbolKind.InjectedPropertyVariable } || IsImplementMethodSymbol(symbol)
             ? new Luau.AST.PropertyAccess(LuauFactory.Self, [luauIdentifier.Name])
             : luauIdentifier;

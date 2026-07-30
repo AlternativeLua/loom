@@ -6,6 +6,7 @@
     Statements: []
   )
   Parameters: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "empty")
 )
@@ -53,6 +54,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "greet")
 )
@@ -110,6 +112,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "sum")
 )
@@ -146,6 +149,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "double")
 )
@@ -187,6 +191,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters(
     LeftArrow: Token(LArrow, "<")
     RightArrow: Token(RArrow, ">")
@@ -210,6 +215,7 @@ FunctionDeclaration(
     )
   )
   Parameters: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "abc")
 )
@@ -230,6 +236,7 @@ FunctionDeclaration(
     RightParen: Token(RParen, ")")
     ParameterList: []
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "noArgs")
 )
@@ -284,6 +291,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "multiParam")
 )
@@ -337,6 +345,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters(
     LeftArrow: Token(LArrow, "<")
     RightArrow: Token(RArrow, ">")
@@ -414,6 +423,7 @@ FunctionDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "expressionBody")
 )

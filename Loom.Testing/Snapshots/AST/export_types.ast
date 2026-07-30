@@ -92,6 +92,7 @@ ExportDeclaration(
               Kind: Void
             )
           )
+          Attributes: null
           TypeParameters: null
           Name: Token(Identifier, "draw")
         )

@@ -145,19 +145,32 @@ public sealed partial class Parser
             : new Attribute(baseExpression, null, null);
     }
 
-    private Statement ParseDeclare(Token declareKeyword)
+    private Statement ParseDeclare(Token declareKeyword) => ParseDeclare(declareKeyword, null);
+
+    private Statement ParseDeclare(Token declareKeyword, Attributes? attributes)
     {
-        var statement = ParseDeclareSignature(declareKeyword);
+        var statement = ParseDeclareSignature(declareKeyword, attributes);
         if (statement is not DeclareSignature signature)
             return statement;
 
         return new Declare(declareKeyword, signature);
     }
 
-    private Statement ParseDeclareSignature(Token declareKeyword)
+    private Statement ParseDeclareSignature(Token declareKeyword, Attributes? attributes)
     {
         if (Match(out var fnKeyword, SyntaxKind.FnKeyword))
-            return ParseDeclareFunctionSignature(fnKeyword);
+            return ParseDeclareFunctionSignature(fnKeyword, attributes);
+
+        if (attributes != null)
+        {
+            _diagnostics.Error(
+                attributes,
+                InternalCodes.AttributesNotSupportedOnDeclaration,
+                "Attributes are only supported on declared function signatures."
+            );
+
+            return new NullStatement(declareKeyword);
+        }
 
         if (Match(out var variableKeyword, SyntaxKind.LetKeyword, SyntaxKind.MutKeyword))
             return ParseDeclareVariableSignature(variableKeyword);
@@ -181,7 +194,7 @@ public sealed partial class Parser
         return new DeclareVariableSignature(variableKeyword, name, colonTypeClause!);
     }
 
-    private Statement ParseDeclareFunctionSignature(Token fnKeyword)
+    private Statement ParseDeclareFunctionSignature(Token fnKeyword, Attributes? attributes = null)
     {
         var name = ExpectIdentifier("function name");
         var typeParameters = ParseTypeParameters();
@@ -195,7 +208,7 @@ public sealed partial class Parser
             ))
             return new NullStatement(fnKeyword);
 
-        return new DeclareFunctionSignature(fnKeyword, name, typeParameters, parameters, returnType);
+        return new DeclareFunctionSignature(fnKeyword, name, typeParameters, parameters, returnType, attributes);
     }
 
     private Statement ParseFunctionDeclaration(Token keyword)

@@ -857,6 +857,39 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Resolves_AttributedDeclareFunctionSignature_AsPropertySymbol_WithLuauNameAttribute()
+    {
+        var model = Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                [luau_name("typeof")]
+                declare fn type_of(value: unknown): string;
+                """
+            )
+        );
+
+        var declare = Assert.IsType<Declare>(model.Tree.Statements.Single());
+        var signature = Assert.IsType<DeclareFunctionSignature>(declare.Signature);
+        var symbol = Assert.IsType<PropertySymbol>(model.GetDeclarationSymbol(signature, SymbolKind.Function));
+
+        Assert.True(symbol.TryGetIntrinsicAttribute("luau_name", out var attribute));
+        Assert.Equal("luau_name", attribute!.Name);
+    }
+
+    [Fact]
+    public void Resolves_NonAttributedDeclareFunctionSignature_AsPlainSymbol()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("declare fn print(..data: unknown[]): void;"));
+
+        var declare = Assert.IsType<Declare>(model.Tree.Statements.Single());
+        var signature = Assert.IsType<DeclareFunctionSignature>(declare.Signature);
+        var symbol = model.GetDeclarationSymbol(signature, SymbolKind.Function);
+
+        Assert.NotNull(symbol);
+        Assert.IsNotType<PropertySymbol>(symbol);
+    }
+
+    [Fact]
     public void Resolves_BareCall_ToMethodFromOtherImplementedTrait()
     {
         var model = Utility.AssertNoErrors(

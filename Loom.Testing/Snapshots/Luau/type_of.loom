@@ -1,0 +1,5 @@
+let v = 69 as unknown;
+print(type_of(v));
+
+let f = type_of;
+print(f(v));

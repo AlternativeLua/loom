@@ -92,7 +92,19 @@ public sealed partial class Resolver
 
     public override bool VisitDeclareFunctionSignature(DeclareFunctionSignature declareFunctionSignature)
     {
-        if (!DeclareVariable(declareFunctionSignature, SymbolKind.Function))
+        var declared = declareFunctionSignature.Attributes != null
+            ? DeclareVariable(
+                declareFunctionSignature,
+                new PropertySymbol(
+                    declareFunctionSignature,
+                    null,
+                    declareFunctionSignature.Attributes.AttributeList.Select(DeclareAttribute).ToList(),
+                    SymbolKind.Function
+                )
+            )
+            : DeclareVariable(declareFunctionSignature, SymbolKind.Function);
+
+        if (!declared)
             return false;
 
         PushScope();

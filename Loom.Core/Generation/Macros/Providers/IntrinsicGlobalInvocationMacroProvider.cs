@@ -3,6 +3,7 @@ using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Luau;
 using Loom.Luau.AST;
+using BinaryOperator = Loom.Luau.AST.BinaryOperator;
 using Identifier = Loom.Luau.AST.Identifier;
 using Type = Loom.Core.TypeChecking.Types.Type;
 
@@ -15,7 +16,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
     public bool Supports(SemanticModel semanticModel, Expression expression) =>
         expression is Parsing.AST.Identifier && semanticModel.GetSymbol(expression) is { IsIntrinsic: true };
 
-    public bool IsInvocationOnlyMember(string memberName) => memberName is "string" or "number" or "new_instance" or "get_service";
+    public bool IsInvocationOnlyMember(string memberName) => memberName is "string" or "number" or "new_instance" or "get_service" or "type_is";
 
     public bool TryInvocation(
         MacroContext context,
@@ -41,6 +42,9 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                 return true;
             case "number":
                 expression = new Call(new Identifier("tonumber"), call.Arguments);
+                return true;
+            case "type_is":
+                expression = new BinaryOperator(new Call(new Identifier("typeof"), [call.Arguments[0]]), "==", call.Arguments[1]);
                 return true;
         }
 

@@ -16,7 +16,7 @@ public class FunctionDeclaration(
         typeParameters,
         parameters,
         returnType!,
-        body
+        extraChildren: [body]
     )
 {
     public new ColonTypeClause? ReturnType { get; } = returnType;

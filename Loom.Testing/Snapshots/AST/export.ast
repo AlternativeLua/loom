@@ -37,6 +37,7 @@ ExportDeclaration(
       )
     )
     Parameters: null
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "do_something")
   )

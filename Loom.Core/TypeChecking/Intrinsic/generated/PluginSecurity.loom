@@ -10554,3 +10554,63 @@ declare interface ServiceInstance: Instance { _is_service: true; }
 declare fn new_instance<T: CreatableInstance>: T;
 declare fn get_service<T: ServiceInstance>: T;
 
+interface Table;
+
+interface TypeNameMap {
+    nil: none;
+    boolean: bool;
+    number: number;
+    string: string;
+    table: Table;
+    function: fn(..args: unknown[]): unknown;
+    thread: thread;
+    buffer: buffer;
+    userdata: unknown;
+    Instance: Instance;
+    EnumItem: EnumItem<string>;
+    Enum: Enum;
+    RBXScriptSignal: ScriptSignal;
+    RBXScriptConnection: ScriptConnection;
+    SecurityCapabilities: SecurityCapabilities;
+    DateTime: DateTime;
+    Content: Content;
+    Vector2: Vector2;
+    Vector2int16: Vector2int16;
+    Vector3: Vector3;
+    Vector3int16: Vector3int16;
+    CFrame: CFrame;
+    Region3int16: Region3int16;
+    Region3: Region3;
+    Color3: Color3;
+    BrickColor: BrickColor;
+    Ray: Ray;
+    RaycastResult: RaycastResult;
+    RaycastParams: RaycastParams;
+    OverlapParams: OverlapParams;
+    UDim: UDim;
+    UDim2: UDim2;
+    Random: Random;
+    NumberRange: NumberRange;
+    NumberSequenceKeypoint: NumberSequenceKeypoint;
+    NumberSequence: NumberSequence;
+    ColorSequenceKeypoint: ColorSequenceKeypoint;
+    ColorSequence: ColorSequence;
+    Rect: Rect;
+    Axes: Axes;
+    Faces: Faces;
+    PhysicalProperties: PhysicalProperties;
+    Path2DControlPoint: Path2DControlPoint;
+    RotationCurveKey: RotationCurveKey;
+    FloatCurveKey: FloatCurveKey;
+    ValueCurveKey: ValueCurveKey;
+    Font: Font;
+    Secret: Secret;
+    DockWidgetPluginGuiInfo: DockWidgetPluginGuiInfo;
+    CatalogSearchParams: CatalogSearchParams;
+    TweenInfo: TweenInfo;
+    SharedTable: SharedTable;
+    User: User;
+}
+
+declare fn type_is<T: keyof (TypeNameMap)>(value: unknown, type_name: T): value is TypeNameMap[T];
+
