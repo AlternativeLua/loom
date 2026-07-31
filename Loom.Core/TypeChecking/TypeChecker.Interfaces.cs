@@ -198,12 +198,19 @@ public sealed partial class TypeChecker
 
     private InterfaceType BindInterfaceInvocation(InterfaceInvocation node, InterfaceType interfaceType, List<ObjectProperty> traitProperties)
     {
-        var traitMethodNames = traitProperties.Select(p => p.Name).ToHashSet();
         CheckInterfaceInvocationInitializers(node, interfaceType);
-        interfaceType.ObjectType.AddProperties(traitProperties);
-        interfaceType.TraitMethodNames = traitMethodNames;
 
-        return BindType(node, interfaceType);
+        // A fresh ObjectType/InterfaceType is built here rather than mutating interfaceType.ObjectType in place,
+        // since interfaceType is the shared instance cached for the interface declaration; mutating it would leak
+        // trait methods into the structural property list for every other construction site of the same interface.
+        var traitMethodNames = traitProperties.Select(p => p.Name).ToHashSet();
+        var objectType = new ObjectType(interfaceType.ObjectType.Indexer, [..interfaceType.ObjectType.Properties, ..traitProperties]);
+        var boundType = new InterfaceType(interfaceType.Name, interfaceType.Constraints, objectType)
+        {
+            TraitMethodNames = traitMethodNames
+        };
+
+        return BindType(node, boundType);
     }
 
     private bool TrySubstituteGenericInterface(

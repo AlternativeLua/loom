@@ -1411,6 +1411,33 @@ public class TypeCheckerTest
         );
 
     [Fact]
+    public void Allows_RepeatedInterfaceInvocation_WithImplementedTraitMethod() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                trait Greetable {
+                    fn greet(): void
+                }
+
+                interface Person {
+                    name: string
+                }
+
+                implement Greetable for Person {
+                    fn greet() {
+                        print(@.name)
+                    }
+                }
+
+                let p1 = new Person { name: "Alice" };
+                let p2 = new Person { name: "Bob" };
+                p1.greet();
+                p2.greet();
+                """
+            )
+        );
+
+    [Fact]
     public void Allows_Implement_ReturnInference() =>
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(
