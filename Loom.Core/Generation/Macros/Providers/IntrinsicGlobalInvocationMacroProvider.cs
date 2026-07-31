@@ -38,10 +38,16 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
 
                 return true;
             case "string":
-                expression = new Call(new Identifier("tostring"), call.Arguments);
+                expression = TryFoldToString(call.Arguments[0], out var stringLiteral)
+                    ? stringLiteral
+                    : new Call(new Identifier("tostring"), call.Arguments);
+
                 return true;
             case "number":
-                expression = new Call(new Identifier("tonumber"), call.Arguments);
+                expression = call.Arguments[0] is StringLiteral numberSource
+                    ? LuauNumberFormat.TryParse(numberSource.Value, out var parsed) ? new NumberLiteral(parsed) : new NilLiteral()
+                    : new Call(new Identifier("tonumber"), call.Arguments);
+
                 return true;
             case "type_is":
                 expression = new BinaryOperator(new Call(new Identifier("typeof"), [call.Arguments[0]]), "==", call.Arguments[1]);
@@ -50,5 +56,30 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
 
         expression = null;
         return false;
+    }
+
+    private static bool TryFoldToString(LuauExpression argument, [MaybeNullWhen(false)] out StringLiteral folded)
+    {
+        switch (argument)
+        {
+            case StringLiteral stringLiteral:
+                folded = stringLiteral;
+                return true;
+            case BooleanLiteral booleanLiteral:
+                folded = new StringLiteral(booleanLiteral.Value ? "true" : "false");
+                return true;
+            case NilLiteral:
+                folded = new StringLiteral("nil");
+                return true;
+            default:
+                if (MacroContext.TryComputeConstantArithmetic(argument, out var number))
+                {
+                    folded = new StringLiteral(LuauNumberFormat.ToLuauString(number));
+                    return true;
+                }
+
+                folded = null;
+                return false;
+        }
     }
 }

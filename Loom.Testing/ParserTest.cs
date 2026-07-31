@@ -818,7 +818,7 @@ public class ParserTest
     [InlineData("1.23e3", 1230L)]
     [InlineData("420.69", 420.69d)]
     [InlineData("1.2345e3", 1234.5)]
-    [InlineData("1_0_0________.6_9e5_1", long.MaxValue)]
+    [InlineData("1_0_0________.6_9e5_1", 1.0069e53)]
     [InlineData("5s", 5L)]
     [InlineData("500ms", 0.5)]
     [InlineData("20hz", 0.05)]

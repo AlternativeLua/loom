@@ -5265,18 +5265,14 @@ public class TypeCheckerTest
     }
 
     [Fact]
-    public void Checks_Intrinsic_Number_WithRadix_ReturnsOptionalNumber()
+    public void ThrowsFor_Intrinsic_Number_WithRadixArgument()
     {
-        var type = Utility.GetLastStatementType("number('ff', 16)");
-        var optional = Assert.IsType<OptionalType>(type);
-        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
-    }
-
-    [Fact]
-    public void ThrowsFor_Intrinsic_Number_WrongRadixArgumentType()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics("number('ff', 'sixteen')");
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '\"sixteen\"' is not assignable to type 'number?'.");
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("number('ff', 16)");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvocationArity,
+            "Function expects 1 argument, but 2 were provided."
+        );
     }
 
     [Fact]

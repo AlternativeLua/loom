@@ -22,7 +22,11 @@ public static class LiteralUtility
     {
         var value = ParseNumberValue(token);
         const double epsilon = 2.220446049250313e-16;
-        if (Math.Abs(Math.Floor(value) - value) < epsilon)
+        const double longMinValue = -9223372036854775808.0; // long.MinValue, exactly representable as a double
+        const double longMaxValueExclusive = 9223372036854775808.0; // one past long.MaxValue (long.MaxValue itself isn't exactly representable)
+
+        var fitsInLong = value >= longMinValue && value < longMaxValueExclusive;
+        if (fitsInLong && Math.Abs(Math.Floor(value) - value) < epsilon)
             return (long)value;
 
         return value;

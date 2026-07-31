@@ -82,52 +82,87 @@ public class MacroExpanderTest
         Assert.IsType<AnonymousFunction>(Assert.Single(idCall.Arguments));
     }
 
-    [Fact]
-    public void Generates_GlobalInvocation_Number_WithRadix()
+    [Theory]
+    [InlineData("'420'", 420)]
+    [InlineData("'69420'", 69420)]
+    [InlineData("'1e+100'", 1e100)]
+    [InlineData("'0xFF'", 255)]
+    [InlineData("'  0x1A  '", 26)]
+    public void Generates_GlobalInvocation_Number_FoldsLiteralString(string literal, double expected)
     {
-        const string source = "number('420', 16)";
+        var source = $"number({literal})";
         var luauTree = Utility.GetLuauAST(source);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
         Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var numberLiteral = Assert.IsType<NumberLiteral>(variable.Initializer);
+        Assert.Equal(expected, numberLiteral.Value);
+    }
+
+    [Fact]
+    public void Generates_GlobalInvocation_Number_FoldsInvalidLiteralStringToNil()
+    {
+        const string source = "number('not a number')";
+        var luauTree = Utility.GetLuauAST(source);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        Assert.IsType<NilLiteral>(variable.Initializer);
+    }
+
+    [Fact]
+    public void Generates_GlobalInvocation_Number_FallsBackForNonLiteral()
+    {
+        const string source = """
+            let x = '420';
+            number(x);
+            """;
+
+        var luauTree = Utility.GetLuauAST(source);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
         var expressionStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
         var tonumberCall = Assert.IsType<Call>(expressionStatement.Expression);
         var identifier = Assert.IsType<Identifier>(tonumberCall.Callee);
         Assert.Equal("tonumber", identifier.Name);
-
-        Assert.Equal(2, tonumberCall.Arguments.Count);
-        Assert.IsType<StringLiteral>(tonumberCall.Arguments.First());
-        Assert.IsType<NumberLiteral>(tonumberCall.Arguments.Last());
+        Assert.IsType<Identifier>(Assert.Single(tonumberCall.Arguments));
     }
 
-    [Fact]
-    public void Generates_GlobalInvocation_Number()
+    [Theory]
+    [InlineData("69", "69")]
+    [InlineData("69420", "69420")]
+    [InlineData("1e100", "1e+100")]
+    [InlineData("-5", "-5")]
+    public void Generates_GlobalInvocation_String_FoldsLiteralNumber(string literal, string expected)
     {
-        const string source = "number('420')";
+        var source = $"string({literal})";
         var luauTree = Utility.GetLuauAST(source);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
         Assert.Single(luauTree.Statements);
 
-        var expressionStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
-        var tonumberCall = Assert.IsType<Call>(expressionStatement.Expression);
-        var identifier = Assert.IsType<Identifier>(tonumberCall.Callee);
-        Assert.Equal("tonumber", identifier.Name);
-        Assert.IsType<StringLiteral>(Assert.Single(tonumberCall.Arguments));
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var stringLiteral = Assert.IsType<StringLiteral>(variable.Initializer);
+        Assert.Equal(expected, stringLiteral.Value);
     }
 
     [Fact]
-    public void Generates_GlobalInvocation_String()
+    public void Generates_GlobalInvocation_String_FallsBackForNonLiteral()
     {
-        const string source = "string(69)";
+        const string source = """
+            let x = 69420;
+            string(x);
+            """;
+
         var luauTree = Utility.GetLuauAST(source);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
-        Assert.Single(luauTree.Statements);
 
         var expressionStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
         var tostringCall = Assert.IsType<Call>(expressionStatement.Expression);
         var identifier = Assert.IsType<Identifier>(tostringCall.Callee);
         Assert.Equal("tostring", identifier.Name);
-        Assert.IsType<NumberLiteral>(Assert.Single(tostringCall.Arguments));
+        Assert.IsType<Identifier>(Assert.Single(tostringCall.Arguments));
     }
 
     [Fact]

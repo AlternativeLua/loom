@@ -16,7 +16,7 @@ declare fn override: void;
 
 declare fn print(..data: unknown[]): void;
 declare fn string(value: unknown): string;
-declare fn number(value: unknown, radix: number?): number?;
+declare fn number(value: unknown): number?;
 
 [luau_name("typeof")]
 declare fn type_of(value: unknown): string;
