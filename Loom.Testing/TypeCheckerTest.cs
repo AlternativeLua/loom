@@ -6685,6 +6685,64 @@ public class TypeCheckerTest
 
         Assert.Single(diagnostics.Set, d => d.Code == InternalCodes.NonFunctionAttribute);
     }
+
+    [Fact]
+    public void Checks_DeclareEvent_TypesAsConsumerEvent()
+    {
+        const string source = "declare event consumer(param: string);";
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+
+        var type = Utility.GetLastStatementType(source);
+        var instantiated = Assert.IsType<InstantiatedType>(type);
+        Assert.Equal("ConsumerEvent", instantiated.GenericType.Declaration.Name.Text);
+        Assert.True(
+            instantiated.Arguments.TakeWhile(Type.IsDefined).Single().Equals(PrimitiveType.String),
+            $"Expected first event argument to be 'string', got '{instantiated.Arguments.FirstOrDefault()}'"
+        );
+    }
+
+    [Fact]
+    public void Checks_DeclareEvent_Connect_TypesAsEventConnection()
+    {
+        const string source = """
+            declare event consumer(param: string);
+
+            fn on_consumer(p: string): void { }
+            consumer += on_consumer
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+        var type = Utility.GetLastStatementType(source);
+        var interfaceType = Assert.IsType<InterfaceType>(type);
+        Assert.Equal("ScriptConnection", interfaceType.Name);
+    }
+
+    [Fact]
+    public void ThrowsFor_FiringConsumerEvent_ThroughDeclareEvent()
+    {
+        const string source = """
+            declare event consumer(param: string);
+            consumer("abc")
+            """;
+
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(source);
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidInvocation,
+            "Consumer events may only be observed, not fired."
+        );
+    }
+
+    [Fact]
+    public void Checks_DeclareEvent_WithAttribute_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [luau_name("OnConsume")]
+                declare event consumer(param: string);
+                """
+            )
+        );
     #endregion Events
 
     #region Match

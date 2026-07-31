@@ -161,12 +161,15 @@ public sealed partial class Parser
         if (Match(out var fnKeyword, SyntaxKind.FnKeyword))
             return ParseDeclareFunctionSignature(fnKeyword, attributes);
 
+        if (Match(out var eventKeyword, SyntaxKind.EventKeyword))
+            return ParseEventDeclaration(eventKeyword, attributes);
+
         if (attributes != null)
         {
             _diagnostics.Error(
                 attributes,
                 InternalCodes.AttributesNotSupportedOnDeclaration,
-                "Attributes are only supported on declared function signatures."
+                "Attributes are only supported on declared function and event signatures."
             );
 
             return new NullStatement(declareKeyword);

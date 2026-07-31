@@ -1974,6 +1974,22 @@ public class ResolverTest
         var model = Utility.GetSemanticModel("{ declare fn helper(): string; helper; }");
         Utility.AssertNoErrors(model);
     }
+
+    [Fact]
+    public void Declares_DeclareEventSymbol()
+    {
+        var model = Utility.AssertNoErrors(Utility.GetSemanticModel("declare event consumer(param: string);"));
+
+        var declare = Assert.IsType<Declare>(model.Tree.Statements.Single());
+        var sig = Assert.IsType<EventDeclaration>(declare.Signature);
+        var symbol = model.GetDeclarationSymbol(sig, SymbolKind.Event);
+        Assert.NotNull(symbol);
+        Assert.Equal("consumer", symbol.Name);
+        Assert.Equal(SymbolKind.Event, symbol.Kind);
+        Assert.Equal(sig, symbol.Declaration);
+        Assert.True(symbol.IsAmbient);
+        Assert.False(symbol.IsMutable);
+    }
     #endregion Declares
 
     #region ReservedLuauKeywords

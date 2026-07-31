@@ -27,6 +27,7 @@ public class LuauGeneratorTest
     [InlineData("declare let x: number;")]
     [InlineData("declare mut x: number;")]
     [InlineData("declare fn x(): number;")]
+    [InlineData("declare event x(param: number);")]
     [InlineData("import { square } from \"./math\"")]
     [InlineData("import { square as sq } from \"./math\"")]
     [InlineData("import type { Vector } from \"./vector\"")]

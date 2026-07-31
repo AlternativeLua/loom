@@ -200,6 +200,7 @@ public sealed partial class TypeChecker
             InterfaceDeclaration interfaceDeclaration => Visit(interfaceDeclaration),
             DeclareVariableSignature variableSignature => Visit(variableSignature.ColonTypeClause!),
             DeclareFunctionSignature functionSignature => Visit(functionSignature),
+            EventDeclaration eventDeclaration => Visit(eventDeclaration),
             _ => Types.PrimitiveType.Never
         };
 

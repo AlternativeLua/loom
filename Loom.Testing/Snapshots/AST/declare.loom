@@ -7,3 +7,6 @@ declare let x: number
 declare mut y: string
 declare interface I;
 declare interface Abc { balls: number }
+declare event consumer(param: string)
+[luau_name("OnConsume")]
+declare event on_consume
