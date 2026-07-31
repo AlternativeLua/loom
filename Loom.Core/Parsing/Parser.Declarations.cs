@@ -36,7 +36,9 @@ public sealed partial class Parser
         return members.OfType<DeclareFunctionSignature>().ToList();
     }
 
-    private InterfaceDeclaration ParseInterfaceDeclaration(Token keyword)
+    private InterfaceDeclaration ParseInterfaceDeclaration(Token keyword) => ParseInterfaceDeclaration(keyword, null);
+
+    private InterfaceDeclaration ParseInterfaceDeclaration(Token keyword, Attributes? attributes)
     {
         var isSealed = keyword.Kind == SyntaxKind.SealedKeyword;
         var interfaceKeyword = isSealed ? Expect(SyntaxKind.InterfaceKeyword) : keyword;
@@ -52,7 +54,8 @@ public sealed partial class Parser
             name,
             typeParameters,
             colonTypeListClause,
-            body
+            body,
+            attributes
         );
     }
 
@@ -214,20 +217,15 @@ public sealed partial class Parser
         return new DeclareFunctionSignature(fnKeyword, name, typeParameters, parameters, returnType, attributes);
     }
 
-    private Statement ParseFunctionDeclaration(Token keyword)
+    private Statement ParseFunctionDeclaration(Token keyword) => ParseFunctionDeclaration(keyword, null);
+
+    private Statement ParseFunctionDeclaration(Token keyword, Attributes? attributes)
     {
         var name = ExpectIdentifier("function name");
         var typeParameters = ParseTypeParameters();
         var parameters = ParseParameters();
         var returnType = ParseColonTypeClause();
-
-        Statement body;
-        if (Match(out var leftBrace, SyntaxKind.LBrace))
-            body = ParseBlock(leftBrace);
-        else if (Match(out var arrow, SyntaxKind.Arrow))
-            body = new ExpressionBody(arrow, ParseExpression());
-        else
-            body = new NullStatement(Current());
+        var body = ParseFunctionBody();
 
         if (body is not NullStatement nullStatement)
             return new FunctionDeclaration(
@@ -236,7 +234,8 @@ public sealed partial class Parser
                 typeParameters,
                 parameters,
                 returnType,
-                body
+                body,
+                attributes
             );
 
         _diagnostics.Error(
@@ -246,6 +245,36 @@ public sealed partial class Parser
         );
 
         return new NullStatement(nullStatement.Token);
+    }
+
+    private Expression ParseFunctionExpression(Token keyword)
+    {
+        var typeParameters = ParseTypeParameters();
+        var parameters = ParseParameters();
+        var returnType = ParseColonTypeClause();
+        var body = ParseFunctionBody();
+
+        if (body is not NullStatement nullStatement)
+            return new FunctionExpression(keyword, typeParameters, parameters, returnType, body);
+
+        _diagnostics.Error(
+            nullStatement.Token ?? Current(),
+            InternalCodes.MissingFunctionBody,
+            $"Expected function body, got {SafeTokenText(nullStatement.Token)}."
+        );
+
+        return new NullExpression(nullStatement.Token ?? Current());
+    }
+
+    private Statement ParseFunctionBody()
+    {
+        if (Match(out var leftBrace, SyntaxKind.LBrace))
+            return ParseBlock(leftBrace);
+
+        if (Match(out var arrow, SyntaxKind.Arrow))
+            return new ExpressionBody(arrow, ParseExpression());
+
+        return new NullStatement(Current());
     }
 
     private TypeAlias ParseTypeAlias(Token keyword)

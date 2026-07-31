@@ -160,6 +160,8 @@ internal static class EventConnectionScopeAnalyzer
                     return (new ScopeId(after), current);
                 case FunctionDeclaration function when function.Body == current:
                     return (new ScopeId(function), current);
+                case FunctionExpression function when function.Body == current:
+                    return (new ScopeId(function), current);
             }
 
             current = parent;

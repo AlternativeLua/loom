@@ -33,6 +33,21 @@ public sealed partial class Resolver
         return true;
     }
 
+    public override bool VisitFunctionExpression(FunctionExpression functionExpression)
+    {
+        PushScope();
+        var lastContext = _context;
+        _context = ResolverContext.Function;
+        if (functionExpression.Body is Block { Statements: [Return] })
+            _diagnostics.Warn(functionExpression, InternalCodes.RedundantCode, "Use expression body.");
+
+        base.VisitFunctionExpression(functionExpression);
+        _context = lastContext;
+        PopScope();
+
+        return true;
+    }
+
     public override bool VisitTypeAlias(TypeAlias typeAlias)
     {
         if (!DeclareType(typeAlias))

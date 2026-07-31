@@ -7399,4 +7399,371 @@ public class TypeCheckerTest
         );
     }
     #endregion Match
+
+    #region Is
+    [Fact]
+    public void Checks_IsExpression_TypesAsBool()
+    {
+        const string source = """
+            interface Foo {}
+            let value = none as never as Foo;
+            value is Foo
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+        Assert.True(Utility.GetLastStatementType(source).Equals(PrimitiveType.Bool));
+    }
+
+    [Fact]
+    public void Narrows_VariableType_FromIsExpression() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                interface Foo { some_field: number }
+                let value = none as never as Foo | number;
+                if value is Foo {
+                    value.some_field
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Narrows_VariableType_FromIsExpression_ElseBranch() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                interface Foo { some_field: number }
+                let value = none as never as Foo | number;
+                if value is number {
+                    value + 1
+                } else {
+                    value.some_field
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_IsExpression_ObjectPatternField_BindsNarrowedType() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                interface Foo { some_field: number }
+                let value = none as never as Foo;
+                if value is Foo { some_field: x } {
+                    x + 1
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_IsExpression_IncompatiblePattern()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            mut value: string = "hello";
+            value is number
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Pattern of type 'number' cannot match value of type 'string'.");
+    }
+    #endregion Is
+
+    #region Function Expressions
+    [Fact]
+    public void Checks_FunctionExpression_InfersReturnTypeFromBlockBody()
+    {
+        const string source = "let f = fn(x: number) { return x + 1; };";
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+
+        var functionType = Assert.IsType<FunctionType>(Utility.GetLastStatementType(source));
+        Assert.True(functionType.ReturnType.Equals(PrimitiveType.Number));
+    }
+
+    [Fact]
+    public void Checks_FunctionExpression_InfersReturnTypeFromArrowBody()
+    {
+        const string source = "let f = fn(x: number) -> x + 1;";
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+
+        var functionType = Assert.IsType<FunctionType>(Utility.GetLastStatementType(source));
+        Assert.True(functionType.ReturnType.Equals(PrimitiveType.Number));
+    }
+
+    [Fact]
+    public void Checks_FunctionExpression_AsHigherOrderArgument() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn call_with_ten(f: fn(n: number): number): number {
+                    return f(10);
+                }
+                call_with_ten(fn(n: number): number { return n * 2; })
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_FunctionExpression_CapturesOuterVariable()
+    {
+        const string source = """
+            let x = 5;
+            let f = fn(): number { return x; };
+            f()
+            """;
+
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+        Assert.True(Utility.GetLastStatementType(source).Equals(PrimitiveType.Number));
+    }
+
+    [Fact]
+    public void ThrowsFor_FunctionExpression_ReturnTypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let f = fn(): number { return \"oops\"; };");
+        Assert.Contains(diagnostics.Set, d => d.Severity == DiagnosticSeverity.Error);
+    }
+
+    [Fact]
+    public void Checks_FunctionExpression_ReturnedFromFunctionDeclaration_TypesAsNestedFunctionType()
+    {
+        const string source = "fn make_adder(x: number) -> fn(y: number): number { return x + y; };";
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics(source));
+
+        var outer = Assert.IsType<FunctionType>(Utility.GetLastStatementType(source));
+        var inner = Assert.IsType<FunctionType>(outer.ReturnType);
+        Assert.True(inner.ReturnType.Equals(PrimitiveType.Number));
+    }
+    #endregion Function Expressions
+
+    #region Decorators
+    [Fact]
+    public void Checks_BareDecoratorAttribute_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn log(f: fn(): void, name: string): void { f(); }
+                [log]
+                fn do_something() { }
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_GenericDecoratorFactory_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn log(ctx: string) -> fn<T>(f: fn(): T, name: string): T {
+                    print(ctx);
+                    return f();
+                };
+
+                [log("info")]
+                fn do_something -> print("did something!");
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_Decorator_OnFunctionWithParameters_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn log(f: fn(): number, name: string): number { return f(); }
+
+                [log]
+                fn add(a: number, b: number): number {
+                    return a + b;
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_ChainedDecorators_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn a(f: fn(): void, name: string): void { f(); }
+                fn b(f: fn(): void, name: string): void { f(); }
+
+                [a, b]
+                fn do_something() { }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_Decorator_ReturnTypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn bad_decorator(f: fn(): number, name: string): string {
+                return "oops";
+            }
+
+            [bad_decorator]
+            fn compute(): number {
+                return 42;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidDecorator,
+            "Decorator must return a value assignable to 'number', but returns 'string'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Decorator_WrongArity()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn one_arg(f: fn(): number): number {
+                return f();
+            }
+
+            [one_arg]
+            fn compute(): number {
+                return 42;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidDecorator,
+            "Decorators must accept the decorated value and its name as arguments."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Decorator_NonFunctionAttribute()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            let not_a_function = 1;
+            [not_a_function]
+            fn do_something() { }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.NonFunctionAttribute, "Only functions may be used as attributes.");
+    }
+
+    [Fact]
+    public void Checks_InterfaceDecorator_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+                [validate]
+                interface Foo { x: number }
+                let foo = new Foo { x: 1 };
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_InterfaceDecorator_ReturnTypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn bad_validate(f: fn(): Foo, name: string): number { return 1; }
+            [bad_validate]
+            interface Foo { x: number }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return a value assignable to 'Foo', but returns 'number'.");
+    }
+
+    [Fact]
+    public void Checks_TopLevelEventDecorator_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn log_event(f: fn(): Event<number>, name: string): Event<number> { return f(); }
+                [log_event]
+                event scored(points: number);
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_TopLevelEventDecorator_ReturnTypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn bad_log(f: fn(): Event<number>, name: string): number { return 1; }
+            [bad_log]
+            event scored(points: number);
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Code == InternalCodes.InvalidDecorator);
+    }
+
+    [Fact]
+    public void Checks_InterfaceMemberEventAttribute_NotValidatedAsDecorator() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                let not_a_valid_decorator_shape = 1;
+                fn only_one_arg(x: number): void { }
+                interface Foo {
+                    [only_one_arg]
+                    event bar(x: number);
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_PropertyDecorator_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                fn clamp(f: fn(): number, name: string): number { return f(); }
+                interface Account {
+                    [clamp]
+                    balance: number
+                }
+                let a = new Account { balance: 10 };
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_PropertyDecorator_ReturnTypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn bad_clamp(f: fn(): number, name: string): string { return "oops"; }
+            interface Account {
+                [bad_clamp]
+                balance: number
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return a value assignable to 'number', but returns 'string'.");
+    }
+
+    [Fact]
+    public void Checks_IntrinsicAttribute_OnEvent_NotTreatedAsDecorator() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [luau_name("NotUsed")]
+                event my_event(param: string);
+                """
+            )
+        );
+    #endregion Decorators
 }

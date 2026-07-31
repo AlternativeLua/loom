@@ -18,6 +18,7 @@
           RightBracket: Token(RBracket, "]")
           AttributeList: [
             Attribute(
+              IsInvoked: False
               Expression: Identifier(
                 Name: Token(Identifier, "some_attribute")
                 Token(Identifier, "some_attribute")
@@ -30,6 +31,7 @@
               )
             )
             Attribute(
+              IsInvoked: True
               Expression: Identifier(
                 Name: Token(Identifier, "other_attribute")
                 Token(Identifier, "other_attribute")
@@ -56,6 +58,7 @@
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "Abc")
 )

@@ -254,4 +254,21 @@ public sealed partial class Parser
             ? new ObjectPatternField(name, null, new IdentifierPattern(name))
             : new ObjectPatternField(name, colon, ParsePattern());
     }
+
+    private TypePattern ParseIsPattern()
+    {
+        var identifier = ExpectIdentifier("type name");
+        var typeArguments = ParseTypeArguments();
+        TypeExpression type = SyntaxFacts.IsPrimitiveType(identifier.Text) && typeArguments == null
+            ? new PrimitiveType(identifier)
+            : new TypeName(identifier, typeArguments);
+
+        ObjectPattern? objectPattern = null;
+        if (Current().Kind == SyntaxKind.LBrace && LooksLikeIsObjectPattern())
+            objectPattern = ParseObjectPattern(Advance());
+
+        return new TypePattern(type, objectPattern);
+    }
+
+    private bool LooksLikeIsObjectPattern() => PeekKind(1) == SyntaxKind.Identifier && PeekKind(2) is SyntaxKind.Colon or SyntaxKind.Comma or SyntaxKind.RBrace;
 }

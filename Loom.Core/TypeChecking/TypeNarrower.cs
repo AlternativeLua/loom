@@ -74,8 +74,26 @@ public sealed class TypeNarrower
             UnaryOperator { Operator.Kind: SyntaxKind.Bang } not => NarrowLogicalNot(not, current),
             Parenthesized p => ComputeBranchStates(p.Expression, current),
             Invocation invocation => NarrowTypePredicate(invocation, current),
+            Is isExpression => NarrowIsOperator(isExpression, current),
             _ => NarrowBooleanCondition(condition, current)
         };
+
+    private BranchStates NarrowIsOperator(Is isExpression, FlowState current)
+    {
+        if (GetFlowAddress(isExpression.Expression) is not { } address)
+            return new BranchStates(current, current);
+
+        if (GetBaseExpressionType(isExpression.Expression, current) is not { } baseType)
+            return new BranchStates(current, current);
+
+        var patternType = _semanticModel.GetType(isExpression.Pattern.Type);
+        var trueBuilder = current.ToBuilder();
+        var falseBuilder = current.ToBuilder();
+        trueBuilder.NarrowedTypes[address] = patternType;
+        falseBuilder.NarrowedTypes[address] = RemoveType(baseType, patternType);
+
+        return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
+    }
 
     // Treats `"field" in object` the same as `object.field != none`, even though `object.field` never
     // literally appears in the `in` expression's AST - narrowing keys off FlowAddress (not AST node

@@ -57,6 +57,16 @@ public abstract class Node
         return null;
     }
 
+    public Node? FirstAncestorImplementing<T>()
+        where T : class
+    {
+        for (var node = Parent; node != null; node = node.Parent)
+            if (node is T)
+                return node;
+
+        return null;
+    }
+
     private TextSpan DeriveSpan() =>
         Tokens.Count == 0
             ? TextSpan.Empty

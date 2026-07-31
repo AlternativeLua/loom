@@ -122,8 +122,10 @@ public sealed partial class TypeChecker
 
     private Type? GetEnclosingDeclaredReturnType(Return @return)
     {
-        var enclosingFunction = @return.FirstAncestorOfType<FunctionDeclaration>();
-        return enclosingFunction?.ReturnType != null
+        if (@return.FirstAncestorImplementing<IFunctionLike>() is not { } enclosingFunction)
+            return null;
+
+        return ((IFunctionLike)enclosingFunction).ReturnType != null
             ? ((Types.FunctionType)_semanticModel.GetType(enclosingFunction)).ReturnType
             : null;
     }

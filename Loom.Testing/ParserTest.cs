@@ -386,6 +386,80 @@ public class ParserTest
     }
 
     [Fact]
+    public void Parses_IsExpression_BareType()
+    {
+        var tree = Utility.GetAST("value is SomeType");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        Assert.Equal("value", Assert.IsType<Identifier>(isExpression.Expression).Name.Text);
+        Assert.Equal("SomeType", Assert.IsType<TypeName>(isExpression.Pattern.Type).Name.Text);
+        Assert.Null(isExpression.Pattern.ObjectPattern);
+    }
+
+    [Fact]
+    public void Parses_IsExpression_PrimitiveType()
+    {
+        var tree = Utility.GetAST("value is number");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        Assert.Equal(PrimitiveTypeKind.Number, Assert.IsType<PrimitiveType>(isExpression.Pattern.Type).Kind);
+        Assert.Null(isExpression.Pattern.ObjectPattern);
+    }
+
+    [Fact]
+    public void Parses_IsExpression_WithObjectPattern()
+    {
+        var tree = Utility.GetAST("value is SomeType { some_field: 1..10 }");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        Assert.Equal("SomeType", Assert.IsType<TypeName>(isExpression.Pattern.Type).Name.Text);
+        Assert.NotNull(isExpression.Pattern.ObjectPattern);
+        var field = Assert.Single(isExpression.Pattern.ObjectPattern.Fields);
+        Assert.Equal("some_field", field.Name.Text);
+        var range = Assert.IsType<RangePattern>(field.Pattern);
+        Assert.Equal(1L, Assert.IsType<LiteralPattern>(range.Minimum).Value);
+        Assert.Equal(10L, Assert.IsType<LiteralPattern>(range.Maximum).Value);
+    }
+
+    [Fact]
+    public void Parses_IsExpression_ObjectPatternBinding()
+    {
+        var tree = Utility.GetAST("value is SomeType { some_field: x }");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        var field = Assert.Single(isExpression.Pattern.ObjectPattern!.Fields);
+        Assert.Equal("x", Assert.IsType<IdentifierPattern>(field.Pattern).Name.Text);
+    }
+
+    [Fact]
+    public void Parses_IsExpression_BareType_InsideIfCondition_LeavesBodyBraceForThenBranch()
+    {
+        var tree = Utility.GetAST("if value is SomeType { print(value) }");
+        var @if = Assert.IsType<If>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(@if.Condition);
+
+        Assert.Null(isExpression.Pattern.ObjectPattern);
+        var block = Assert.IsType<Block>(@if.ThenBranch);
+        Assert.Single(block.Statements);
+    }
+
+    [Fact]
+    public void Parses_IsExpression_WithObjectPattern_InsideIfCondition_LeavesBodyBraceForThenBranch()
+    {
+        var tree = Utility.GetAST("if value is SomeType { some_field: 1..10 } { print(value.some_field) }");
+        var @if = Assert.IsType<If>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(@if.Condition);
+
+        Assert.NotNull(isExpression.Pattern.ObjectPattern);
+        var block = Assert.IsType<Block>(@if.ThenBranch);
+        Assert.Single(block.Statements);
+    }
+
+    [Fact]
     public void Parses_MatchExpression_WhenGuard()
     {
         var tree = Utility.GetAST("match n { x when x > 0 -> x }");
@@ -1116,4 +1190,149 @@ public class ParserTest
         Assert.NotNull(diagnostic);
     }
     #endregion Tuples
+
+    #region Function Expressions
+    [Fact]
+    public void Parses_FunctionExpression_BlockBody()
+    {
+        var tree = Utility.GetAST("let f = fn(a: number, b: number): number { return a + b; };");
+        var declaration = Assert.IsType<VariableDeclaration>(Assert.Single(tree.Statements));
+        var functionExpression = Assert.IsType<FunctionExpression>(declaration.EqualsValueClause!.Value);
+
+        Assert.Null(functionExpression.TypeParameters);
+        Assert.Equal(2, functionExpression.Parameters!.ParameterList.Count);
+        Assert.Equal(PrimitiveTypeKind.Number, Assert.IsType<PrimitiveType>(functionExpression.ReturnType!.Type).Kind);
+        Assert.IsType<Block>(functionExpression.Body);
+    }
+
+    [Fact]
+    public void Parses_FunctionExpression_ArrowBody()
+    {
+        var tree = Utility.GetAST("let f = fn(x: number) -> x + 1;");
+        var declaration = Assert.IsType<VariableDeclaration>(Assert.Single(tree.Statements));
+        var functionExpression = Assert.IsType<FunctionExpression>(declaration.EqualsValueClause!.Value);
+
+        Assert.Null(functionExpression.ReturnType);
+        var body = Assert.IsType<ExpressionBody>(functionExpression.Body);
+        Assert.IsType<BinaryOperator>(body.Expression);
+    }
+
+    [Fact]
+    public void Parses_FunctionExpression_WithTypeParameters()
+    {
+        var tree = Utility.GetAST("let f = fn<T>(x: T): T { return x; };");
+        var declaration = Assert.IsType<VariableDeclaration>(Assert.Single(tree.Statements));
+        var functionExpression = Assert.IsType<FunctionExpression>(declaration.EqualsValueClause!.Value);
+
+        Assert.NotNull(functionExpression.TypeParameters);
+        Assert.Equal("T", Assert.Single(functionExpression.TypeParameters.ParameterList).Name.Text);
+    }
+
+    [Fact]
+    public void Parses_FunctionExpression_NoParameters()
+    {
+        var tree = Utility.GetAST("let f = fn -> 1;");
+        var declaration = Assert.IsType<VariableDeclaration>(Assert.Single(tree.Statements));
+        var functionExpression = Assert.IsType<FunctionExpression>(declaration.EqualsValueClause!.Value);
+        Assert.Null(functionExpression.Parameters);
+    }
+
+    [Fact]
+    public void Parses_FunctionExpression_ImmediatelyInvoked()
+    {
+        var tree = Utility.GetAST("(fn(): number { return 1; })();");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var invocation = Assert.IsType<Invocation>(expressionStatement.Expression);
+        var parenthesized = Assert.IsType<Parenthesized>(invocation.Expression);
+        Assert.IsType<FunctionExpression>(parenthesized.Expression);
+    }
+
+    [Fact]
+    public void Parses_FunctionExpression_ImmediatelyInvoked_InsideExpressionPosition()
+    {
+        var tree = Utility.GetAST("let x = fn(): number { return 1; }();");
+        var declaration = Assert.IsType<VariableDeclaration>(Assert.Single(tree.Statements));
+        var invocation = Assert.IsType<Invocation>(declaration.EqualsValueClause!.Value);
+        Assert.IsType<FunctionExpression>(invocation.Expression);
+    }
+
+    [Fact]
+    public void Parses_FunctionExpression_ReturnedFromFunctionDeclaration()
+    {
+        var tree = Utility.GetAST("fn make_adder(x: number) -> fn(y: number): number { return x + y; };");
+        var declaration = Assert.IsType<FunctionDeclaration>(Assert.Single(tree.Statements));
+        var body = Assert.IsType<ExpressionBody>(declaration.Body);
+        Assert.IsType<FunctionExpression>(body.Expression);
+    }
+    #endregion Function Expressions
+
+    #region Decorators
+    [Fact]
+    public void Parses_FunctionDeclaration_WithBareDecoratorAttribute()
+    {
+        var tree = Utility.GetAST("[log_everything] fn do_something() { }");
+        var declaration = Assert.IsType<FunctionDeclaration>(Assert.Single(tree.Statements));
+        var attribute = Assert.Single(declaration.Attributes!.AttributeList);
+
+        Assert.False(attribute.IsInvoked);
+        Assert.Equal("log_everything", Assert.IsType<Identifier>(attribute.Expression).Name.Text);
+    }
+
+    [Fact]
+    public void Parses_FunctionDeclaration_WithInvokedDecoratorAttribute()
+    {
+        var tree = Utility.GetAST("[log(\"info\")] fn do_something() { }");
+        var declaration = Assert.IsType<FunctionDeclaration>(Assert.Single(tree.Statements));
+        var attribute = Assert.Single(declaration.Attributes!.AttributeList);
+
+        Assert.True(attribute.IsInvoked);
+        Assert.Equal("log", Assert.IsType<Identifier>(attribute.Expression).Name.Text);
+        var argument = Assert.Single(attribute.Arguments.ArgumentList);
+        Assert.Equal("info", Assert.IsType<Literal>(argument).Value);
+    }
+
+    [Fact]
+    public void Parses_FunctionDeclaration_WithMultipleDecoratorAttributes()
+    {
+        var tree = Utility.GetAST("[log(\"info\"), twice] fn do_something() { }");
+        var declaration = Assert.IsType<FunctionDeclaration>(Assert.Single(tree.Statements));
+        Assert.Equal(2, declaration.Attributes!.AttributeList.Count);
+    }
+
+    [Fact]
+    public void Parses_FunctionDeclaration_WithDecoratorAttribute_NoParenBody()
+    {
+        var tree = Utility.GetAST("[log(\"info\")]\nfn do_something -> print(\"hi\");");
+        var declaration = Assert.IsType<FunctionDeclaration>(Assert.Single(tree.Statements));
+        Assert.NotNull(declaration.Attributes);
+        Assert.Null(declaration.Parameters);
+    }
+
+    [Fact]
+    public void Parses_InterfaceDeclaration_WithBareDecoratorAttribute()
+    {
+        var tree = Utility.GetAST("[validate] interface Foo { x: number }");
+        var declaration = Assert.IsType<InterfaceDeclaration>(Assert.Single(tree.Statements));
+        var attribute = Assert.Single(declaration.Attributes!.AttributeList);
+        Assert.False(attribute.IsInvoked);
+    }
+
+    [Fact]
+    public void Parses_SealedInterfaceDeclaration_WithDecoratorAttribute()
+    {
+        var tree = Utility.GetAST("[validate] sealed interface Foo { x: number }");
+        var declaration = Assert.IsType<InterfaceDeclaration>(Assert.Single(tree.Statements));
+        Assert.NotNull(declaration.SealedKeyword);
+        Assert.NotNull(declaration.Attributes);
+    }
+
+    [Fact]
+    public void Parses_InterfaceDeclaration_WithInvokedDecoratorAttribute()
+    {
+        var tree = Utility.GetAST("[validate(\"strict\")] interface Foo { x: number }");
+        var declaration = Assert.IsType<InterfaceDeclaration>(Assert.Single(tree.Statements));
+        var attribute = Assert.Single(declaration.Attributes!.AttributeList);
+        Assert.True(attribute.IsInvoked);
+    }
+    #endregion Decorators
 }

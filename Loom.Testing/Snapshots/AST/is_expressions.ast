@@ -1,0 +1,158 @@
+﻿ExpressionStatement(
+  Expression: Is(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    Pattern: TypePattern(
+      Type: TypeName(
+        Name: Token(Identifier, "SomeType")
+        TypeArguments: null
+      )
+      ObjectPattern: null
+    )
+  )
+)
+ExpressionStatement(
+  Expression: Is(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    Pattern: TypePattern(
+      Type: PrimitiveType(
+        Kind: Number
+      )
+      ObjectPattern: null
+    )
+  )
+)
+ExpressionStatement(
+  Expression: Is(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    Pattern: TypePattern(
+      Type: TypeName(
+        Name: Token(Identifier, "SomeType")
+        TypeArguments: null
+      )
+      ObjectPattern(
+        LeftBrace: Token(LBrace, "{")
+        RightBrace: Token(RBrace, "}")
+        Fields: [
+          ObjectPatternField(
+            Name: Token(Identifier, "some_field")
+            Colon: Token(Colon, ":")
+            Pattern: RangePattern(
+              Minimum: LiteralPattern(
+                Token(NumberLiteral, "1")
+                Value: 1
+              )
+              DotDot: Token(DotDot, "..")
+              Maximum: LiteralPattern(
+                Token(NumberLiteral, "10")
+                Value: 10
+              )
+            )
+          )
+        ]
+      )
+    )
+  )
+)
+ExpressionStatement(
+  Expression: Is(
+    Expression: Identifier(
+      Name: Token(Identifier, "value")
+      Token(Identifier, "value")
+    )
+    Pattern: TypePattern(
+      Type: TypeName(
+        Name: Token(Identifier, "SomeType")
+        TypeArguments: null
+      )
+      ObjectPattern(
+        LeftBrace: Token(LBrace, "{")
+        RightBrace: Token(RBrace, "}")
+        Fields: [
+          ObjectPatternField(
+            Name: Token(Identifier, "some_field")
+            Colon: Token(Colon, ":")
+            Pattern: IdentifierPattern(
+              Name: Token(Identifier, "x")
+            )
+          )
+        ]
+      )
+    )
+  )
+)
+If(
+  Condition: BinaryOperator(
+    Operator: Token(AmpersandAmpersand, "&&")
+    Left: Is(
+      Expression: Identifier(
+        Name: Token(Identifier, "value")
+        Token(Identifier, "value")
+      )
+      Pattern: TypePattern(
+        Type: TypeName(
+          Name: Token(Identifier, "SomeType")
+          TypeArguments: null
+        )
+        ObjectPattern(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Fields: [
+            ObjectPatternField(
+              Name: Token(Identifier, "some_field")
+              Colon: Token(Colon, ":")
+              Pattern: IdentifierPattern(
+                Name: Token(Identifier, "n")
+              )
+            )
+          ]
+        )
+      )
+    )
+    Right: BinaryOperator(
+      Operator: Token(RArrow, ">")
+      Left: Identifier(
+        Name: Token(Identifier, "n")
+        Token(Identifier, "n")
+      )
+      Right: Literal(
+        Token(NumberLiteral, "0")
+        Value: 0
+      )
+    )
+  )
+  ThenBranch: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: [
+      ExpressionStatement(
+        Expression: Invocation(
+          Expression: Identifier(
+            Name: Token(Identifier, "print")
+            Token(Identifier, "print")
+          )
+          TypeArguments: null
+          Arguments(
+            LeftParen: Token(LParen, "(")
+            RightParen: Token(RParen, ")")
+            ArgumentList: [
+              Identifier(
+                Name: Token(Identifier, "n")
+                Token(Identifier, "n")
+              )
+            ]
+          )
+        )
+      )
+    ]
+  )
+  ElseBranch: null
+)

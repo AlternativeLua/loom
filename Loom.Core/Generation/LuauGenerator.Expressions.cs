@@ -4,6 +4,7 @@ using Loom.Core.Text;
 using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
+using Attribute = Loom.Core.Parsing.AST.Attribute;
 using BinaryOperator = Loom.Core.Parsing.AST.BinaryOperator;
 using ElementAccess = Loom.Core.Parsing.AST.ElementAccess;
 using ExpressionStatement = Loom.Luau.AST.ExpressionStatement;
@@ -19,6 +20,8 @@ namespace Loom.Core.Generation;
 
 public sealed partial class LuauGenerator
 {
+    public override LuauNode VisitAttribute(Attribute attribute) => attribute.IsInvoked ? VisitInvocation(attribute) : Visit(attribute.Expression);
+
     public override LuauNode VisitInvocation(Invocation invocation)
     {
         var arguments = invocation.Arguments.ArgumentList.ConvertAll(Visit);
@@ -130,6 +133,9 @@ public sealed partial class LuauGenerator
         if (binaryOperator.Operator.Kind is SyntaxKind.AmpersandAmpersandEquals or SyntaxKind.PipePipeEquals or SyntaxKind.QuestionQuestionEquals)
             return GenerateCompoundLogicalAssignment(binaryOperator);
 
+        if (binaryOperator.Operator.Kind == SyntaxKind.AmpersandAmpersand)
+            return GenerateLogicalAnd(binaryOperator);
+
         var op = binaryOperator.Operator.Text;
         var leftType = _semanticModel.GetType(binaryOperator.Left);
         var rightType = _semanticModel.GetType(binaryOperator.Right);
@@ -159,6 +165,51 @@ public sealed partial class LuauGenerator
         var leftValue = _state.PushToVariable("_coalesce", Visit(binaryOperator.Left));
         var condition = new Luau.AST.BinaryOperator(leftValue, "~=", new NilLiteral());
         return new IfExpression(condition, leftValue, [], Visit(binaryOperator.Right));
+    }
+
+    private LuauNode GenerateLogicalAnd(BinaryOperator binaryOperator)
+    {
+        var left = Visit(binaryOperator.Left);
+        var substitutions = CollectIsSubstitutions(binaryOperator.Left);
+        if (substitutions.Count == 0)
+            return new Luau.AST.BinaryOperator(left, "and", Visit(binaryOperator.Right));
+
+        var previous = _guardSubstitutions;
+        var merged = previous == null ? substitutions : new Dictionary<string, LuauExpression>(previous);
+        foreach (var (name, value) in substitutions)
+            merged[name] = value;
+
+        _guardSubstitutions = merged;
+        LuauExpression right;
+        try
+        {
+            right = Visit(binaryOperator.Right);
+        }
+        finally
+        {
+            _guardSubstitutions = previous;
+        }
+
+        return new Luau.AST.BinaryOperator(left, "and", right);
+    }
+
+    private Dictionary<string, LuauExpression> CollectIsSubstitutions(Expression expression) =>
+        expression switch
+        {
+            Is isExpression when _isSubjects.TryGetValue(isExpression, out var subject) =>
+                CollectPatternBindings(isExpression.Pattern, subject).ToDictionary(binding => binding.Name, binding => binding.Value),
+            BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand } and =>
+                MergeSubstitutions(CollectIsSubstitutions(and.Left), CollectIsSubstitutions(and.Right)),
+            Parenthesized parenthesized => CollectIsSubstitutions(parenthesized.Expression),
+            _ => []
+        };
+
+    private static Dictionary<string, LuauExpression> MergeSubstitutions(Dictionary<string, LuauExpression> left, Dictionary<string, LuauExpression> right)
+    {
+        foreach (var (name, value) in right)
+            left[name] = value;
+
+        return left;
     }
 
     // Luau has no &&=/||=/??= (unlike +=/-=/etc.), so desugar to a plain `left = left <op> right`.
@@ -252,6 +303,25 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitAs(As @as) => new TypeCast(Visit(@as.Expression), Visit(@as.Type));
     public override LuauNode VisitNameOf(NameOf nameOf) => new StringLiteral(((LiteralType)_semanticModel.GetType(nameOf)).Value!.ToString()!);
 
+    public override LuauNode VisitIs(Is @is)
+    {
+        var subject = Visit(@is.Expression);
+        _isSubjects[@is] = subject;
+
+        var conditions = new List<LuauExpression>();
+        var bindings = new List<LuauStatement>();
+        TryCompilePattern(@is.Pattern, subject, conditions, bindings, out _);
+
+        var prelude = new List<LuauStatement>();
+        if (@is.Expression is AssignmentTarget)
+            prelude.Add(new ExpressionStatement(new Luau.AST.BinaryOperator(subject, "=", new TypeCast(subject, Visit(@is.Pattern.Type)))));
+
+        prelude.AddRange(bindings);
+        _isPreludes[@is] = prelude;
+
+        return CombineWith(conditions, "and");
+    }
+
     public override LuauNode VisitInterfaceInvocation(InterfaceInvocation interfaceInvocation)
     {
         var symbol = _semanticModel.GetSymbol(interfaceInvocation.Name, SymbolKind.Interface);
@@ -262,23 +332,33 @@ public sealed partial class LuauGenerator
             return new NilLiteral();
 
         var table = GenerateInterfaceInvocationBody(interfaceInvocation.Body, interfaceSymbol);
+        LuauExpression result;
         if (interfaceSymbol.Implements.Count == 0)
-            return table;
-
-        var metaNames = interfaceSymbol.Implementations.ConvertAll(LuauExpression (i) => new Luau.AST.Identifier(GetImplementationMetaName(i)));
-        LuauExpression meta;
-        if (metaNames.Count == 1)
         {
-            meta = metaNames[0];
+            result = table;
         }
         else
         {
-            _semanticModel.RuntimeReferences += 1;
-            meta = LuauFactory.RuntimeLibraryCall(["merge_meta"], metaNames);
+            var metaNames = interfaceSymbol.Implementations.ConvertAll(LuauExpression (i) => new Luau.AST.Identifier(GetImplementationMetaName(i)));
+            LuauExpression meta;
+            if (metaNames.Count == 1)
+            {
+                meta = metaNames[0];
+            }
+            else
+            {
+                _semanticModel.RuntimeReferences += 1;
+                meta = LuauFactory.RuntimeLibraryCall(["merge_meta"], metaNames);
+            }
+
+            var call = LuauFactory.SetMetatableCall(table, meta);
+            result = new TypeCast(call, new Luau.AST.TypeName(interfaceInvocation.Name.Token.Text));
         }
 
-        var call = LuauFactory.SetMetatableCall(table, meta);
-        return new TypeCast(call, new Luau.AST.TypeName(interfaceInvocation.Name.Token.Text));
+        if (interfaceSymbol.Declaration is InterfaceDeclaration { Attributes: { } attributes } && HasDecoratorAttributes(attributes))
+            result = ApplyDecorators(attributes, result, interfaceInvocation.Name.Token.Text);
+
+        return result;
     }
 
     private Table GenerateInterfaceInvocationBody(InterfaceInvocationBody interfaceInvocationBody, InterfaceSymbol interfaceSymbol)
@@ -317,10 +397,16 @@ public sealed partial class LuauGenerator
         PropertyInitializer propertyInitializer,
         InterfaceSymbol interfaceSymbol)
     {
-        var name = GetRenamedPropertyName(interfaceSymbol, propertyInitializer.Name.Text);
-        var initializedValue = Visit(propertyInitializer.Expression);
-        return new PropertyTableInitializer(name, initializedValue);
+        var name = propertyInitializer.Name.Text;
+        var renamedName = GetRenamedPropertyName(interfaceSymbol, name);
+        var initializedValue = ApplyPropertyDecorators(interfaceSymbol, name, Visit(propertyInitializer.Expression));
+        return new PropertyTableInitializer(renamedName, initializedValue);
     }
+
+    private LuauExpression ApplyPropertyDecorators(InterfaceSymbol interfaceSymbol, string name, LuauExpression value) =>
+        interfaceSymbol.GetPropertyAtPath([name])?.Declaration is PropertyDeclaration { Attributes: { } attributes } && HasDecoratorAttributes(attributes)
+            ? ApplyDecorators(attributes, value, name)
+            : value;
 
     private string GetRenamedPropertyName(InterfaceSymbol interfaceSymbol, string name)
     {
@@ -334,8 +420,13 @@ public sealed partial class LuauGenerator
 
     private PropertyTableInitializer GenerateInterfaceInvocationShorthandPropertyInitializer(
         ShorthandPropertyInitializer shorthandPropertyInitializer,
-        InterfaceSymbol interfaceSymbol) =>
-        new(GetRenamedPropertyName(interfaceSymbol, shorthandPropertyInitializer.Identifier.Name.Text), Visit(shorthandPropertyInitializer.Identifier));
+        InterfaceSymbol interfaceSymbol)
+    {
+        var name = shorthandPropertyInitializer.Identifier.Name.Text;
+        var renamedName = GetRenamedPropertyName(interfaceSymbol, name);
+        var initializedValue = ApplyPropertyDecorators(interfaceSymbol, name, Visit(shorthandPropertyInitializer.Identifier));
+        return new PropertyTableInitializer(renamedName, initializedValue);
+    }
 
     private Luau.AST.PropertyAccess GenerateRenamedAccess(Expression access, LuauExpression target, List<string> names) =>
         _semanticModel.TryGetIntrinsicAttribute(access, "luau_name", out var attr) && ValidateLuauNameAttribute(attr, out var nameLiteral)

@@ -70,8 +70,26 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
             AssignmentOperator assignmentOperator => AnalyzeAssignment(assignmentOperator, state),
             Identifier identifier => AnalyzeIdentifier(identifier, state),
             MatchExpression matchExpression => AnalyzeMatchExpression(matchExpression, state),
+            Is isExpression => AnalyzeIsExpression(isExpression, state),
+            FunctionExpression functionExpression => AnalyzeFunctionExpression(functionExpression, state),
             _ => AnalyzeUnhandledExpression(expression, state)
         };
+    }
+
+    private FlowState AnalyzeFunctionExpression(FunctionExpression functionExpression, FlowState state)
+    {
+        var functionState = functionExpression.Parameters is { } parameters
+            ? state.WithInitialized(parameters.ParameterList.Select(p => semanticModel.GetDeclarationSymbol(p)).OfType<Symbol>())
+            : state;
+
+        AnalyzeStatement(functionExpression.Body, functionState);
+        return BindState(functionExpression, state);
+    }
+
+    private FlowState AnalyzeIsExpression(Is isExpression, FlowState state)
+    {
+        var afterScrutinee = AnalyzeExpression(isExpression.Expression, state);
+        return BindState(isExpression, MarkPatternBindingsInitialized(isExpression.Pattern, afterScrutinee));
     }
 
     private FlowState AnalyzeUnhandledExpression(Expression expression, FlowState state) =>

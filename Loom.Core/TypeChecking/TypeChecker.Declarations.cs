@@ -11,6 +11,8 @@ public sealed partial class TypeChecker
 {
     public override Type VisitFunctionDeclaration(FunctionDeclaration functionDeclaration)
     {
+        MaybeVisit(functionDeclaration.Attributes);
+
         var typeParameters = functionDeclaration.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter) ?? [];
         var parameterTypes = functionDeclaration.Parameters?.ParameterList.ConvertAll(Visit) ?? [];
         MaybeVisit(functionDeclaration.ReturnType);
@@ -31,6 +33,35 @@ public sealed partial class TypeChecker
         else
         {
             Visit(functionDeclaration.Body);
+        }
+
+        if (functionDeclaration.Attributes != null)
+            foreach (var attribute in functionDeclaration.Attributes.AttributeList)
+                CheckDecoratorAttribute(attribute, functionDeclaration.Name.Text, functionType.ReturnType);
+
+        return functionType;
+    }
+
+    public override Type VisitFunctionExpression(FunctionExpression functionExpression)
+    {
+        var typeParameters = functionExpression.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter) ?? [];
+        var parameterTypes = functionExpression.Parameters?.ParameterList.ConvertAll(Visit) ?? [];
+        MaybeVisit(functionExpression.ReturnType);
+
+        var returnType = GetReturnType(functionExpression);
+        var functionType = BindType(
+            functionExpression,
+            new Types.FunctionType(typeParameters, parameterTypes, returnType, HasRestParameter(functionExpression.Parameters))
+        );
+
+        if (functionExpression.Body is ExpressionBody body)
+        {
+            if (functionExpression.ReturnType != null)
+                Check(body.Expression, returnType);
+        }
+        else
+        {
+            Visit(functionExpression.Body);
         }
 
         return functionType;
@@ -248,14 +279,14 @@ public sealed partial class TypeChecker
             _ => false
         };
 
-    private Type GetReturnType(FunctionDeclaration functionDeclaration)
+    private Type GetReturnType(IFunctionLike functionLike)
     {
-        if (functionDeclaration.ReturnType != null)
-            return Visit(functionDeclaration.ReturnType);
+        if (functionLike.ReturnType != null)
+            return Visit(functionLike.ReturnType);
 
-        var possibleReturnTypes = functionDeclaration.Body is ExpressionBody body
+        var possibleReturnTypes = functionLike.Body is ExpressionBody body
             ? [Visit(body)]
-            : GetOwnReturnStatements(functionDeclaration.Body).Select(Visit).ToList();
+            : GetOwnReturnStatements(functionLike.Body).Select(Visit).ToList();
 
         return possibleReturnTypes.Count == 0
             ? Types.PrimitiveType.Void
@@ -276,7 +307,7 @@ public sealed partial class TypeChecker
             if (child is Return returnStatement)
                 result.Add(returnStatement);
 
-            if (child is not FunctionDeclaration)
+            if (child is not (FunctionDeclaration or FunctionExpression))
                 CollectOwnReturnStatements(child, result);
         }
     }

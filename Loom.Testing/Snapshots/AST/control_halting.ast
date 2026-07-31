@@ -171,6 +171,7 @@ InterfaceDeclaration(
   SealedKeyword: null
   ColonTypeListClause: null
   Body: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )

@@ -6,6 +6,7 @@
     RightBrace: Token(RBrace, "}")
     Members: []
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )
@@ -40,6 +41,7 @@ InterfaceDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "IPoint")
 )
@@ -63,6 +65,7 @@ InterfaceDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )
@@ -89,6 +92,7 @@ InterfaceDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )
@@ -115,6 +119,7 @@ InterfaceDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )
@@ -152,6 +157,7 @@ InterfaceDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )
@@ -176,6 +182,7 @@ InterfaceDeclaration(
       )
     ]
   )
+  Attributes: null
   TypeParameters(
     LeftArrow: Token(LArrow, "<")
     RightArrow: Token(RArrow, ">")
@@ -209,6 +216,7 @@ InterfaceDeclaration(
     RightBrace: Token(RBrace, "}")
     Members: []
   )
+  Attributes: null
   TypeParameters(
     LeftArrow: Token(LArrow, "<")
     RightArrow: Token(RArrow, ">")
@@ -236,6 +244,7 @@ InterfaceDeclaration(
   SealedKeyword: null
   ColonTypeListClause: null
   Body: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "Empty")
 )
@@ -243,6 +252,7 @@ InterfaceDeclaration(
   SealedKeyword: Token(SealedKeyword, "sealed")
   ColonTypeListClause: null
   Body: null
+  Attributes: null
   TypeParameters: null
   Name: Token(Identifier, "I")
 )
@@ -251,6 +261,7 @@ Declare(
     SealedKeyword: null
     ColonTypeListClause: null
     Body: null
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "I")
   )
@@ -271,6 +282,7 @@ InterfaceDeclaration(
     ]
   )
   Body: null
+  Attributes: null
   TypeParameters(
     LeftArrow: Token(LArrow, "<")
     RightArrow: Token(RArrow, ">")

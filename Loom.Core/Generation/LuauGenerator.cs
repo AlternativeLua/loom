@@ -26,6 +26,8 @@ public sealed partial class LuauGenerator
 {
     private readonly DiagnosticBag _diagnostics;
     private readonly EventConnectionTracker _eventConnections = new();
+    private readonly Dictionary<Is, List<LuauStatement>> _isPreludes = [];
+    private readonly Dictionary<Is, LuauExpression> _isSubjects = [];
     private readonly Lazy<HashSet<(EventTarget Target, Symbol Function)>> _localSafeConnections;
     private readonly MacroExpander _macroExpander;
     private readonly ModuleImportExportGenerator _moduleGenerator;
@@ -73,15 +75,15 @@ public sealed partial class LuauGenerator
 
     protected override LuauNode Visit(Node node) => node.Accept(this);
 
-    private Chunk GenerateFunctionBody(FunctionDeclaration functionDeclaration)
+    private Chunk GenerateFunctionBody(IFunctionLike functionLike)
     {
         var chunk = _state.CaptureIsolated(() =>
-            functionDeclaration.Body is ExpressionBody expressionBody
+            functionLike.Body is ExpressionBody expressionBody
                 ? new Chunk(GenerateStatements(expressionBody.Expression))
-                : GenerateChunk(functionDeclaration.Body)
+                : GenerateChunk(functionLike.Body)
         );
-        
-        var defaultGuards = (functionDeclaration.Parameters?.ParameterList ?? [])
+
+        var defaultGuards = (functionLike.Parameters?.ParameterList ?? [])
             .Where(parameter => parameter.DotDot == null && parameter.EqualsValueClause != null)
             .Select(GenerateParameterDefaultGuard)
             .ToList();

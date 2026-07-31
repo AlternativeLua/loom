@@ -61,6 +61,23 @@ public sealed partial class Parser
             return ParseDeclare(declareKeyword, attributes);
         }
 
+        if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBefore(SyntaxKind.FnKeyword))
+        {
+            var leftBracket = Advance();
+            var attributes = ParseAttributes(leftBracket);
+            var fnKeyword = Expect(SyntaxKind.FnKeyword);
+            return ParseFunctionDeclaration(fnKeyword, attributes);
+        }
+
+        if (Current().Kind == SyntaxKind.LBracket
+            && (LooksLikeAttributesBefore(SyntaxKind.InterfaceKeyword) || LooksLikeAttributesBefore(SyntaxKind.SealedKeyword)))
+        {
+            var leftBracket = Advance();
+            var attributes = ParseAttributes(leftBracket);
+            var interfaceKeyword = Advance();
+            return ParseInterfaceDeclaration(interfaceKeyword, attributes);
+        }
+
         var token = Advance();
         var statementParser = StatementParsers.GetValueOrDefault(token.Kind);
         if (statementParser != null)

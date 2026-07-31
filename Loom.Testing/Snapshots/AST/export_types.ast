@@ -44,6 +44,7 @@ ExportDeclaration(
         )
       ]
     )
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "Point")
   )
@@ -54,6 +55,7 @@ ExportDeclaration(
     SealedKeyword: Token(SealedKeyword, "sealed")
     ColonTypeListClause: null
     Body: null
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "Handle")
   )

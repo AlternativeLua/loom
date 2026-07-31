@@ -8,7 +8,8 @@ public class FunctionDeclaration(
     TypeParameters? typeParameters,
     Parameters? parameters,
     ColonTypeClause? returnType,
-    Statement body
+    Statement body,
+    Attributes? attributes = null
 )
     : DeclareFunctionSignature(
         keyword,
@@ -16,8 +17,10 @@ public class FunctionDeclaration(
         typeParameters,
         parameters,
         returnType!,
-        extraChildren: [body]
-    )
+        attributes,
+        body
+    ),
+      IFunctionLike
 {
     public new ColonTypeClause? ReturnType { get; } = returnType;
     public Statement Body { get; } = body;

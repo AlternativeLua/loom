@@ -68,6 +68,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
             [
                 VisitWithDefault(interfaceDeclaration.TypeParameters),
                 VisitWithDefault(interfaceDeclaration.ColonTypeListClause),
+                VisitWithDefault(interfaceDeclaration.Attributes),
                 VisitWithDefault(interfaceDeclaration.Body)
             ]
         );
@@ -78,7 +79,18 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
                 VisitWithDefault(functionDeclaration.TypeParameters),
                 VisitWithDefault(functionDeclaration.Parameters),
                 VisitWithDefault(functionDeclaration.ReturnType),
+                VisitWithDefault(functionDeclaration.Attributes),
                 Visit(functionDeclaration.Body)
+            ]
+        );
+
+    public virtual T VisitFunctionExpression(FunctionExpression functionExpression) =>
+        CombineResults(
+            [
+                VisitWithDefault(functionExpression.TypeParameters),
+                VisitWithDefault(functionExpression.Parameters),
+                VisitWithDefault(functionExpression.ReturnType),
+                Visit(functionExpression.Body)
             ]
         );
 
@@ -180,6 +192,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitElementAccess(ElementAccess elementAccess) => CombineResults([Visit(elementAccess.Expression), Visit(elementAccess.IndexExpression)]);
 
     public virtual T VisitAs(As @as) => CombineResults([Visit(@as.Expression), Visit(@as.Type)]);
+    public virtual T VisitIs(Is @is) => CombineResults([Visit(@is.Expression), Visit(@is.Pattern)]);
 
     public virtual T VisitAssignmentOperator(AssignmentOperator assignmentOperator) =>
         CombineResults([Visit(assignmentOperator.Left), Visit(assignmentOperator.Right)]);

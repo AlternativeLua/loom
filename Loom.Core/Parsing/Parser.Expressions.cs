@@ -25,6 +25,12 @@ public sealed partial class Parser
                     left = new As(op, left, type);
                     continue;
                 }
+                case SyntaxKind.IsKeyword:
+                {
+                    var pattern = ParseIsPattern();
+                    left = new Is(left, op, pattern);
+                    continue;
+                }
                 case SyntaxKind.Question:
                 {
                     var thenBranch = ParseBinaryLevel(level);
@@ -129,6 +135,9 @@ public sealed partial class Parser
 
     private Expression ParsePrimary()
     {
+        if (Match(out var fnKeyword, SyntaxKind.FnKeyword))
+            return ParseFunctionExpression(fnKeyword);
+
         if (Match(out var matchKeyword, SyntaxKind.MatchKeyword))
             return ParseMatchExpression(matchKeyword);
 

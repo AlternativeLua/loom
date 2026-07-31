@@ -4,6 +4,7 @@ using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
 using ArrayType = Loom.Core.Parsing.AST.ArrayType;
+using Attribute = Loom.Core.Parsing.AST.Attribute;
 using Identifier = Loom.Luau.AST.Identifier;
 using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using OptionalType = Loom.Luau.AST.OptionalType;
@@ -58,7 +59,65 @@ public sealed partial class LuauGenerator
         if (functionDeclaration.Parameters?.ParameterList is [.., { DotDot: not null } restParameter])
             statements.Statements.Insert(0, GenerateRestParameterBinding(restParameter));
 
-        return new Function(functionDeclaration.Name.Text, typeParameters, parameters, returnType, statements);
+        if (functionDeclaration.Attributes == null || !HasDecoratorAttributes(functionDeclaration.Attributes))
+            return new Function(functionDeclaration.Name.Text, typeParameters, parameters, returnType, statements);
+
+        return GenerateDecoratedFunction(functionDeclaration, typeParameters, parameters, returnType, statements);
+    }
+
+    private Function GenerateDecoratedFunction(
+        FunctionDeclaration functionDeclaration,
+        TypeParameters? typeParameters,
+        List<Luau.AST.Parameter> parameters,
+        LuauType? returnType,
+        Chunk statements)
+    {
+        var implName = _state.Scope.AddIdentifier($"_{functionDeclaration.Name.Text}_impl");
+        _state.Prereq(new Function(implName, typeParameters, parameters, returnType, statements));
+
+        var forwardedArguments = parameters.ConvertAll(p => (LuauExpression)new Identifier(p.Name));
+        var call = ApplyDecorators(
+            functionDeclaration.Attributes!,
+            new Call(new Identifier(implName), forwardedArguments),
+            functionDeclaration.Name.Text
+        );
+
+        return new Function(functionDeclaration.Name.Text, typeParameters, parameters, returnType, new Chunk([new Luau.AST.Return(call)]));
+    }
+
+    private LuauExpression ApplyDecorators(Attributes attributes, LuauExpression originalValue, string name)
+    {
+        var value = originalValue;
+        foreach (var attribute in attributes.AttributeList)
+        {
+            if (IsIntrinsicAttribute(attribute))
+                continue;
+
+            var thunk = new AnonymousFunction(null, [], null, new Chunk([new Luau.AST.Return(value)]));
+            value = new Call(Visit<LuauExpression>(attribute), [thunk, new StringLiteral(name)]);
+        }
+
+        return value;
+    }
+
+    private bool HasDecoratorAttributes(Attributes attributes) => attributes.AttributeList.Exists(a => !IsIntrinsicAttribute(a));
+
+    private bool IsIntrinsicAttribute(Attribute attribute) => _semanticModel.GetSymbol(attribute.Expression)?.IsIntrinsic == true;
+
+    public override LuauNode VisitFunctionExpression(FunctionExpression functionExpression)
+    {
+        var typeParameters = MaybeVisit<TypeParameters>(functionExpression.TypeParameters);
+        if (typeParameters != null)
+            foreach (var typeParameter in typeParameters.Parameters)
+                typeParameter.OfFunction = true;
+
+        var parameters = functionExpression.Parameters?.ParameterList.ConvertAll(VisitParameter) ?? [];
+        var returnType = MaybeVisit<LuauType>(functionExpression.ReturnType);
+        var statements = GenerateFunctionBody(functionExpression);
+        if (functionExpression.Parameters?.ParameterList is [.., { DotDot: not null } restParameter])
+            statements.Statements.Insert(0, GenerateRestParameterBinding(restParameter));
+
+        return new AnonymousFunction(typeParameters, parameters, returnType, statements);
     }
 
     private static LocalVariable GenerateRestParameterBinding(Parameter restParameter) =>

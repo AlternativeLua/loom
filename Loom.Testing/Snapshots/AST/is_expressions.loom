@@ -1,0 +1,5 @@
+value is SomeType
+value is number
+value is SomeType { some_field: 1..10 }
+value is SomeType { some_field: x }
+if value is SomeType { some_field: n } && n > 0 { print(n) }

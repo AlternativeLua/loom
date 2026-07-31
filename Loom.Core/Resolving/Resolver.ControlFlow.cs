@@ -59,6 +59,17 @@ public sealed partial class Resolver
         return success;
     }
 
+    public override bool VisitIf(If @if)
+    {
+        PushScope();
+        var conditionSuccess = Visit(@if.Condition);
+        var thenSuccess = Visit(@if.ThenBranch);
+        PopScope();
+
+        var elseSuccess = @if.ElseBranch == null || Visit(@if.ElseBranch);
+        return conditionSuccess && thenSuccess && elseSuccess;
+    }
+
     public override bool VisitWhile(While @while)
     {
         Visit(@while.Condition);
@@ -91,10 +102,10 @@ public sealed partial class Resolver
 
     public override bool VisitReturn(Return @return)
     {
-        if (@return.FirstAncestorOfType<FunctionDeclaration>() is { } functionDeclaration)
+        if (@return.FirstAncestorImplementing<IFunctionLike>() is { } enclosingFunction)
         {
             var after = @return.FirstAncestorOfType<After>();
-            if (after == null || functionDeclaration.FirstAncestorOfType<After>() == after)
+            if (after == null || enclosingFunction.FirstAncestorOfType<After>() == after)
                 return base.VisitReturn(@return);
 
             _diagnostics.Error(@return, InternalCodes.ReturnInAfter, "Cannot return a value from an 'after' statement body.");

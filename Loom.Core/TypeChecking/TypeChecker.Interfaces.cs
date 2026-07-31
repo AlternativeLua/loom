@@ -108,6 +108,8 @@ public sealed partial class TypeChecker
 
     public override Type VisitInterfaceDeclaration(InterfaceDeclaration interfaceDeclaration)
     {
+        MaybeVisit(interfaceDeclaration.Attributes);
+
         var name = interfaceDeclaration.Name.Text;
         if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol)
         {
@@ -141,6 +143,10 @@ public sealed partial class TypeChecker
         var properties = ResolveInterfaceProperties(constraints, propertyDeclarations);
         objectType.AddProperties(events);
         objectType.AddProperties(properties);
+
+        if (interfaceDeclaration.Attributes != null)
+            foreach (var attribute in interfaceDeclaration.Attributes.AttributeList)
+                CheckDecoratorAttribute(attribute, name, interfaceType);
 
         if (publishedType is GenericType generic)
             publishedType = VarianceInferrer.ApplyInferredVariance(generic);
@@ -255,6 +261,11 @@ public sealed partial class TypeChecker
 
             var isMutable = property.MutKeyword != null;
             var valueType = Visit(property.ColonTypeClause);
+
+            if (property.Attributes != null)
+                foreach (var attribute in property.Attributes.AttributeList)
+                    CheckDecoratorAttribute(attribute, name, valueType);
+
             properties.Add(new ObjectProperty(isMutable, name, valueType));
         }
 

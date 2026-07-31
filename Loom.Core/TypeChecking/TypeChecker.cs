@@ -101,16 +101,29 @@ public sealed partial class TypeChecker
 
         var parameterTypes = eventDeclaration.Parameters?.ParameterList.ConvertAll(VisitParameter) ?? [];
         var type = InstantiateEventType(eventDeclaration, symbol.IsAmbient, parameterTypes);
+
+        if (!symbol.IsAmbient && eventDeclaration.Parent is not InterfaceBody && eventDeclaration.Attributes != null)
+            foreach (var attribute in eventDeclaration.Attributes.AttributeList)
+                CheckDecoratorAttribute(attribute, eventDeclaration.Name.Text, type);
+
         return BindType(eventDeclaration, type);
     }
 
     public override Type VisitAttribute(Attribute attribute)
     {
         var expressionType = Visit(attribute.Expression);
-        if (expressionType is not Types.FunctionType)
+        if (expressionType is not Types.FunctionType functionType)
+        {
             _diagnostics.Error(attribute, InternalCodes.NonFunctionAttribute, "Only functions may be used as attributes.");
+            return BindType(attribute, Types.PrimitiveType.Never);
+        }
 
-        return expressionType;
+        if (!attribute.IsInvoked)
+            return BindType(attribute, functionType);
+
+        return functionType.TypeParameters.Count == 0
+            ? CheckNonGenericInvocation(attribute, functionType)
+            : CheckGenericInvocation(attribute, functionType);
     }
 
     public override Type VisitAs(As @as)
@@ -121,6 +134,13 @@ public sealed partial class TypeChecker
             _semanticModel.TypeSolver.AddConstraint(expressionType, castedType, @as);
 
         return BindType(@as, castedType);
+    }
+
+    public override Type VisitIs(Is @is)
+    {
+        var expressionType = Visit(@is.Expression);
+        CheckPattern(@is.Pattern, expressionType);
+        return BindType(@is, Types.PrimitiveType.Bool);
     }
 
     public override Type VisitNameOf(NameOf nameOf) =>

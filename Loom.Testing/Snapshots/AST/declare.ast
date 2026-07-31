@@ -187,6 +187,7 @@ Declare(
     SealedKeyword: null
     ColonTypeListClause: null
     Body: null
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "I")
   )
@@ -212,6 +213,7 @@ Declare(
         )
       ]
     )
+    Attributes: null
     TypeParameters: null
     Name: Token(Identifier, "Abc")
   )
@@ -248,6 +250,7 @@ Declare(
       RightBracket: Token(RBracket, "]")
       AttributeList: [
         Attribute(
+          IsInvoked: True
           Expression: Identifier(
             Name: Token(Identifier, "luau_name")
             Token(Identifier, "luau_name")

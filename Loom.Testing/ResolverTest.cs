@@ -620,6 +620,58 @@ public class ResolverTest
     }
 
     [Fact]
+    public void ThrowsFor_IsExpression_DoesNotBindOuterName()
+    {
+        var diagnostics = Utility.GetSemanticModel("interface Foo {}; let value = none as never as Foo; if value is Foo { print(value) }; f;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'f'.");
+    }
+
+    [Fact]
+    public void Allows_IsExpression_ObjectPatternBinding_InsideThenBranch() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface Foo { some_field: number }
+                let value = none as never as Foo;
+                if value is Foo { some_field: x } {
+                    print(x)
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_IsExpression_ObjectPatternBinding_LeaksOutsideThenBranch()
+    {
+        var diagnostics = Utility.GetSemanticModel(
+            """
+            interface Foo { some_field: number }
+            let value = none as never as Foo;
+            if value is Foo { some_field: x } {
+                print(x)
+            }
+            print(x)
+            """
+        ).Diagnostics;
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'x'.");
+    }
+
+    [Fact]
+    public void Allows_IsExpression_ObjectPatternBinding_UsedInAndChainedCondition() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                interface Foo { some_field: number }
+                let value = none as never as Foo;
+                if value is Foo { some_field: n } && n > 0 {
+                    print(n)
+                }
+                """
+            )
+        );
+
+    [Fact]
     public void ThrowsFor_ExportMutable()
     {
         var diagnostics = Utility.GetSemanticModel("export mut x = 1;").Diagnostics;
@@ -1553,6 +1605,25 @@ public class ResolverTest
     public void Allows_ReturnStatementInsideFunction() => Utility.AssertNoErrors(Utility.GetSemanticModel("fn test() { return 42; }"));
 
     [Fact]
+    public void Allows_ReturnStatementInFunctionExpression() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let f = fn(): number { return 42; };"));
+
+    [Fact]
+    public void Allows_FunctionExpression_CapturesOuterVariable() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let x = 42; let f = fn(): number { return x; };"));
+
+    [Fact]
+    public void ThrowsFor_FunctionExpression_ParameterLeaksOutsideBody()
+    {
+        var diagnostics = Utility.GetSemanticModel("let f = fn(x: number): number { return x; }; x;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'x'.");
+    }
+
+    [Fact]
+    public void Allows_FunctionExpression_ParameterShadowsOuterVariable() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let x = 42; let f = fn(x: number): number { return x; };"));
+
+    [Fact]
     public void Allows_MultipleInitializations_AcrossBranches() =>
         Utility.AssertNoErrors(
             Utility.GetSemanticModel(
@@ -2144,4 +2215,44 @@ public class ResolverTest
     public void Resolves_TupleConstraint_ResolvesTupleName() =>
         Utility.AssertNoErrors(Utility.GetSemanticModel("declare fn something<T: Tuple>(..args: T): void;").Diagnostics);
     #endregion Destructuring
+
+    #region Decorators
+    [Fact]
+    public void Resolves_DecoratorAttribute_AsOrdinaryValueReference() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                fn log(f: fn(): void, name: string): void { f(); }
+                [log]
+                fn do_something() { }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_DecoratorAttribute_UnknownName()
+    {
+        var diagnostics = Utility.GetSemanticModel("[unknown_decorator]\nfn do_something() { }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'unknown_decorator'.");
+    }
+
+    [Fact]
+    public void Resolves_InterfaceDecoratorAttribute_AsOrdinaryValueReference() =>
+        Utility.AssertNoErrors(
+            Utility.GetSemanticModel(
+                """
+                fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+                [validate]
+                interface Foo { x: number }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_InterfaceDecoratorAttribute_UnknownName()
+    {
+        var diagnostics = Utility.GetSemanticModel("[unknown_decorator]\ninterface Foo { x: number }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'unknown_decorator'.");
+    }
+    #endregion Decorators
 }

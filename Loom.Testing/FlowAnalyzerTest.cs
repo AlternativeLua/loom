@@ -31,6 +31,7 @@ public class FlowAnalyzerTest
     [InlineData("mut x: number; { x; }")]
     [InlineData("mut x: number; let arr = [0]; arr[0] = 42; x;")]
     [InlineData("""mut x: number; $"{x}";""")]
+    [InlineData("mut x: number; let f = fn(): number { return x; };")]
     public void ThrowsFor_UseOfUninitialized(string source)
     {
         var diagnostics = Utility.FlowAnalyze(source).AnalyzerResult.Diagnostics;
@@ -110,6 +111,7 @@ public class FlowAnalyzerTest
     }
 
     [Theory]
+    [InlineData("mut x: number; x = 1; let f = fn(): number { return x; }; f();")]
     [InlineData("fn abc(x: number) -> print(x)")]
     [InlineData("fn abc(x: number) -> abc(x)")]
     [InlineData(

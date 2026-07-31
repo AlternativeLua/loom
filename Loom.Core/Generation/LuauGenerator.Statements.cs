@@ -184,6 +184,7 @@ public sealed partial class LuauGenerator
     {
         var condition = Visit(@if.Condition);
         var thenBranch = GenerateChunk(@if.ThenBranch);
+        thenBranch.Statements.InsertRange(0, CollectIsPreludes(@if.Condition));
         var elseBranch = @if.ElseBranch != null ? GenerateChunk(@if.ElseBranch.Branch) : null;
         var elseIfBranches = new List<ElseIfBranch>();
         if (@if.ElseBranch is not { Branch: If elseIf })
@@ -196,4 +197,14 @@ public sealed partial class LuauGenerator
 
         return new IfStatement(condition, thenBranch, elseIfBranches, elseBranch);
     }
+
+    private List<LuauStatement> CollectIsPreludes(Expression condition) =>
+        condition switch
+        {
+            Is isExpression => _isPreludes.GetValueOrDefault(isExpression, []),
+            Loom.Core.Parsing.AST.BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand } and =>
+                [..CollectIsPreludes(and.Left), ..CollectIsPreludes(and.Right)],
+            Loom.Core.Parsing.AST.Parenthesized parenthesized => CollectIsPreludes(parenthesized.Expression),
+            _ => []
+        };
 }

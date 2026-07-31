@@ -111,6 +111,7 @@ public static class InternalCodes
     public const string EventStoreExportCollision = "L386";
     public const string InvalidTypePredicateSubject = "L387";
     public const string AttributesNotSupportedOnDeclaration = "L388";
+    public const string InvalidDecorator = "L389";
 
     public const string SimplifiableCode = "L400";
 }

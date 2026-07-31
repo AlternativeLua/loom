@@ -4220,4 +4220,387 @@ public class LuauGeneratorTest
         Assert.Contains("t[2]", rendered);
         Assert.DoesNotContain("table.move", rendered);
     }
+
+    [Fact]
+    public void Generates_IsExpression_ChecksTypeofAndCastsScrutineeInThenBranch()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface SomeType {}
+            let value = none as never as SomeType;
+            if value is SomeType {
+                print(value)
+            }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("==", condition.Operator);
+        var typeofCall = Assert.IsType<Call>(condition.Left);
+        Assert.Equal("typeof", Assert.IsType<Identifier>(typeofCall.Callee).Name);
+        Assert.Equal("table", Assert.IsType<StringLiteral>(condition.Right).Value);
+
+        var castStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]);
+        var cast = Assert.IsType<BinaryOperator>(castStatement.Expression);
+        Assert.Equal("=", cast.Operator);
+        Assert.Equal("value", Assert.IsType<Identifier>(cast.Left).Name);
+        var typeCast = Assert.IsType<TypeCast>(cast.Right);
+        Assert.Equal("value", Assert.IsType<Identifier>(typeCast.Expression).Name);
+    }
+
+    [Fact]
+    public void Generates_IsExpression_WithObjectPattern_ChecksFieldsAndBindsAfterCast()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            interface SomeType { some_field: number }
+            let value = none as never as SomeType;
+            if value is SomeType { some_field: 0..1 } {
+                print(value.some_field)
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("typeof(value) == \"table\" and typeof(value.some_field) == \"number\" and value.some_field >= 0 and value.some_field <= 1", rendered);
+        Assert.Contains("value = value :: SomeType", rendered);
+    }
+
+    [Fact]
+    public void Generates_IsExpression_ObjectPatternField_BindsAfterCast()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface SomeType { some_field: number }
+            let value = none as never as SomeType;
+            if value is SomeType { some_field: x } {
+                print(x)
+            }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var castStatement = Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]);
+        Assert.IsType<BinaryOperator>(castStatement.Expression);
+
+        var binding = Assert.IsType<ConstVariable>(ifStatement.ThenBranch.Statements[1]);
+        Assert.Equal("x", binding.Name);
+        var access = Assert.IsType<PropertyAccess>(binding.Initializer);
+        Assert.Equal(["some_field"], access.Names);
+    }
+
+    [Fact]
+    public void Generates_IsExpression_AndChainedCondition_SubstitutesBindingBeforeItsDeclared()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            interface SomeType { some_field: number }
+            let value = none as never as SomeType;
+            if value is SomeType { some_field: n } && n > 0 {
+                print(n)
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("value.some_field > 0", rendered);
+    }
+
+    [Fact]
+    public void Generates_IsExpression_NoCast_WhenScrutineeIsNotAnAssignmentTarget()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface SomeType {}
+            fn get_value(): SomeType | number {
+                return none as never as SomeType;
+            }
+            if get_value() is SomeType {
+                print("matched")
+            }
+            """,
+            true
+        );
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements.OfType<IfStatement>().Single());
+        Assert.Single(ifStatement.ThenBranch.Statements);
+    }
+
+    [Fact]
+    public void Generates_FunctionExpression_AsAnonymousFunction()
+    {
+        var luauTree = Utility.GetLuauAST("let f = fn(a: number, b: number): number { return a + b; };", true);
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        var anonFn = Assert.IsType<AnonymousFunction>(declaration.Initializer);
+
+        Assert.Equal(2, anonFn.Parameters.Count);
+        Assert.NotNull(anonFn.ReturnType);
+        Assert.Single(anonFn.Body.Statements);
+    }
+
+    [Fact]
+    public void Generates_FunctionExpression_CapturesOuterVariable()
+    {
+        var luauTree = Utility.GetLuauAST("let x = 42; let f = fn(): number { return x + 1; };", true);
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var anonFn = Assert.IsType<AnonymousFunction>(declaration.Initializer);
+        var returnStatement = Assert.IsType<Return>(Assert.Single(anonFn.Body.Statements));
+        var binary = Assert.IsType<BinaryOperator>(returnStatement.Expression);
+        Assert.Equal("x", Assert.IsType<Identifier>(binary.Left).Name);
+    }
+
+    [Fact]
+    public void Generates_FunctionExpression_ArrowBody_AsSingleReturnStatement()
+    {
+        var luauTree = Utility.GetLuauAST("let f = fn(x: number) -> x + 1;", true);
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        var anonFn = Assert.IsType<AnonymousFunction>(declaration.Initializer);
+
+        var returnStatement = Assert.IsType<Return>(Assert.Single(anonFn.Body.Statements));
+        Assert.IsType<BinaryOperator>(returnStatement.Expression);
+    }
+
+    [Fact]
+    public void Generates_FunctionExpression_NestedClosure_ReturnsAnonymousFunction()
+    {
+        var luauTree = Utility.GetLuauAST("let make_adder = fn(x: number) -> fn(y: number): number { return x + y; };", true);
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        var outerFn = Assert.IsType<AnonymousFunction>(declaration.Initializer);
+
+        var returnStatement = Assert.IsType<Return>(Assert.Single(outerFn.Body.Statements));
+        Assert.IsType<AnonymousFunction>(returnStatement.Expression);
+    }
+
+    [Fact]
+    public void Generates_Decorator_EmitsInternalImplAndPublicWrapper()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn log(f: fn(): void, name: string): void { f(); }
+            [log]
+            fn do_something() { }
+            """,
+            true
+        );
+
+        var impl = Assert.IsType<Function>(luauTree.Statements[1]);
+        Assert.Equal("_do_something_impl", impl.Name);
+
+        var wrapper = Assert.IsType<Function>(luauTree.Statements[2]);
+        Assert.Equal("do_something", wrapper.Name);
+
+        var returnStatement = Assert.IsType<Return>(Assert.Single(wrapper.Body.Statements));
+        var call = Assert.IsType<Call>(returnStatement.Expression);
+        Assert.Equal("log", Assert.IsType<Identifier>(call.Callee).Name);
+
+        var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
+        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
+        var implCall = Assert.IsType<Call>(thunkReturn.Expression);
+        Assert.Equal("_do_something_impl", Assert.IsType<Identifier>(implCall.Callee).Name);
+
+        Assert.Equal("do_something", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+    }
+
+    [Fact]
+    public void Generates_Decorator_ForwardsParametersThroughThunk()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn log(f: fn(): number, name: string): number { return f(); }
+            [log]
+            fn add(a: number, b: number): number { return a + b; }
+            """,
+            true
+        );
+
+        var wrapper = luauTree.Statements.OfType<Function>().Single(f => f.Name == "add");
+        Assert.Equal(["a", "b"], wrapper.Parameters.ConvertAll(p => p.Name));
+
+        var returnStatement = Assert.IsType<Return>(Assert.Single(wrapper.Body.Statements));
+        var call = Assert.IsType<Call>(returnStatement.Expression);
+        var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
+        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
+        var implCall = Assert.IsType<Call>(thunkReturn.Expression);
+
+        Assert.Equal(["a", "b"], implCall.Arguments.ConvertAll(a => Assert.IsType<Identifier>(a).Name));
+    }
+
+    [Fact]
+    public void Generates_ChainedDecorators_LaterAttributeWrapsEarlierOne()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn a(f: fn(): void, name: string): void { f(); }
+            fn b(f: fn(): void, name: string): void { f(); }
+            [a, b]
+            fn do_something() { }
+            """,
+            true
+        );
+
+        var wrapper = luauTree.Statements.OfType<Function>().Single(f => f.Name == "do_something");
+        var returnStatement = Assert.IsType<Return>(Assert.Single(wrapper.Body.Statements));
+        var outerCall = Assert.IsType<Call>(returnStatement.Expression);
+        Assert.Equal("b", Assert.IsType<Identifier>(outerCall.Callee).Name);
+
+        var innerThunk = Assert.IsType<AnonymousFunction>(outerCall.Arguments[0]);
+        var innerReturn = Assert.IsType<Return>(Assert.Single(innerThunk.Body.Statements));
+        var innerCall = Assert.IsType<Call>(innerReturn.Expression);
+        Assert.Equal("a", Assert.IsType<Identifier>(innerCall.Callee).Name);
+    }
+
+    [Fact]
+    public void Generates_DecoratorFactory_MatchesIssueExample()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn log(ctx: string) -> fn<T>(f: fn(): T, name: string): T {
+                let result = f();
+                return result;
+            };
+
+            [log("info")]
+            fn do_something -> print("did something!");
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("const function do_something()", rendered);
+        Assert.Contains("return log(\"info\")(function()", rendered);
+        Assert.Contains("return _do_something_impl()", rendered);
+    }
+
+    [Fact]
+    public void Generates_InterfaceDecorator_WrapsConstruction()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+            [validate]
+            interface Foo { x: number }
+            let foo = new Foo { x: 1 };
+            """,
+            true
+        );
+
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(declaration.Initializer);
+        Assert.Equal("validate", Assert.IsType<Identifier>(call.Callee).Name);
+        Assert.Equal("Foo", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+
+        var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
+        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
+        Assert.IsType<Table>(thunkReturn.Expression);
+    }
+
+    [Fact]
+    public void Generates_InterfaceDecorator_WrapsEveryConstructionSite()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+            [validate]
+            interface Foo { x: number }
+            let a = new Foo { x: 1 };
+            let b = new Foo { x: 2 };
+            """,
+            true
+        );
+
+        var declarations = luauTree.Statements.OfType<ConstVariable>().Where(d => d.Name is "a" or "b").ToList();
+        Assert.Equal(2, declarations.Count);
+        Assert.All(declarations, d => Assert.IsType<Call>(d.Initializer));
+    }
+
+    [Fact]
+    public void Generates_TopLevelEventDecorator_WrapsEventConstruction()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn log_event(f: fn(): Event<number>, name: string): Event<number> { return f(); }
+            [log_event]
+            event scored(points: number);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "scored");
+        var call = Assert.IsType<Call>(declaration.Initializer);
+        Assert.Equal("log_event", Assert.IsType<Identifier>(call.Callee).Name);
+        Assert.Equal("scored", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+
+        var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
+        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
+        Assert.IsType<Call>(thunkReturn.Expression);
+    }
+
+    [Fact]
+    public void Generates_PropertyDecorator_WrapsFieldValueAtConstruction()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn clamp(f: fn(): number, name: string): number { return f(); }
+            interface Account {
+                [clamp]
+                balance: number
+            }
+            let a = new Account { balance: 10 };
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "a");
+        var table = Assert.IsType<Table>(declaration.Initializer);
+        var propertyInitializer = Assert.IsType<PropertyTableInitializer>(Assert.Single(table.Initializers));
+        Assert.Equal("balance", propertyInitializer.PropertyName);
+
+        var call = Assert.IsType<Call>(propertyInitializer.Value);
+        Assert.Equal("clamp", Assert.IsType<Identifier>(call.Callee).Name);
+        Assert.Equal("balance", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+    }
+
+    [Fact]
+    public void Generates_PropertyDecorator_ShorthandInitializer_IsWrapped()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn clamp(f: fn(): number, name: string): number { return f(); }
+            interface Account {
+                [clamp]
+                balance: number
+            }
+            let balance = 10;
+            let a = new Account { balance };
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "a");
+        var table = Assert.IsType<Table>(declaration.Initializer);
+        var propertyInitializer = Assert.IsType<PropertyTableInitializer>(Assert.Single(table.Initializers));
+        Assert.IsType<Call>(propertyInitializer.Value);
+    }
+
+    [Fact]
+    public void Generates_IntrinsicAttribute_OnEvent_IsNotWrappedAsDecorator()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            [luau_name("NotUsed")]
+            event my_event(param: string);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "my_event");
+        var call = Assert.IsType<Call>(declaration.Initializer);
+        var callee = Assert.IsType<Luau.AST.PropertyAccess>(call.Callee);
+        Assert.Equal(["Event", "new"], callee.Names);
+        Assert.Empty(call.Arguments);
+    }
 }

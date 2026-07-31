@@ -8,7 +8,8 @@ public class InterfaceDeclaration(
     Token name,
     TypeParameters? typeParameters,
     ColonTypeListClause? colonTypeListClause,
-    InterfaceBody? body
+    InterfaceBody? body,
+    Attributes? attributes = null
 )
     : GenericNamedDeclaration(
         sealedKeyword != null ? [sealedKeyword] : [],
@@ -16,12 +17,15 @@ public class InterfaceDeclaration(
         name,
         typeParameters,
         colonTypeListClause,
-        body
-    )
+        body,
+        attributes
+    ),
+      IWithAttributes
 {
     public Token? SealedKeyword { get; } = sealedKeyword;
     public ColonTypeListClause? ColonTypeListClause { get; } = colonTypeListClause;
     public InterfaceBody? Body { get; } = body;
+    public Attributes? Attributes { get; } = attributes;
 
     public override T Accept<T>(Visitor<T> visitor) => visitor.VisitInterfaceDeclaration(this);
 }
