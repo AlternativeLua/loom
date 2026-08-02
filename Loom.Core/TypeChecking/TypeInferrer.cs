@@ -100,9 +100,6 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
         if (!visitedPairs.Add((parameterType, argumentType)))
             return true;
 
-        if (TryMatchGenericTypes(parameterType, argumentType, inferredTypes, visitedPairs, out var genericResult))
-            return genericResult;
-
         return (parameterType, argumentType) switch
         {
             (TypeParameter typeParameter, _) => BindTypeParameter(typeParameter, argumentType, inferredTypes),
@@ -324,54 +321,6 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
         HashSet<(Type, Type)> visitedPairs) =>
         !parameterIntersection.Types.Where((t, index) => !TryInferTypes(t, argumentIntersection.Types[index], inferredTypes, visitedPairs)).Any();
 
-    private static bool TryMatchGenericTypes(
-        Type parameterType,
-        Type argumentType,
-        TypeParameterSubstitution inferredTypes,
-        HashSet<(Type, Type)> visitedPairs,
-        out bool result)
-    {
-        result = false;
-        var parameterGenericInfo = GetGenericTypeAndArguments(parameterType);
-        var argumentGenericInfo = GetGenericTypeAndArguments(argumentType);
-        if (parameterGenericInfo.Generic == null || argumentGenericInfo.Generic == null)
-            return false;
-
-        if (!parameterGenericInfo.Generic.Declaration.Equals(argumentGenericInfo.Generic.Declaration))
-            return false;
-
-        switch (parameterGenericInfo.Arguments.Count)
-        {
-            case > 0 when argumentGenericInfo.Arguments.Count > 0:
-            {
-                for (var index = 0; index < Math.Min(parameterGenericInfo.Arguments.Count, argumentGenericInfo.Arguments.Count); index++)
-                    if (!TryInferTypes(parameterGenericInfo.Arguments[index], argumentGenericInfo.Arguments[index], inferredTypes, visitedPairs))
-                        return false;
-
-                break;
-            }
-            case > 0 when argumentGenericInfo.Arguments.Count == 0:
-            {
-                for (var index = 0; index < Math.Min(parameterGenericInfo.Arguments.Count, argumentGenericInfo.Generic.Parameters.Count); index++)
-                    if (!TryInferTypes(argumentGenericInfo.Generic.Parameters[index], parameterGenericInfo.Arguments[index], inferredTypes, visitedPairs))
-                        return false;
-
-                break;
-            }
-            case 0 when argumentGenericInfo.Arguments.Count > 0:
-            {
-                for (var index = 0; index < Math.Min(parameterGenericInfo.Generic.Parameters.Count, argumentGenericInfo.Arguments.Count); index++)
-                    if (!TryInferTypes(parameterGenericInfo.Generic.Parameters[index], argumentGenericInfo.Arguments[index], inferredTypes, visitedPairs))
-                        return false;
-
-                break;
-            }
-        }
-
-        result = true;
-        return true;
-    }
-
     private static Type ExpandAliases(Type type) =>
         TypeSolver.Transform(
             type,
@@ -379,12 +328,4 @@ public sealed class TypeInferrer(Func<Node, Type> getType)
                 ? instantiated.Expand()
                 : candidateType
         );
-
-    private static (GenericType? Generic, List<Type> Arguments) GetGenericTypeAndArguments(Type type) =>
-        type switch
-        {
-            InstantiatedType instantiated => (instantiated.GenericType, instantiated.Arguments),
-            GenericType generic => (generic, []),
-            _ => (null, [])
-        };
 }
