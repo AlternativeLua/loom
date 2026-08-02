@@ -1371,7 +1371,7 @@ ToString_for_User = ToString_for_User :: User
 function ToString_for_User.to_string(self: User)
 	return "User" .. " { name: ''" .. self.name .. "', age: " .. tostring(self.age) .. " }"
 end
-const user = setmetatable({ name = "Runic", age = 21 }, Loom.merge_meta(ToString_for_User)) :: User
+const user = setmetatable({ name = "Runic", age = 21 }, ToString_for_User) :: User
 print(user:to_string())
 ```
 
@@ -1412,7 +1412,7 @@ Serialize_string_for_User = Serialize_string_for_User :: User
 function Serialize_string_for_User.serialize(self: User)
 	return `{self.name}, {self.age}`
 end
-const user = setmetatable({ name = "Runic", age = 21 }, Loom.merge_meta(Serialize_string_for_User)) :: User
+const user = setmetatable({ name = "Runic", age = 21 }, Serialize_string_for_User) :: User
 print(user:serialize())
 ```
 
@@ -1449,7 +1449,7 @@ FlagContainer_for_Flags = FlagContainer_for_Flags :: Flags
 function FlagContainer_for_Flags.has_flag(self: Flags, flag)
 	return self[flag] ~= nil
 end
-const flags = setmetatable({ [69] = true, [420] = true }, Loom.merge_meta(FlagContainer_for_Flags)) :: Flags
+const flags = setmetatable({ [69] = true, [420] = true }, FlagContainer_for_Flags) :: Flags
 print(flags:has_flag(69))
 ```
 ---
