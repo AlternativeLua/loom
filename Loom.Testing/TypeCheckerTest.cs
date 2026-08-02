@@ -2962,6 +2962,25 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_GenericInvocation_UnrelatedSelfReferentialParameter_NotCorrupted() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                interface Node {
+                    parent: Node?;
+                    value: number;
+                }
+
+                declare fn process<T = unknown>(node: Node): T;
+                declare fn get_node(): Node;
+
+                let n = get_node();
+                process(n)
+                """
+            )
+        );
+
+    [Fact]
     public void Checks_Inference_GenericTypeWithDefaultParameter()
     {
         const string source = "type Container<T = number> = T; fn wrap<T = Container>(value: T): T -> value; wrap(42)";

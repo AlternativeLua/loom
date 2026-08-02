@@ -1,7 +1,10 @@
+declare let game: DataModel;
+
 declare interface CreatableInstance: Instance { _is_creatable: true; }
 declare interface ServiceInstance: Instance { _is_service: true; }
 declare fn new_instance<T: CreatableInstance>: T;
 declare fn get_service<T: ServiceInstance>: T;
+declare fn require<T = unknown>(module: ModuleScript): T;
 
 interface Table;
 
@@ -61,4 +64,6 @@ interface TypeNameMap {
     User: User;
 }
 
-declare fn type_is<T: keyof (TypeNameMap)>(value: unknown, type_name: T): value is TypeNameMap[T];
+[luau_name("typeof")]
+declare fn type_of(value: unknown): keyof(TypeNameMap);
+declare fn type_is<T: keyof(TypeNameMap)>(value: unknown, type_name: T): value is TypeNameMap[T];

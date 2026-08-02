@@ -19,7 +19,7 @@ public sealed class InterfaceType(
             ? new IntersectionType([ObjectType, ..Constraints.Select(c => c.AssignabilityType)])
             : ObjectType;
 
-    public HashSet<string> TraitMethodNames { get; set; } = traitMethodNames ?? [];
+    public HashSet<string> TraitMethodNames { get; init; } = traitMethodNames ?? [];
     public override ObjectIndexer? Indexer
     {
         get => ObjectType.Indexer ?? Constraints.Select(c => c.Indexer).FirstOrDefault(i => i != null);

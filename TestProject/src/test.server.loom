@@ -1,2 +1,3 @@
-[attribute_usage(AttributeTargets.Function | AttributeTargets.Event)]
-declare fn attr: void;
+let m = game.find_first_child_of_class::<ModuleScript>()!;
+let v = require(m);
+print(v)

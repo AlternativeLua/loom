@@ -157,7 +157,7 @@ public sealed partial class TypeChecker
         if (cache.TryGetValue(type, out var cached))
             return cached;
 
-        cache[type] = PrimitiveType.Never;
+        cache[type] = type;
         var substitutedType = TrySubstituteTypeParameter(type, substitution, out var substituted)
             ? substituted
             : type is IndexedType indexedType

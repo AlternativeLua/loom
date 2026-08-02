@@ -148,7 +148,7 @@ public sealed partial class TypeChecker
                 InternalCodes.RedundantCode,
                 $"Null-forgiving operator has no effect since '{expressionType}' is not optional."
             );
-
+        
         return BindType(nullForgiving, expressionType.NonNullable());
     }
 

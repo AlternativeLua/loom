@@ -28,6 +28,3 @@ declare fn number(value: unknown): number?;
 
 declare fn get_metadata<T>(member_name: string?, attribute: unknown): unknown[]?;
 declare fn has_attribute<T>(member_name: string?, attribute: unknown): bool;
-
-[luau_name("typeof")]
-declare fn type_of(value: unknown): string;
