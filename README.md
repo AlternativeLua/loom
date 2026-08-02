@@ -60,6 +60,7 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
   - [While Loops](#while-loops)
   - [Sealed & Declared Interfaces](#sealed--declared-interfaces)
   - [`after` Statements](#after-statements)
+  - [`every` Statements](#every-statements)
   - [For Loops](#for-loops)
   - [Ternary Operator](#ternary-operator)
   - [keyof](#keyof)
@@ -119,10 +120,11 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
 
 ## Upcoming Features
 
-- `declare event` & `declare enum` – type declarations for events and enums (#46)
-- Pipe operator (#64)
+- Negation (`not`) pattern (#147)
+- Compiler watch mode (#150)
+- Intrinsic serialization API (#139)
 - `defer` statements (#73)
-- `every` statements (#141)
+- Pipe operator (#64)
 - Generic `event` declarations (#132)
 - Package management & installation pipeline (#111 & #112 respectively)
 - LSP implementation (#47)
@@ -836,7 +838,42 @@ task.delay(0.25, function(): ()
 	print(computed)
 end)
 ```
+### `every` Statements
+
+Every statements schedule a function to be called forever (or until the optional condition returns false) with a specified duration.
+
+```cs
+every 500ms {
+    print("half a second passed!");
+}
+```
+
+```luau
+Loom.every(0.5, nil, print, "half a second passed!")
+```
+
 ---
+
+```cs
+mut counter = 0;
+every 10hz while counter < 10 {
+    counter += 1;
+    print("polling while counter < 10");
+}
+```
+
+```luau
+local counter = 0
+Loom.every(0.1, function()
+    return counter < 10
+end, function()
+    counter += 1
+    print("polling while counter < 10")
+end)
+```
+
+---
+
 ### For Loops
 
 ```ts
