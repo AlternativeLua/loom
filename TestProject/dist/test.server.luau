@@ -1,1 +1,0 @@
-type Flags = number

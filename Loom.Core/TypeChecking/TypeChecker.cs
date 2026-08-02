@@ -139,6 +139,19 @@ public sealed partial class TypeChecker
         return BindType(@as, castedType);
     }
 
+    public override Type VisitNullForgiving(NullForgiving nullForgiving)
+    {
+        var expressionType = Visit(nullForgiving.Expression);
+        if (!Type.IsOptional(expressionType))
+            _diagnostics.Warn(
+                nullForgiving,
+                InternalCodes.RedundantCode,
+                $"Null-forgiving operator has no effect since '{expressionType}' is not optional."
+            );
+
+        return BindType(nullForgiving, expressionType.NonNullable());
+    }
+
     public override Type VisitIs(Is @is)
     {
         var expressionType = Visit(@is.Expression);

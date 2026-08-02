@@ -70,6 +70,7 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
   - [Pattern Matching](#pattern-matching)
   - [Discriminated Unions](#discriminated-unions)
   - [Optional Chaining](#optional-chaining)
+  - [Null-Forgiving Expression](#null-forgiving-expression)
   - [Instance Helpers](#instance-helpers)
   - [string() & number()](#string--number)
   - [Decorators](#decorators)
@@ -97,6 +98,7 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
 - **Pattern matching** – `match` expressions with literal, range, guard, or-pattern, and destructuring arms, plus exhaustiveness checking over unions. See
   [example](#pattern-matching).
 - **Optional chaining** – `?.` short-circuits through nullable member and index access instead of throwing. See [example](#optional-chaining).
+- **Null-forgiving expression** – `!` strips optionality from a type as a compile-time-only assertion, no runtime check. See [example](#null-forgiving-expression).
 - **Default parameter values** – Omit trailing arguments at the call site and fall back to a default. See [example](#functions).
 - **Generic functions and types** – Full support for type parameters including constraints and defaults
 - **Result pattern for errors** – Error handling uses the result pattern from Rust, no more `pcall`s. See [example](#result-pattern).
@@ -1154,6 +1156,20 @@ type Outer = {
 }
 const a: Outer? = nil
 const x = if a ~= nil then if a.b ~= nil then a.b.c else nil else nil
+```
+---
+## Null-Forgiving Expression
+
+`!` asserts an expression isn't `nil` without a runtime check — a compile-time-only type cast, purely for the cases where you know more than the type checker does.
+
+```rs
+let nullable: number? = 5;
+let forgiven = nullable!;
+```
+
+```luau
+const nullable: number? = 5
+const forgiven = nullable :: Loom.NonNullable<typeof(nullable)>
 ```
 ---
 ## Instance Helpers

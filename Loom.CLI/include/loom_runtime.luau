@@ -4,7 +4,7 @@
 const Event = require("./event")
 const Loom = {}
 
-type function NonNullable(ty)
+export type function NonNullable(ty)
 	return types.intersectionof(ty, types.negationof(types.singleton(nil)))
 end
 

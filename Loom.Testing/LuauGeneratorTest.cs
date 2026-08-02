@@ -2715,6 +2715,31 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_NullForgiving_ProducesNonNullableTypeCast()
+    {
+        var luauTree = Utility.GetLuauAST("let nullable: number? = 5; let forgiven = nullable!;", true, false);
+        var variable = luauTree.Statements.OfType<ConstVariable>().Single(v => v.Name == "forgiven");
+        var typeCast = Assert.IsType<TypeCast>(variable.Initializer);
+        var identifier = Assert.IsType<Identifier>(typeCast.Expression);
+        Assert.Equal("nullable", identifier.Name);
+
+        var qualifiedType = Assert.IsType<QualifiedTypeName>(typeCast.Type);
+        Assert.Equal(["Loom"], qualifiedType.Qualifications);
+        Assert.Equal("NonNullable", qualifiedType.FinalName.Name);
+
+        var typeOf = Assert.IsType<TypeOfType>(Assert.Single(qualifiedType.FinalName.TypeArguments));
+        var typeOfIdentifier = Assert.IsType<Identifier>(typeOf.Expression);
+        Assert.Equal("nullable", typeOfIdentifier.Name);
+    }
+
+    [Fact]
+    public void Generates_NullForgiving_RequiresRuntimeImport()
+    {
+        var luauTree = Utility.GetLuauAST("let nullable: number? = 5; let forgiven = nullable!;", true, false);
+        Assert.Contains(luauTree.Statements, s => s is ConstVariable { Name: "Loom" });
+    }
+
+    [Fact]
     public void Generates_Identifiers()
     {
         var luauTree = Utility.GetLuauAST("abc");

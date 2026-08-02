@@ -149,6 +149,13 @@ public sealed partial class TypeChecker
         {
             _semanticModel.TypeSolver.AddConstraint(leftType, rule.LeftType, binaryOperator.Left);
             _semanticModel.TypeSolver.AddConstraint(rightType, rule.RightType, binaryOperator.Right);
+
+            if (IsBitwiseOperator(binaryOperator.Operator.Kind)
+                && GetEnumMemberOwner(binaryOperator.Left) is { } enumDeclaration
+                && enumDeclaration == GetEnumMemberOwner(binaryOperator.Right)
+                && _semanticModel.GetType(enumDeclaration) is ObjectType enumObjectType)
+                return BindType(binaryOperator, enumObjectType.PropertyUnion());
+
             return BindType(binaryOperator, rule.ReturnType);
         }
 
@@ -199,4 +206,16 @@ public sealed partial class TypeChecker
 
         return BindType(unaryOperator, Types.PrimitiveType.Never);
     }
+
+    private static bool IsBitwiseOperator(SyntaxKind kind) =>
+        kind is SyntaxKind.Ampersand or SyntaxKind.Pipe or SyntaxKind.Tilde or SyntaxKind.LArrowLArrow or SyntaxKind.RArrowRArrow or SyntaxKind.RArrowRArrowRArrow;
+
+    private EnumDeclaration? GetEnumMemberOwner(Expression expression) =>
+        expression switch
+        {
+            QualifiedName name when _semanticModel.GetDeclaringSymbol(name.Identifier) is { Declaration: EnumDeclaration declaration } => declaration,
+            PropertyAccess access when _semanticModel.GetDeclaringSymbol(access.Expression) is { Declaration: EnumDeclaration declaration } => declaration,
+            ElementAccess elementAccess when _semanticModel.GetDeclaringSymbol(elementAccess.Expression) is { Declaration: EnumDeclaration declaration } => declaration,
+            _ => null
+        };
 }

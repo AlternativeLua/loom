@@ -467,6 +467,15 @@ public class VisitorTraversalTest
         );
 
     [Fact]
+    public void NullForgiving_VisitsExpression() =>
+        AssertVisitOrder(
+            "x!",
+            "ExpressionStatement",
+            "NullForgiving",
+            "Identifier"
+        );
+
+    [Fact]
     public void ArrayType_VisitsElementType() =>
         AssertVisitOrder(
             "let x: number[];",

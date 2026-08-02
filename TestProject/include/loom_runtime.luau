@@ -4,6 +4,10 @@
 const Event = require("./event")
 const Loom = {}
 
+export type function NonNullable(ty)
+	return types.intersectionof(ty, types.negationof(types.singleton(nil)))
+end
+
 export type CreatableInstance = Instance
 export type ServiceInstance = Instance
 export type Range = { minimum: number, maximum: number }

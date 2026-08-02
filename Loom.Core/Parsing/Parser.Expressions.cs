@@ -98,6 +98,8 @@ public sealed partial class Parser
                 expression = ParseElementAccess(leftBracket, expression);
             else if (Match(out var dot, SyntaxKind.Dot, SyntaxKind.QuestionDot))
                 expression = ParseNamedAccess(dot, expression);
+            else if (Current().Kind == SyntaxKind.Bang && IsOnSameLine(expression.Tokens[^1], Current()))
+                expression = new NullForgiving(expression, Advance());
             else
                 break;
 
@@ -105,6 +107,8 @@ public sealed partial class Parser
     }
 
     private bool AtInvocationStart() => Current() is { Kind: SyntaxKind.LParen or SyntaxKind.ColonColonLArrow };
+
+    private static bool IsOnSameLine(Token previous, Token next) => previous.GetLocation().End.Line == next.GetLocation().Start.Line;
 
     private ElementAccess ParseElementAccess(Token leftBracket, Expression expression)
     {

@@ -634,6 +634,33 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_BitwiseOr_OnSameEnumMembers_PreservesEnumType() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                enum Flags { A = 1 << 0, B = 1 << 1, C = 1 << 2 }
+                fn accept(flags: Flags): void { }
+                accept(Flags.A | Flags.B)
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_BitwiseOr_OnDifferentEnums_WidensToNumber()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            enum Flags { A = 1, B = 2 }
+            enum Other { X = 1, Y = 2 }
+            fn accept(flags: Flags): void { }
+            accept(Flags.A | Other.X)
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'number' is not assignable to type '1 | 2'.");
+    }
+
+    [Fact]
     public void ThrowsFor_EnumTypeMismatch()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics("enum Status { Active, Inactive } let x: Status = 5");
@@ -702,6 +729,34 @@ public class TypeCheckerTest
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics("69 as string");
         Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '69' is not assignable to type 'string'.");
+    }
+
+    [Fact]
+    public void Checks_NullForgiving_StripsOptionality()
+    {
+        var type = Utility.GetLastStatementType("let x: number? = 5; let y = x!;");
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void Checks_NullForgiving_OnInterfaceProperty_StripsOptionality()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Foo { bar: number? }
+            let foo = new Foo { bar: 1 };
+            foo.bar!
+            """
+        );
+
+        Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Fact]
+    public void ThrowsFor_NullForgiving_RedundantWhenNotOptional()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x: number = 5; let y = x!;");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.RedundantCode, "Null-forgiving operator has no effect since 'number' is not optional.");
     }
 
     [Fact]

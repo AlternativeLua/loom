@@ -1,0 +1,39 @@
+﻿ExpressionStatement(
+  Expression: NullForgiving(
+    Expression: Identifier(
+      Name: Token(Identifier, "nullable")
+      Token(Identifier, "nullable")
+    )
+    Bang: Token(Bang, "!")
+  )
+)
+ExpressionStatement(
+  Expression: PropertyAccess(
+    Expression: NullForgiving(
+      Expression: Identifier(
+        Name: Token(Identifier, "nullable")
+        Token(Identifier, "nullable")
+      )
+      Bang: Token(Bang, "!")
+    )
+    Names: [
+      DotName(
+        Dot: Token(Dot, ".")
+        Name: Token(Identifier, "field")
+        IsOptional: False
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: UnaryOperator(
+    Operator: Token(Bang, "!")
+    Operand: NullForgiving(
+      Expression: Identifier(
+        Name: Token(Identifier, "nullable")
+        Token(Identifier, "nullable")
+      )
+      Bang: Token(Bang, "!")
+    )
+  )
+)

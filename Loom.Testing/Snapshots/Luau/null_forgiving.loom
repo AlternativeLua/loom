@@ -1,0 +1,4 @@
+interface Player { health: number? }
+
+let player = new Player { health: 100 };
+let health = player.health!
