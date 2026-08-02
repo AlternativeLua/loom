@@ -112,11 +112,15 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitElementAccess(ElementAccess elementAccess)
     {
         var luauAccess = new Luau.AST.ElementAccess(Visit(elementAccess.Expression), Visit(elementAccess.IndexExpression));
-        return _macroExpander.TryGetElementAccessMacro(elementAccess, luauAccess, out var replacement)
-            ? replacement
-            : luauAccess.Index is StringLiteral literal
-                ? GenerateRenamedAccess(elementAccess, luauAccess.Target, [literal.Value])
-                : luauAccess;
+        if (_macroExpander.TryGetElementAccessMacro(elementAccess, luauAccess, out var replacement))
+            return replacement;
+
+        if (_macroExpander.TryGetInvocationMacroReference(elementAccess, luauAccess, out var referenceReplacement))
+            return referenceReplacement;
+
+        return luauAccess.Index is StringLiteral literal
+            ? GenerateRenamedAccess(elementAccess, luauAccess.Target, [literal.Value])
+            : luauAccess;
     }
 
     public override LuauNode VisitBinaryOperator(BinaryOperator binaryOperator)

@@ -65,6 +65,111 @@ public class MacroExpanderTest
     }
 
     [Fact]
+    public void Generates_InvocationMacroReference_ViaElementAccess_Ok()
+    {
+        const string source = """
+            declare fn consume<T, E>(callback: fn(value: T): Result<T, E>): void;
+            consume(Result["ok"]);
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var consumeCall = Assert.IsType<Call>(statement.Expression);
+        var anonymousFunction = Assert.IsType<AnonymousFunction>(Assert.Single(consumeCall.Arguments));
+        var returnStatement = Assert.IsType<Return>(Assert.Single(anonymousFunction.Body.Statements));
+        var table = Assert.IsType<Table>(returnStatement.Expression);
+
+        var okInit = Assert.IsType<PropertyTableInitializer>(table.Initializers[0]);
+        Assert.Equal("ok", okInit.PropertyName);
+    }
+
+    [Fact]
+    public void Generates_InvocationMacroReference_ToStringMacroOnlyMember_WrapsCorrectly()
+    {
+        const string source = """
+            declare fn consumeStr(cb: fn(): string): void;
+            consumeStr("abc".upper);
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var consumeCall = Assert.IsType<Call>(statement.Expression);
+        var anonymousFunction = Assert.IsType<AnonymousFunction>(Assert.Single(consumeCall.Arguments));
+        Assert.Empty(anonymousFunction.Parameters);
+
+        var returnStatement = Assert.IsType<Return>(Assert.Single(anonymousFunction.Body.Statements));
+        var upperCall = Assert.IsType<Call>(returnStatement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(upperCall.Callee);
+        Assert.Equal(["upper"], callee.Names);
+        Assert.Equal("string", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("abc", Assert.IsType<StringLiteral>(Assert.Single(upperCall.Arguments)).Value);
+    }
+
+    [Fact]
+    public void Generates_ArrayInvocation_UnrecognizedMember_FallsThroughUnexpanded()
+    {
+        const string source = """
+            let arr: number[] = [1, 2, 3];
+            arr.bogus();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source);
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal(["bogus"], callee.Names);
+    }
+
+    [Fact]
+    public void Generates_RangeInvocation_UnrecognizedMember_FallsThroughUnexpanded()
+    {
+        const string source = """
+            let rng = 1..10;
+            rng.bogus();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source);
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal(["bogus"], callee.Names);
+    }
+
+    [Fact]
+    public void Generates_ResultStaticInvocation_UnrecognizedMember_FallsThroughUnexpanded()
+    {
+        const string source = """
+            declare fn consume<T, E>(callback: fn(value: T): Result<T, E>): void;
+            Result.bogus();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal(["bogus"], callee.Names);
+    }
+
+    [Fact]
+    public void Generates_StringInvocation_UnrecognizedMember_FallsThroughUnexpanded()
+    {
+        const string source = """
+            let s = "abc";
+            s.bogus();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source);
+        var statement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var call = Assert.IsType<Call>(statement.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal(["bogus"], callee.Names);
+    }
+
+    [Fact]
     public void Generates_InvocationMacroReference_NestedInArgument()
     {
         const string source = """

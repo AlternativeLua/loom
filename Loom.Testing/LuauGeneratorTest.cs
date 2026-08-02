@@ -3315,6 +3315,30 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_EventConnect_ThroughNamespaceImport_UsesTheModulesConnectionStore()
+    {
+        const string eventsModule = "export event tick;";
+        const string mainModule = """
+            import * as ev from "./events"
+            fn h(): void { }
+            ev.tick += h;
+            ev.tick -= h;
+            """;
+
+        Utility.WithTempProject(
+            [("main.loom", mainModule), ("events.loom", eventsModule)],
+            (_, result) =>
+            {
+                Utility.AssertNoErrors(result);
+
+                var main = result.Files.Single(file => file.SourceFile.Name == "main.loom");
+                Assert.Contains("_tick_connections[h] = ev.tick:Connect(h)", main.RenderedLuau);
+                Assert.Contains("Loom.disconnect_event(_tick_connections, h)", main.RenderedLuau);
+            }
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_EventDisconnect_WhenFunctionRequiresAnonymousWrapper()
     {
         const string source = """
@@ -4991,6 +5015,173 @@ public class LuauGeneratorTest
         var absent = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "absent");
         Assert.True(Assert.IsType<BooleanLiteral>(present.Initializer).Value);
         Assert.False(Assert.IsType<BooleanLiteral>(absent.Initializer).Value);
+    }
+
+    [Fact]
+    public void Generates_GetMetadata_WithNoneMemberName_ReadsInterfaceLevelAttribute()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            enum Level { Low = 1, High = 2 }
+            fn tag(level: Level): void { }
+            [tag(Level.High)]
+            interface Account { balance: number }
+            let meta = get_metadata::<Account>(none, tag);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "meta");
+        var table = Assert.IsType<Table>(declaration.Initializer);
+        var arg = Assert.IsType<TableInitializer>(Assert.Single(table.Initializers));
+        Assert.Equal(2, Assert.IsType<NumberLiteral>(arg.Value).Value);
+    }
+
+    [Fact]
+    public void Generates_GetMetadata_FoldsDoubleStringAndBoolArgs()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn tag(a: number, b: string, c: bool): void { }
+            [tag(1.5, "hi", true)]
+            interface Account { balance: number }
+            let meta = get_metadata::<Account>(none, tag);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "meta");
+        var table = Assert.IsType<Table>(declaration.Initializer);
+        Assert.Equal(3, table.Initializers.Count);
+
+        var first = Assert.IsType<TableInitializer>(table.Initializers[0]);
+        Assert.Equal(1.5, Assert.IsType<NumberLiteral>(first.Value).Value);
+
+        var second = Assert.IsType<TableInitializer>(table.Initializers[1]);
+        Assert.Equal("hi", Assert.IsType<StringLiteral>(second.Value).Value);
+
+        var third = Assert.IsType<TableInitializer>(table.Initializers[2]);
+        Assert.True(Assert.IsType<BooleanLiteral>(third.Value).Value);
+    }
+
+    [Fact]
+    public void Generates_GetMetadata_FoldsNoneArgToNilLiteral()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn tag(a: unknown): void { }
+            [tag(none)]
+            interface Account { balance: number }
+            let meta = get_metadata::<Account>(none, tag);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "meta");
+        var table = Assert.IsType<Table>(declaration.Initializer);
+        var arg = Assert.IsType<TableInitializer>(Assert.Single(table.Initializers));
+        Assert.IsType<NilLiteral>(arg.Value);
+    }
+
+    [Fact]
+    public void ThrowsFor_GetMetadata_WithoutInterfaceTypeArgument()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            fn tag(): void { }
+            let meta = get_metadata::<number>("x", tag);
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidTypeArguments, "'get_metadata' requires an interface type argument.");
+    }
+
+    [Fact]
+    public void ThrowsFor_GetMetadata_WithWrongArgumentCount()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface Account { balance: number }
+            fn tag(): void { }
+            let meta = get_metadata::<Account>("balance");
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CompilerError, "'get_metadata' expects exactly 2 arguments.");
+    }
+
+    [Fact]
+    public void ThrowsFor_GetMetadata_WithUnknownMemberName()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface Account { balance: number }
+            fn tag(): void { }
+            let meta = get_metadata::<Account>("nonexistent", tag);
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.UnknownMetadataMember, "Interface 'Account' has no member 'nonexistent'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_GetMetadata_WithNonStringNonNoneMemberName()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface Account { balance: number }
+            fn tag(): void { }
+            let meta = get_metadata::<Account>(69, tag);
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.UnknownMetadataMember, "'member_name' must be a string literal or 'none'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_GetMetadata_WithNonDecoratorAttributeReference()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface Account { balance: number }
+            let meta = get_metadata::<Account>("balance", 69);
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidMetadataAttributeReference,
+            "'attribute' must be a direct reference to a decorator function."
+        );
+    }
+
+    [Fact]
+    public void Generates_StringGlobal_FoldsStringLiteralArgument()
+    {
+        var luauTree = Utility.GetLuauAST("let m = string(\"hi\")");
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        Assert.Equal("hi", Assert.IsType<StringLiteral>(declaration.Initializer).Value);
+    }
+
+    [Fact]
+    public void Generates_StringGlobal_FoldsBooleanLiteralArgument()
+    {
+        var luauTree = Utility.GetLuauAST("let m = string(true)");
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        Assert.Equal("true", Assert.IsType<StringLiteral>(declaration.Initializer).Value);
+    }
+
+    [Fact]
+    public void Generates_StringGlobal_FoldsNoneLiteralArgument()
+    {
+        var luauTree = Utility.GetLuauAST("let m = string(none)");
+        var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Single());
+        Assert.Equal("nil", Assert.IsType<StringLiteral>(declaration.Initializer).Value);
     }
 
     [Fact]

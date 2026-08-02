@@ -120,7 +120,7 @@ internal static class InvocationMacroReference
 
             currentType = TypeSimplifier.GetMemberPropertyType(currentType, names[i].Name.Text);
             if (currentType is null)
-                return false;
+                break;
         }
 
         if (foundProvider is null || foundIndex != memberIndex)
