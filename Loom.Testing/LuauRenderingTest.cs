@@ -17,6 +17,9 @@ public class LuauRenderingTest
     public void Renders_Comment() => Assert.Equal("-- hello!", new Comment(" hello!").Render());
 
     [Fact]
+    public void Renders_NoOpStatement_AsEmptyString() => Assert.Equal("", new NoOpStatement().Render());
+
+    [Fact]
     public void Renders_Simple_IfStatement_Break()
     {
         var chunk = new Chunk([new Break()]);

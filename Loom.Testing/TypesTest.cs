@@ -1551,6 +1551,21 @@ public class TypesTest
     }
 
     [Fact]
+    public void TypeVariable_GetHashCode_EqualForSameId() => Assert.Equal(new TypeVariable(7).GetHashCode(), new TypeVariable(7).GetHashCode());
+
+    [Fact]
+    public void TupleMarkerType_EqualsOtherTupleMarkerType() => Assert.True(new TupleMarkerType().Equals(new TupleMarkerType()));
+
+    [Fact]
+    public void TupleMarkerType_DoesNotEqualOtherTypes() => Assert.False(new TupleMarkerType().Equals(Number));
+
+    [Fact]
+    public void TupleMarkerType_IsAssignableToOtherTupleMarkerType() => Assert.True(new TupleMarkerType().IsAssignableTo(new TupleMarkerType()));
+
+    [Fact]
+    public void TupleMarkerType_ToString() => Assert.Equal("Tuple", new TupleMarkerType().ToString());
+
+    [Fact]
     public void PrimitiveType_ToString()
     {
         Assert.Equal("number", Number.ToString());

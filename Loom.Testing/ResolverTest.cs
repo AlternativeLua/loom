@@ -2348,4 +2348,16 @@ public class ResolverTest
         Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'unknown_decorator'.");
     }
     #endregion Decorators
+
+    [Fact]
+    public void DeclareFunctionSignature_TryGetIntrinsicAttribute_FindsAttributeByName()
+    {
+        var semanticModel = Utility.GetSemanticModel("[luau_name(\"Bar\")]\ndeclare fn foo(): void;");
+        Utility.AssertNoErrors(semanticModel.Diagnostics);
+
+        var signature = semanticModel.Tree.GetDescendants<DeclareFunctionSignature>().Single();
+        Assert.True(signature.TryGetIntrinsicAttribute(semanticModel, "luau_name", out var attribute));
+        Assert.Equal("luau_name", attribute.Name);
+        Assert.False(signature.TryGetIntrinsicAttribute(semanticModel, "luau_method", out _));
+    }
 }

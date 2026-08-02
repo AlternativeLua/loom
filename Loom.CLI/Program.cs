@@ -14,9 +14,10 @@ if (config == null)
 var compilationUnit = new CompilationUnit(config, diagnosticOptions);
 var result = compilationUnit.Compile();
 writeIncludeFolder(config);
-var debugInfo = result.Files
+var diagnosticInfo = result.Files
     .Where(f => !f.SourceFile.IsDeclaration)
-    .Select(f => f.GetDebugInfo(false, debugDiagnostics: config.Debug));
+    .Select(f => (config.Debug ? f.Diagnostics : f.Diagnostics.WithoutInfo()).ToString())
+    .Where(diagnostics => !string.IsNullOrEmpty(diagnostics));
 
 var failureInfo = result.Failures.Count == 0
     ? []
@@ -26,7 +27,7 @@ var failureInfo = result.Failures.Count == 0
         DiagnosticBag.Concat(result.Failures.ConvertAll(failure => failure.Diagnostics)).WithoutInfo().ToString()
     };
 
-Console.WriteLine(string.Join(Environment.NewLine, debugInfo.Concat(failureInfo)));
+Console.WriteLine(string.Join(Environment.NewLine, diagnosticInfo.Concat(failureInfo)));
 const string includeFolderName = "include";
 return;
 

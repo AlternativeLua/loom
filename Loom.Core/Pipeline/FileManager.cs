@@ -14,6 +14,7 @@ public static class FileManager
             Directory.CreateDirectory(directory);
 
         File.WriteAllText(file.Path, file.RenderedLuau);
+        Console.WriteLine($"[Info] Wrote {file.Path}");
     }
 
     public static string GetOutputPath(SourceFile file, LoomConfig config)
