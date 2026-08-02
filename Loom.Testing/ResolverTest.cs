@@ -394,6 +394,80 @@ public class ResolverTest
     }
 
     [Fact]
+    public void ThrowsFor_ReturnInsideEveryBody_OutsideFunction()
+    {
+        var diagnostics = Utility.GetSemanticModel("every 1s { return 42; }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ReturnOutsideFunction, "Return statements can only be used inside of functions.");
+    }
+
+    [Fact]
+    public void ThrowsFor_EveryDuration_UsesUndefinedVariable()
+    {
+        var diagnostics = Utility.GetSemanticModel("every unknown { }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'unknown'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_EveryCondition_UsesUndefinedVariable()
+    {
+        var diagnostics = Utility.GetSemanticModel("every 1s while unknown { }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'unknown'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_VariableDeclaredInEveryBody_UsedOutside()
+    {
+        var diagnostics = Utility.GetSemanticModel("every 1s { let x = 42; } x;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'x'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ContinueInsideEvery()
+    {
+        var diagnostics = Utility.GetSemanticModel("every 1s { continue }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ContinueOutsideLoop, "Continue statements can only be used inside of loops.");
+    }
+
+    [Fact]
+    public void ThrowsFor_BreakInsideEvery()
+    {
+        var diagnostics = Utility.GetSemanticModel("every 1s { break }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.BreakOutsideLoop, "Break statements can only be used inside of loops.");
+    }
+
+    [Fact]
+    public void ThrowsFor_BreakInsideEvery_NestedInLoop()
+    {
+        var diagnostics = Utility.GetSemanticModel("while true { every 1s { break } }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.BreakOutsideLoop, "Break statements can only be used inside of loops.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ReturnInsideEvery()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn abc { every 1s { return 69 } }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ReturnInAfter, "Cannot return a value from an 'every' statement body.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ReturnInsideAfter_NestedInsideEvery()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn abc { every 1s { after 1s { return 69 } } }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ReturnInAfter, "Cannot return a value from an 'after' statement body.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ReturnInsideEvery_NestedInsideAfter()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn abc { after 1s { every 1s { return 69 } } }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ReturnInAfter, "Cannot return a value from an 'every' statement body.");
+    }
+
+    [Fact]
+    public void Allows_ReturnInsideFunctionExpression_NestedInsideEvery() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("every 1s { let f = fn(): number { return 69; }; }"));
+
+    [Fact]
     public void ThrowsFor_DeclareVariable_MissingType()
     {
         var diagnostics = Utility.GetSemanticModel("declare let x").Diagnostics;
@@ -1534,6 +1608,25 @@ public class ResolverTest
 
     [Fact]
     public void Allows_After_WithEmptyBlock() => Utility.AssertNoErrors(Utility.GetSemanticModel("after 1s { }"));
+
+    [Fact]
+    public void Allows_VariableInitializedBeforeEvery_UsedAfter() => Utility.AssertNoErrors(Utility.GetSemanticModel("let x = 1; every 1s { } x;"));
+
+    [Fact]
+    public void Allows_EveryInsideIf() => Utility.AssertNoErrors(Utility.GetSemanticModel("if true { every 1s { } }"));
+
+    [Fact]
+    public void Allows_EveryInsideWhile() => Utility.AssertNoErrors(Utility.GetSemanticModel("while true { every 1s { } }"));
+
+    [Fact]
+    public void Allows_EveryBody_WithShadowedVariable() => Utility.AssertNoErrors(Utility.GetSemanticModel("let x = 1; every 1s { let x = 2; x; } x;"));
+
+    [Fact]
+    public void Allows_Every_WithEmptyBlock() => Utility.AssertNoErrors(Utility.GetSemanticModel("every 1s { }"));
+
+    [Fact]
+    public void Allows_EveryGuardCondition_ReferencingOuterVariable() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("let running = true; every 1s while running { }"));
 
     [Fact]
     public void Allows_NonSealedInterfaceConstraints() => Utility.AssertNoErrors(Utility.GetSemanticModel("interface A; interface B: A;"));

@@ -79,6 +79,20 @@ public sealed partial class TypeChecker
         return BindType(after, Visit(after.Body));
     }
 
+    public override Type VisitEvery(Every every)
+    {
+        var durationType = Visit(every.Duration);
+        _semanticModel.TypeSolver.AddConstraint(durationType, Types.PrimitiveType.Number, every.Duration);
+
+        if (every.Condition != null)
+        {
+            var conditionType = Visit(every.Condition);
+            _semanticModel.TypeSolver.AddConstraint(conditionType, Types.PrimitiveType.Bool, every.Condition);
+        }
+
+        return BindType(every, Visit(every.Body));
+    }
+
     public override Type VisitWhile(While @while)
     {
         var conditionType = Visit(@while.Condition);

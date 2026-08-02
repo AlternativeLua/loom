@@ -91,6 +91,18 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitAfter(After after) =>
         new Luau.AST.ExpressionStatement(LuauFactory.TaskCall("delay", [Visit(after.Duration), ..UnwrapFunctionArgument(after.Body)]));
 
+    public override LuauNode VisitEvery(Every every)
+    {
+        _semanticModel.RuntimeReferences += 1;
+        LuauExpression conditionArgument = every.Condition != null
+            ? new AnonymousFunction(null, [], null, new Chunk([new Luau.AST.Return(Visit(every.Condition))]))
+            : new NilLiteral();
+
+        return new Luau.AST.ExpressionStatement(
+            LuauFactory.RuntimeLibraryCall(["every"], [Visit(every.Duration), conditionArgument, ..UnwrapFunctionArgument(every.Body)])
+        );
+    }
+
     public override LuauNode VisitReturn(Return @return)
     {
         if (@return.Expression == null)

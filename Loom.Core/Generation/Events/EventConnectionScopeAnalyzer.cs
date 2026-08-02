@@ -133,7 +133,7 @@ internal static class EventConnectionScopeAnalyzer
 
     /// <summary>
     ///     Walks up from <paramref name="node" /> to the nearest Luau-scope-introducing ancestor (a Block,
-    ///     the file root, an if-branch, or a while/for/after/function body), returning that scope's
+    ///     the file root, an if-branch, or a while/for/after/every/function body), returning that scope's
     ///     identity plus the direct child of the scope that <paramref name="node" /> descends through.
     /// </summary>
     private static (ScopeId Id, Node EntryChild)? FindImmediateScope(Node node)
@@ -158,6 +158,8 @@ internal static class EventConnectionScopeAnalyzer
                     return (new ScopeId(@for), current);
                 case After after when after.Body == current:
                     return (new ScopeId(after), current);
+                case Every every when every.Body == current:
+                    return (new ScopeId(every), current);
                 case FunctionDeclaration function when function.Body == current:
                     return (new ScopeId(function), current);
                 case FunctionExpression function when function.Body == current:

@@ -502,6 +502,83 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_EveryStatement_WithCallExpressionBody()
+    {
+        var luauTree = Utility.GetLuauAST("every 1s foo(69)");
+        Assert.Single(luauTree.Statements);
+
+        var exprStmt = Assert.IsType<ExpressionStatement>(luauTree.Statements.First());
+        var call = Assert.IsType<Call>(exprStmt.Expression);
+        var propAccess = Assert.IsType<PropertyAccess>(call.Callee);
+        var target = Assert.IsType<Identifier>(propAccess.Target);
+        Assert.Equal("Loom", target.Name);
+        Assert.Single(propAccess.Names);
+        Assert.Equal("every", propAccess.Names.First());
+        Assert.Equal(4, call.Arguments.Count);
+
+        var duration = Assert.IsType<NumberLiteral>(call.Arguments[0]);
+        Assert.Equal(1, duration.Value);
+
+        Assert.IsType<NilLiteral>(call.Arguments[1]);
+
+        var fnIdentifier = Assert.IsType<Identifier>(call.Arguments[2]);
+        Assert.Equal("foo", fnIdentifier.Name);
+
+        var argument = Assert.IsType<NumberLiteral>(call.Arguments[3]);
+        Assert.Equal(69, argument.Value);
+    }
+
+    [Fact]
+    public void Generates_EveryStatement_WithBlockBody()
+    {
+        var luauTree = Utility.GetLuauAST("every 2s { foo(); bar() }");
+        Assert.Single(luauTree.Statements);
+
+        var exprStmt = Assert.IsType<ExpressionStatement>(luauTree.Statements.First());
+        var call = Assert.IsType<Call>(exprStmt.Expression);
+        var propAccess = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal("Loom", ((Identifier)propAccess.Target).Name);
+        Assert.Equal("every", propAccess.Names.First());
+
+        Assert.Equal(3, call.Arguments.Count);
+        var duration = Assert.IsType<NumberLiteral>(call.Arguments[0]);
+        Assert.Equal(2, duration.Value);
+
+        Assert.IsType<NilLiteral>(call.Arguments[1]);
+
+        var anonFn = Assert.IsType<AnonymousFunction>(call.Arguments[2]);
+        Assert.Empty(anonFn.Parameters);
+        Assert.Equal(2, anonFn.Body.Statements.Count);
+
+        var firstStmt = Assert.IsType<Call>(Assert.IsType<ExpressionStatement>(anonFn.Body.Statements.First()).Expression);
+        var secondStmt = Assert.IsType<Call>(Assert.IsType<ExpressionStatement>(anonFn.Body.Statements.Last()).Expression);
+        Assert.Equal("foo", ((Identifier)firstStmt.Callee).Name);
+        Assert.Equal("bar", ((Identifier)secondStmt.Callee).Name);
+    }
+
+    [Fact]
+    public void Generates_EveryStatement_WithCondition()
+    {
+        var luauTree = Utility.GetLuauAST("every 1s while isActive foo()");
+        Assert.Single(luauTree.Statements);
+
+        var exprStmt = Assert.IsType<ExpressionStatement>(luauTree.Statements.First());
+        var call = Assert.IsType<Call>(exprStmt.Expression);
+        Assert.Equal(3, call.Arguments.Count);
+
+        var conditionFn = Assert.IsType<AnonymousFunction>(call.Arguments[1]);
+        Assert.Empty(conditionFn.Parameters);
+        Assert.Null(conditionFn.ReturnType);
+
+        var returnStmt = Assert.IsType<Return>(Assert.Single(conditionFn.Body.Statements));
+        var conditionIdentifier = Assert.IsType<Identifier>(returnStmt.Expression);
+        Assert.Equal("isActive", conditionIdentifier.Name);
+
+        var fnIdentifier = Assert.IsType<Identifier>(call.Arguments[2]);
+        Assert.Equal("foo", fnIdentifier.Name);
+    }
+
+    [Fact]
     public void Generates_WhileLoop_WithBlockBody()
     {
         var luauTree = Utility.GetLuauAST("while true { break }");

@@ -28,6 +28,7 @@ public sealed partial class Parser
             [SyntaxKind.IfKeyword] = ParseIf,
             [SyntaxKind.ForKeyword] = ParseFor,
             [SyntaxKind.AfterKeyword] = ParseAfter,
+            [SyntaxKind.EveryKeyword] = ParseEvery,
             [SyntaxKind.WhileKeyword] = ParseWhile,
             [SyntaxKind.BreakKeyword] = ParseBreak,
             [SyntaxKind.ContinueKeyword] = ParseContinue
@@ -167,6 +168,21 @@ public sealed partial class Parser
         var condition = ParseExpression();
         var body = ParseControlFlowBody(keyword);
         return new After(keyword, condition, body);
+    }
+
+    private Every ParseEvery(Token keyword)
+    {
+        var duration = ParseExpression();
+        Token? whileKeyword = null;
+        Expression? condition = null;
+        if (Match(out var w, SyntaxKind.WhileKeyword))
+        {
+            whileKeyword = w;
+            condition = ParseExpression();
+        }
+
+        var body = ParseControlFlowBody(keyword);
+        return new Every(keyword, duration, whileKeyword, condition, body);
     }
 
     private static Break ParseBreak(Token keyword) => new(keyword);

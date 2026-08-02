@@ -1,0 +1,251 @@
+﻿Every(
+  Duration: Literal(
+    Token(NumberLiteral, "5s")
+    Value: 5
+  )
+  WhileKeyword: null
+  Condition: null
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: []
+  )
+)
+Every(
+  Duration: Literal(
+    Token(NumberLiteral, "5s")
+    Value: 5
+  )
+  WhileKeyword: null
+  Condition: null
+  Body: ExpressionStatement(
+    Expression: Invocation(
+      Expression: Identifier(
+        Name: Token(Identifier, "doSomething")
+        Token(Identifier, "doSomething")
+      )
+      TypeArguments: null
+      Arguments(
+        LeftParen: Token(LParen, "(")
+        RightParen: Token(RParen, ")")
+        ArgumentList: []
+      )
+    )
+  )
+)
+Every(
+  Duration: Literal(
+    Token(NumberLiteral, "500ms")
+    Value: 0.5
+  )
+  WhileKeyword: null
+  Condition: null
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: []
+  )
+)
+Every(
+  Duration: Literal(
+    Token(NumberLiteral, "10ms")
+    Value: 0.01
+  )
+  WhileKeyword: null
+  Condition: null
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: [
+      VariableDeclaration(
+        EqualsValueClause(
+          EqualsToken: Token(Equals, "=")
+          Value: Literal(
+            Token(NumberLiteral, "1")
+            Value: 1
+          )
+        )
+        ColonTypeClause: null
+        Name: Token(Identifier, "x")
+      )
+    ]
+  )
+)
+Every(
+  Duration: Literal(
+    Token(NumberLiteral, "2s")
+    Value: 2
+  )
+  WhileKeyword: null
+  Condition: null
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: [
+      If(
+        Condition: Identifier(
+          Name: Token(Identifier, "condition")
+          Token(Identifier, "condition")
+        )
+        ThenBranch: Block(
+          LeftBrace: Token(LBrace, "{")
+          RightBrace: Token(RBrace, "}")
+          Statements: [
+            Break(
+
+            )
+          ]
+        )
+        ElseBranch: null
+      )
+    ]
+  )
+)
+If(
+  Condition: Literal(
+    Token(TrueLiteral, "true")
+    Value: True
+  )
+  ThenBranch: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: [
+      Every(
+        Duration: Literal(
+          Token(NumberLiteral, "1s")
+          Value: 1
+        )
+        WhileKeyword: null
+        Condition: null
+        Body: ExpressionStatement(
+          Expression: Invocation(
+            Expression: Identifier(
+              Name: Token(Identifier, "foo")
+              Token(Identifier, "foo")
+            )
+            TypeArguments: null
+            Arguments(
+              LeftParen: Token(LParen, "(")
+              RightParen: Token(RParen, ")")
+              ArgumentList: []
+            )
+          )
+        )
+      )
+    ]
+  )
+  ElseBranch(
+    Branch: Block(
+      LeftBrace: Token(LBrace, "{")
+      RightBrace: Token(RBrace, "}")
+      Statements: [
+        Every(
+          Duration: Literal(
+            Token(NumberLiteral, "2s")
+            Value: 2
+          )
+          WhileKeyword: null
+          Condition: null
+          Body: ExpressionStatement(
+            Expression: Invocation(
+              Expression: Identifier(
+                Name: Token(Identifier, "bar")
+                Token(Identifier, "bar")
+              )
+              TypeArguments: null
+              Arguments(
+                LeftParen: Token(LParen, "(")
+                RightParen: Token(RParen, ")")
+                ArgumentList: []
+              )
+            )
+          )
+        )
+      ]
+    )
+  )
+)
+Every(
+  Duration: Invocation(
+    Expression: Identifier(
+      Name: Token(Identifier, "getDelay")
+      Token(Identifier, "getDelay")
+    )
+    TypeArguments: null
+    Arguments(
+      LeftParen: Token(LParen, "(")
+      RightParen: Token(RParen, ")")
+      ArgumentList: []
+    )
+  )
+  WhileKeyword: null
+  Condition: null
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: [
+      ExpressionStatement(
+        Expression: Invocation(
+          Expression: Identifier(
+            Name: Token(Identifier, "action")
+            Token(Identifier, "action")
+          )
+          TypeArguments: null
+          Arguments(
+            LeftParen: Token(LParen, "(")
+            RightParen: Token(RParen, ")")
+            ArgumentList: []
+          )
+        )
+      )
+    ]
+  )
+)
+Every(
+  Duration: Literal(
+    Token(NumberLiteral, "500ms")
+    Value: 0.5
+  )
+  WhileKeyword: Token(WhileKeyword, "while")
+  Condition: Identifier(
+    Name: Token(Identifier, "isActive")
+    Token(Identifier, "isActive")
+  )
+  Body: Block(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Statements: []
+  )
+)
+Every(
+  Duration: Literal(
+    Token(NumberLiteral, "1s")
+    Value: 1
+  )
+  WhileKeyword: Token(WhileKeyword, "while")
+  Condition: BinaryOperator(
+    Operator: Token(LArrow, "<")
+    Left: Identifier(
+      Name: Token(Identifier, "x")
+      Token(Identifier, "x")
+    )
+    Right: Literal(
+      Token(NumberLiteral, "10")
+      Value: 10
+    )
+  )
+  Body: ExpressionStatement(
+    Expression: Invocation(
+      Expression: Identifier(
+        Name: Token(Identifier, "tick")
+        Token(Identifier, "tick")
+      )
+      TypeArguments: null
+      Arguments(
+        LeftParen: Token(LParen, "(")
+        RightParen: Token(RParen, ")")
+        ArgumentList: []
+      )
+    )
+  )
+)

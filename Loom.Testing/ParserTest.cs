@@ -95,6 +95,10 @@ public class ParserTest
         new("interface I { 123 }", InternalCodes.UnexpectedToken, "Expected property name, got '123'.", null),
         new("after { }", InternalCodes.UnexpectedToken, "Expected expression, got '{'.", null),
         new("after 5s", InternalCodes.UnexpectedEof, "Unexpected end of file.", null),
+        new("every { }", InternalCodes.UnexpectedToken, "Expected expression, got '{'.", null),
+        new("every 5s", InternalCodes.UnexpectedEof, "Unexpected end of file.", null),
+        new("every 10ms let x = 1", InternalCodes.DeclarationOutsideOfBlock, "Declarations can only be declared inside of a block.", null),
+        new("every 500ms while { }", InternalCodes.UnexpectedToken, "Expected expression, got '{'.", null),
         new("for : items { }", InternalCodes.UnexpectedToken, "Expected identifier, got ':'.", null),
         new("for x items { }", InternalCodes.UnexpectedToken, "Expected ':', got 'items'.", null),
         new("fn a<>() { }", InternalCodes.UnexpectedToken, "Expected type parameter name, got '>'.", null),
@@ -714,6 +718,7 @@ public class ParserTest
                 "while true {",
                 "for x : items {",
                 "after 5 {",
+                "every 5 {",
                 // Other unfinished top-level forms
                 "let x =",
                 "mut x =",

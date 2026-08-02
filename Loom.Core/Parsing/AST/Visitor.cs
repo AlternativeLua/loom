@@ -15,6 +15,7 @@ public abstract class Visitor<T>(Func<Node?, T> defaultValue)
     public virtual T VisitTree(Tree tree) => VisitList(tree.Statements);
     public virtual T VisitFor(For @for) => CombineResults([VisitList(@for.Names), Visit(@for.CollectionExpression), Visit(@for.Body)]);
     public virtual T VisitAfter(After after) => CombineResults([Visit(after.Duration), Visit(after.Body)]);
+    public virtual T VisitEvery(Every every) => CombineResults([Visit(every.Duration), VisitWithDefault(every.Condition), Visit(every.Body)]);
     public virtual T VisitBreak(Break @break) => DefaultValue(@break);
     public virtual T VisitContinue(Continue @continue) => DefaultValue(@continue);
     public virtual T VisitWhile(While @while) => CombineResults([Visit(@while.Condition), Visit(@while.Body)]);

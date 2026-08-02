@@ -881,6 +881,20 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void ThrowsFor_Every_NonNumberDuration()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("every true { }");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'true' is not assignable to type 'number'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_Every_NonBooleanCondition()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("every 1s while 1 { }");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type '1' is not assignable to type 'bool'.");
+    }
+
+    [Fact]
     public void ThrowsFor_FunctionTypeParameterDefault_ConstraintViolation()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics("fn foo<T: number = 'hello'>() {}");
@@ -3693,6 +3707,14 @@ public class TypeCheckerTest
     public void Checks_After_PropagatesBodyType()
     {
         var type = Utility.GetLastStatementType("after 1 { 42 }");
+        var literal = Assert.IsType<LiteralType>(type);
+        Assert.Equal(42L, literal.Value);
+    }
+
+    [Fact]
+    public void Checks_Every_PropagatesBodyType()
+    {
+        var type = Utility.GetLastStatementType("every 1 { 42 }");
         var literal = Assert.IsType<LiteralType>(type);
         Assert.Equal(42L, literal.Value);
     }

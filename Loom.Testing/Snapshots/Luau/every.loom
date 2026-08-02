@@ -1,0 +1,10 @@
+every 500ms {
+    print("im")
+    print("so")
+    print("epic")
+}
+
+every 10s print("big dawg")
+
+let running = true
+every 1s while running print("tick")

@@ -1,0 +1,9 @@
+every 5s { }
+every 5s doSomething()
+every 500ms { }
+every 10ms { let x = 1 }
+every 2s { if condition { break } }
+if true { every 1s foo() } else { every 2s bar() }
+every getDelay() { action() }
+every 500ms while isActive { }
+every 1s while x < 10 tick()

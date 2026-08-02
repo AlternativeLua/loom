@@ -40,6 +40,7 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
             Continue @continue => AnalyzeContinue(@continue, state),
             If @if => AnalyzeIf(@if, state),
             After after => AnalyzeAfter(after, state),
+            Every every => AnalyzeEvery(every, state),
             While @while => AnalyzeWhile(@while, state),
             For @for => AnalyzeFor(@for, state),
             ExpressionStatement expressionStatement => AnalyzeExpressionStatement(expressionStatement, state),
@@ -264,6 +265,16 @@ public sealed class FlowAnalyzer(SemanticModel semanticModel)
         var bodyState = AnalyzeExpression(after.Duration, state);
         var (body, _) = CaptureExitStates(after.Body, bodyState, null);
         return BindState(after, state.Merge(body));
+    }
+
+    private FlowState AnalyzeEvery(Every every, FlowState state)
+    {
+        var bodyState = AnalyzeExpression(every.Duration, state);
+        if (every.Condition != null)
+            bodyState = AnalyzeExpression(every.Condition, bodyState);
+
+        var (body, _) = CaptureExitStates(every.Body, bodyState, null);
+        return BindState(every, state.Merge(body));
     }
 
     private FlowState AnalyzeWhile(While @while, FlowState state)

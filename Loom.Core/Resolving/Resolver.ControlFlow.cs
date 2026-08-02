@@ -18,6 +18,20 @@ public sealed partial class Resolver
         return true;
     }
 
+    public override bool VisitEvery(Every every)
+    {
+        Visit(every.Duration);
+        if (every.Condition != null)
+            Visit(every.Condition);
+
+        var lastContext = _context;
+        _context = ResolverContext.Scheduler;
+        Visit(every.Body);
+        _context = lastContext;
+
+        return true;
+    }
+
     public override bool VisitFor(For @for)
     {
         Visit(@for.CollectionExpression);
@@ -104,15 +118,30 @@ public sealed partial class Resolver
     {
         if (@return.FirstAncestorImplementing<IFunctionLike>() is { } enclosingFunction)
         {
-            var after = @return.FirstAncestorOfType<After>();
-            if (after == null || enclosingFunction.FirstAncestorOfType<After>() == after)
+            var schedulerAncestor = FirstSchedulerAncestor(@return);
+            if (schedulerAncestor == null || FirstSchedulerAncestor(enclosingFunction) == schedulerAncestor)
                 return base.VisitReturn(@return);
 
-            _diagnostics.Error(@return, InternalCodes.ReturnInAfter, "Cannot return a value from an 'after' statement body.");
+            var keyword = schedulerAncestor is After ? "after" : "every";
+            _diagnostics.Error(@return, InternalCodes.ReturnInAfter, $"Cannot return a value from an '{keyword}' statement body.");
             return false;
         }
 
         _diagnostics.Error(@return, InternalCodes.ReturnOutsideFunction, "Return statements can only be used inside of functions.");
         return false;
+    }
+
+    /// <summary>
+    ///     The nearest deferred-execution body (an 'after' or 'every' statement) wrapping <paramref name="node" />,
+    ///     if any - a bare 'return' inside one is ambiguous with returning from the enclosing function, so it's
+    ///     forbidden entirely.
+    /// </summary>
+    private static Node? FirstSchedulerAncestor(Node node)
+    {
+        for (var current = node.Parent; current != null; current = current.Parent)
+            if (current is After or Every)
+                return current;
+
+        return null;
     }
 }
