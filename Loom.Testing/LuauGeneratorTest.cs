@@ -3338,6 +3338,71 @@ public class LuauGeneratorTest
         );
     }
 
+    [Theory]
+    [InlineData("while true {\n    abc -= h;\n}")]
+    [InlineData("for i : 1..3 {\n    abc -= h;\n}")]
+    [InlineData("after 1s {\n    abc -= h;\n}")]
+    [InlineData("every 1s {\n    abc -= h;\n}")]
+    [InlineData("if false {\n} else {\n    abc -= h;\n}")]
+    public void Generates_EventConnect_ConnectBeforeNestedScope_DisconnectInside_UsesLocal(string nestedDisconnect)
+    {
+        var source = $$"""
+            event abc;
+            fn h(): void { }
+            abc += h;
+            {{nestedDisconnect}}
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("h_conn", connVariable.Name);
+        Assert.IsType<Call>(connVariable.Initializer);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_ThroughFunctionExpressionClosure_UsesLocal()
+    {
+        const string source = """
+            event abc;
+            fn h(): void { }
+            abc += h;
+            let f = fn(): void { abc -= h; };
+            f();
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        var connVariable = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("h_conn", connVariable.Name);
+
+        var closure = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
+        var anonymousFunction = Assert.IsType<AnonymousFunction>(closure.Initializer);
+        var disconnectStatement = Assert.IsType<ExpressionStatement>(Assert.Single(anonymousFunction.Body.Statements));
+        var disconnectCall = Assert.IsType<Call>(disconnectStatement.Expression);
+        var disconnectAccess = Assert.IsType<PropertyAccess>(disconnectCall.Callee);
+        Assert.Equal("h_conn", Assert.IsType<Identifier>(disconnectAccess.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_EventConnect_OnCallExpressionReceiver_UsesConnectionStore()
+    {
+        const string source = """
+            declare fn get_part(): Part;
+            fn on_touch(hit: never): void { }
+            get_part().touched += on_touch;
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var store = Assert.IsType<ConstVariable>(luauTree.Statements[0]);
+        Assert.Equal("_touched_connections", store.Name);
+
+        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var connectAssign = Assert.IsType<BinaryOperator>(connectStatement.Expression);
+        var connectionSlot = Assert.IsType<ElementAccess>(connectAssign.Left);
+        Assert.Equal("_touched_connections", Assert.IsType<Identifier>(connectionSlot.Target).Name);
+    }
+
     [Fact]
     public void ThrowsFor_EventDisconnect_WhenFunctionRequiresAnonymousWrapper()
     {
