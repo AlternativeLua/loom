@@ -1087,7 +1087,7 @@ print(s.length);
 
 ```luau
 const s = "  Hello, World!  "
-print((string.gsub(s, "^%s*(.-)%s*$", "%1")))
+print(string.gsub(s, "^%s*(.-)%s*$", "%1"))
 print(string.upper(s))
 print(string.lower(s))
 print(string.split(s, ", "))
@@ -1101,7 +1101,9 @@ print(#s)
 
 `reverse`, `repeat`, `byte`, and `replace` are also available. Fully-typed versions of Luau's built-in libraries, like `math`, are usable as-is with no
 import required.
+
 ---
+
 ## Pattern Matching
 
 `match` expressions support literal, range, guard (`when`), or-pattern (`|`), and destructuring arms, compiling to a chain of `if`/`elseif` with no runtime
