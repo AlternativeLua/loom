@@ -1,8 +1,11 @@
 using System.Diagnostics.CodeAnalysis;
+using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
+using Loom.Core.Resolving.Symbols;
 using Loom.Luau;
 using Loom.Luau.AST;
+using Attribute = Loom.Core.Parsing.AST.Attribute;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
 using Identifier = Loom.Luau.AST.Identifier;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -16,7 +19,8 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
     public bool Supports(SemanticModel semanticModel, Expression expression) =>
         expression is Parsing.AST.Identifier && semanticModel.GetSymbol(expression) is { IsIntrinsic: true };
 
-    public bool IsInvocationOnlyMember(string memberName) => memberName is "string" or "number" or "new_instance" or "get_service" or "type_is";
+    public bool IsInvocationOnlyMember(string memberName) =>
+        memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute";
 
     public bool TryInvocation(
         MacroContext context,
@@ -52,11 +56,106 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
             case "type_is":
                 expression = new BinaryOperator(new Call(new Identifier("typeof"), [call.Arguments[0]]), "==", call.Arguments[1]);
                 return true;
+            case "get_metadata":
+            {
+                var matchedAttribute = FindMatchedAttribute(context, typeArguments, name, out var hadError);
+                expression = hadError || matchedAttribute == null
+                    ? new NilLiteral()
+                    : new Table(
+                        matchedAttribute.Arguments.ArgumentList
+                            .ConvertAll(argument => (TableInitializer)new TableInitializer(ToLuauConstant(context.SemanticModel.GetConstantValue(argument))))
+                    );
+
+                return true;
+            }
+            case "has_attribute":
+            {
+                var matchedAttribute = FindMatchedAttribute(context, typeArguments, name, out var hadError);
+                expression = new BooleanLiteral(!hadError && matchedAttribute != null);
+                return true;
+            }
         }
 
         expression = null;
         return false;
     }
+
+    private static Attribute? FindMatchedAttribute(MacroContext context, TypeArguments? typeArguments, string name, out bool hadError)
+    {
+        hadError = false;
+        var invocation = (Invocation)context.Node;
+        var semanticModel = context.SemanticModel;
+
+        var typeArgument = typeArguments?.ArgumentsList.FirstOrDefault();
+        if (typeArgument == null || semanticModel.GetSymbol(typeArgument, SymbolKind.Interface) is not InterfaceSymbol interfaceSymbol)
+        {
+            context.Diagnostics.Error(invocation, InternalCodes.InvalidTypeArguments, $"'{name}' requires an interface type argument.");
+            hadError = true;
+            return null;
+        }
+
+        if (invocation.Arguments.ArgumentList is not [var memberNameExpression, var attributeExpression])
+        {
+            context.Diagnostics.CompilerError(invocation, $"'{name}' expects exactly 2 arguments.");
+            hadError = true;
+            return null;
+        }
+
+        IWithAttributes? target;
+        if (memberNameExpression is Literal { Value: null })
+        {
+            target = interfaceSymbol.Declaration as InterfaceDeclaration;
+        }
+        else if (memberNameExpression is Literal { Value: string memberName })
+        {
+            var propertySymbol = interfaceSymbol.GetPropertyAtPath([memberName]);
+            if (propertySymbol == null)
+            {
+                context.Diagnostics.Error(
+                    memberNameExpression,
+                    InternalCodes.UnknownMetadataMember,
+                    $"Interface '{interfaceSymbol.Name}' has no member '{memberName}'."
+                );
+
+                hadError = true;
+                return null;
+            }
+
+            target = propertySymbol.Declaration as IWithAttributes;
+        }
+        else
+        {
+            context.Diagnostics.Error(memberNameExpression, InternalCodes.UnknownMetadataMember, "'member_name' must be a string literal or 'none'.");
+            hadError = true;
+            return null;
+        }
+
+        var attributeSymbol = semanticModel.GetSymbol(attributeExpression);
+        if (attributeSymbol == null)
+        {
+            context.Diagnostics.Error(
+                attributeExpression,
+                InternalCodes.InvalidMetadataAttributeReference,
+                "'attribute' must be a direct reference to a decorator function."
+            );
+
+            hadError = true;
+            return null;
+        }
+
+        return target?.Attributes?.AttributeList.Find(a => semanticModel.GetSymbol(a.Expression) == attributeSymbol);
+    }
+
+    private static LuauExpression ToLuauConstant(object? value) =>
+        value switch
+        {
+            long l => new NumberLiteral(l),
+            int i => new NumberLiteral(i),
+            double d => new NumberLiteral(d),
+            string s => new StringLiteral(s),
+            bool b => new BooleanLiteral(b),
+            _ => new NilLiteral()
+        };
 
     private static bool TryFoldToString(LuauExpression argument, [MaybeNullWhen(false)] out StringLiteral folded)
     {

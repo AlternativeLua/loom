@@ -72,6 +72,7 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
   - [Optional Chaining](#optional-chaining)
   - [Instance Helpers](#instance-helpers)
   - [string() & number()](#string--number)
+  - [Decorators](#decorators)
   - [Traits & implementations](#traits--implementations)
   - [typeof](#typeof)
   - [Events](#events)
@@ -111,12 +112,12 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
 - **Destructuring** – Bind array elements or object fields straight out of a value, including renaming a field on bind. See [example](#destructuring).
 - **Tuple types** – Fixed-arity, positional types with their own literal, indexing, destructuring, and `match` pattern syntax, plus a `Tuple` generic
   constraint for variadic-tuple rest parameters. See [example](#tuples).
+- **Decorators** – Ordinary functions applied with `[attr]` syntax: behavior-wrapping on functions, zero-cost compile-time metadata everywhere else, queried
+  with `get_metadata`/`has_attribute` and restricted per-target with `attribute_usage`. See [example](#decorators).
 
 ## Upcoming Features
 
 - `declare event` & `declare enum` – type declarations for events and enums (#46)
-- User decorators (#138)
-- `is` operator (#128)
 - Pipe operator (#64)
 - `defer` statements (#73)
 - `every` statements (#141)
@@ -1185,25 +1186,98 @@ same pattern.
 ---
 ## string() & number()
 
+`string()` and `number()` mirror Luau's `tostring`/`tonumber` exactly, and fold to a literal at compile time whenever their argument is already known.
+
 ```rs
 let digits = string(69420);
 let n = number(digits);
 ```
 
 ```luau
-const digits = tostring(69420)
+const digits = "69420"
 const n = tonumber(digits)
 ```
 
 ---
 
+Radix is inferred from a `0x` prefix instead of a second argument.
+
 ```rs
-let n = number("F00D", 16)
+let n = number("0xF00D")
 ```
 
 ```luau
-const n = tonumber("F00D", 16)
+const n = 61453
 ```
+---
+## Decorators
+
+Decorators are ordinary functions applied with `[attr]`/`[attr(args)]` syntax, but what they do depends on what they decorate. On a function, a decorator wraps every call — the decorator receives a thunk that produces the original result plus the function's name, and can transform it, retry it, log around it, or anything else. Decorator factories work too: invoking the attribute expression itself (`[log("info")]`) configures the decorator before it wraps anything.
+
+```rs
+fn log(f: fn(): void, name: string): void {
+    print(name);
+    f();
+}
+
+[log]
+fn greet(name: string) {
+    print($"hi, {name}");
+}
+```
+
+```luau
+const function log(f: () -> (), name: string): ()
+  print(name)
+  f()
+end
+const function greet(name: string)
+  return log(function()
+    print(`hi, {name}`)
+  end, "greet")
+end
+```
+
+On an interface, a property, or an interface-nested event, a decorator is purely passive metadata — it never runs, never wraps anything, and costs nothing at runtime. Its arguments must be compile-time constants, and nothing is emitted for it anywhere except at an actual query. `get_metadata` resolves entirely at compile time, folding straight to the matched attribute's arguments (or `none` if it isn't present); `has_attribute` folds the same way to a plain `true`/`false`.
+
+```rs
+[attribute_usage(AttributeTargets.Property)]
+fn replicated(): void {}
+
+interface Player {
+    [replicated]
+    health: number
+
+    name: string
+}
+
+let is_replicated = has_attribute::<Player>("health", replicated);
+```
+
+```luau
+const function replicated(): ()
+end
+type Player = {
+  read health: number,
+  read name: string,
+}
+const is_replicated = true
+```
+
+`attribute_usage` restricts which kinds of declarations a decorator may be applied to, using the `AttributeTargets` bitflag enum — combine targets with `|` just like any other bitflags.
+
+```rs
+enum AttributeTargets {
+    Function = 1 << 0,
+    Interface = 1 << 1,
+    Property = 1 << 2,
+    Event = 1 << 3,
+}
+
+[attribute_usage(AttributeTargets.Property | AttributeTargets.Event)]
+fn replicated(): void {}
+```
+
 ---
 ## Traits & implementations
 

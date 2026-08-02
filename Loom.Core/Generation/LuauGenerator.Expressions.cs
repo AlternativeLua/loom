@@ -355,9 +355,6 @@ public sealed partial class LuauGenerator
             result = new TypeCast(call, new Luau.AST.TypeName(interfaceInvocation.Name.Token.Text));
         }
 
-        if (interfaceSymbol.Declaration is InterfaceDeclaration { Attributes: { } attributes } && HasDecoratorAttributes(attributes))
-            result = ApplyDecorators(attributes, result, interfaceInvocation.Name.Token.Text);
-
         return result;
     }
 
@@ -399,14 +396,8 @@ public sealed partial class LuauGenerator
     {
         var name = propertyInitializer.Name.Text;
         var renamedName = GetRenamedPropertyName(interfaceSymbol, name);
-        var initializedValue = ApplyPropertyDecorators(interfaceSymbol, name, Visit(propertyInitializer.Expression));
-        return new PropertyTableInitializer(renamedName, initializedValue);
+        return new PropertyTableInitializer(renamedName, Visit(propertyInitializer.Expression));
     }
-
-    private LuauExpression ApplyPropertyDecorators(InterfaceSymbol interfaceSymbol, string name, LuauExpression value) =>
-        interfaceSymbol.GetPropertyAtPath([name])?.Declaration is PropertyDeclaration { Attributes: { } attributes } && HasDecoratorAttributes(attributes)
-            ? ApplyDecorators(attributes, value, name)
-            : value;
 
     private string GetRenamedPropertyName(InterfaceSymbol interfaceSymbol, string name)
     {
@@ -424,8 +415,7 @@ public sealed partial class LuauGenerator
     {
         var name = shorthandPropertyInitializer.Identifier.Name.Text;
         var renamedName = GetRenamedPropertyName(interfaceSymbol, name);
-        var initializedValue = ApplyPropertyDecorators(interfaceSymbol, name, Visit(shorthandPropertyInitializer.Identifier));
-        return new PropertyTableInitializer(renamedName, initializedValue);
+        return new PropertyTableInitializer(renamedName, Visit(shorthandPropertyInitializer.Identifier));
     }
 
     private Luau.AST.PropertyAccess GenerateRenamedAccess(Expression access, LuauExpression target, List<string> names) =>

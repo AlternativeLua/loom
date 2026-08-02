@@ -102,9 +102,12 @@ public sealed partial class TypeChecker
         var parameterTypes = eventDeclaration.Parameters?.ParameterList.ConvertAll(VisitParameter) ?? [];
         var type = InstantiateEventType(eventDeclaration, symbol.IsAmbient, parameterTypes);
 
-        if (!symbol.IsAmbient && eventDeclaration.Parent is not InterfaceBody && eventDeclaration.Attributes != null)
+        if (!symbol.IsAmbient && eventDeclaration.Attributes != null)
             foreach (var attribute in eventDeclaration.Attributes.AttributeList)
-                CheckDecoratorAttribute(attribute, eventDeclaration.Name.Text, type);
+            {
+                CheckPassiveDecorator(attribute);
+                CheckAttributeUsage(attribute, AttributeTargetsFlag.Event);
+            }
 
         return BindType(eventDeclaration, type);
     }

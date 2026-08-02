@@ -31,8 +31,6 @@ public sealed partial class LuauGenerator
         var parameterTypes = eventDeclaration.Parameters?.ParameterList.ConvertAll(p => Visit(p.ColonTypeClause!.Type)) ?? [];
         var eventType = LuauFactory.QualifyRuntimeType(new TypeName("Event", parameterTypes));
         LuauExpression initializer = LuauFactory.RuntimeLibraryCall(["Event", "new"], []);
-        if (eventDeclaration.Attributes != null && HasDecoratorAttributes(eventDeclaration.Attributes))
-            initializer = ApplyDecorators(eventDeclaration.Attributes, initializer, eventDeclaration.Name.Text);
 
         return new ConstVariable(eventDeclaration.Name.Text, eventType, initializer);
     }

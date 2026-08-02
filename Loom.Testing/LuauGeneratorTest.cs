@@ -4377,37 +4377,34 @@ public class LuauGeneratorTest
     }
 
     [Fact]
-    public void Generates_Decorator_EmitsInternalImplAndPublicWrapper()
+    public void Generates_Decorator_InlinesBodyIntoThunk_NoSeparateImplFunction()
     {
         var luauTree = Utility.GetLuauAST(
             """
             fn log(f: fn(): void, name: string): void { f(); }
             [log]
-            fn do_something() { }
+            fn do_something() { print("hi"); }
             """,
             true
         );
 
-        var impl = Assert.IsType<Function>(luauTree.Statements[1]);
-        Assert.Equal("_do_something_impl", impl.Name);
+        Assert.DoesNotContain(luauTree.Statements, s => s is Function { Name: "_do_something_impl" });
 
-        var wrapper = Assert.IsType<Function>(luauTree.Statements[2]);
-        Assert.Equal("do_something", wrapper.Name);
-
+        var wrapper = luauTree.Statements.OfType<Function>().Single(f => f.Name == "do_something");
         var returnStatement = Assert.IsType<Return>(Assert.Single(wrapper.Body.Statements));
         var call = Assert.IsType<Call>(returnStatement.Expression);
         Assert.Equal("log", Assert.IsType<Identifier>(call.Callee).Name);
 
         var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
-        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
-        var implCall = Assert.IsType<Call>(thunkReturn.Expression);
-        Assert.Equal("_do_something_impl", Assert.IsType<Identifier>(implCall.Callee).Name);
+        var thunkStatement = Assert.IsType<ExpressionStatement>(Assert.Single(thunk.Body.Statements));
+        var printCall = Assert.IsType<Call>(thunkStatement.Expression);
+        Assert.Equal("print", Assert.IsType<Identifier>(printCall.Callee).Name);
 
         Assert.Equal("do_something", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
     }
 
     [Fact]
-    public void Generates_Decorator_ForwardsParametersThroughThunk()
+    public void Generates_Decorator_CapturesOriginalParametersAsUpvalues()
     {
         var luauTree = Utility.GetLuauAST(
             """
@@ -4425,9 +4422,10 @@ public class LuauGeneratorTest
         var call = Assert.IsType<Call>(returnStatement.Expression);
         var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
         var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
-        var implCall = Assert.IsType<Call>(thunkReturn.Expression);
+        var sum = Assert.IsType<BinaryOperator>(thunkReturn.Expression);
 
-        Assert.Equal(["a", "b"], implCall.Arguments.ConvertAll(a => Assert.IsType<Identifier>(a).Name));
+        Assert.Equal("a", Assert.IsType<Identifier>(sum.Left).Name);
+        Assert.Equal("b", Assert.IsType<Identifier>(sum.Right).Name);
     }
 
     [Fact]
@@ -4472,15 +4470,16 @@ public class LuauGeneratorTest
 
         Assert.Contains("const function do_something()", rendered);
         Assert.Contains("return log(\"info\")(function()", rendered);
-        Assert.Contains("return _do_something_impl()", rendered);
+        Assert.Contains("return print(\"did something!\")", rendered);
+        Assert.DoesNotContain("_do_something_impl", rendered);
     }
 
     [Fact]
-    public void Generates_InterfaceDecorator_WrapsConstruction()
+    public void Generates_InterfaceDecorator_ConstructionIsUnwrapped()
     {
         var luauTree = Utility.GetLuauAST(
             """
-            fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+            fn validate(): void { }
             [validate]
             interface Foo { x: number }
             let foo = new Foo { x: 1 };
@@ -4489,21 +4488,15 @@ public class LuauGeneratorTest
         );
 
         var declaration = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        var call = Assert.IsType<Call>(declaration.Initializer);
-        Assert.Equal("validate", Assert.IsType<Identifier>(call.Callee).Name);
-        Assert.Equal("Foo", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
-
-        var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
-        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
-        Assert.IsType<Table>(thunkReturn.Expression);
+        Assert.IsType<Table>(declaration.Initializer);
     }
 
     [Fact]
-    public void Generates_InterfaceDecorator_WrapsEveryConstructionSite()
+    public void Generates_InterfaceDecorator_EveryConstructionSiteIsUnwrapped()
     {
         var luauTree = Utility.GetLuauAST(
             """
-            fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+            fn validate(): void { }
             [validate]
             interface Foo { x: number }
             let a = new Foo { x: 1 };
@@ -4514,15 +4507,15 @@ public class LuauGeneratorTest
 
         var declarations = luauTree.Statements.OfType<ConstVariable>().Where(d => d.Name is "a" or "b").ToList();
         Assert.Equal(2, declarations.Count);
-        Assert.All(declarations, d => Assert.IsType<Call>(d.Initializer));
+        Assert.All(declarations, d => Assert.IsType<Table>(d.Initializer));
     }
 
     [Fact]
-    public void Generates_TopLevelEventDecorator_WrapsEventConstruction()
+    public void Generates_TopLevelEventDecorator_ConstructionIsUnwrapped()
     {
         var luauTree = Utility.GetLuauAST(
             """
-            fn log_event(f: fn(): Event<number>, name: string): Event<number> { return f(); }
+            fn log_event(): void { }
             [log_event]
             event scored(points: number);
             """,
@@ -4531,20 +4524,17 @@ public class LuauGeneratorTest
 
         var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "scored");
         var call = Assert.IsType<Call>(declaration.Initializer);
-        Assert.Equal("log_event", Assert.IsType<Identifier>(call.Callee).Name);
-        Assert.Equal("scored", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
-
-        var thunk = Assert.IsType<AnonymousFunction>(call.Arguments[0]);
-        var thunkReturn = Assert.IsType<Return>(Assert.Single(thunk.Body.Statements));
-        Assert.IsType<Call>(thunkReturn.Expression);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
+        Assert.Equal(["Event", "new"], callee.Names);
+        Assert.Empty(call.Arguments);
     }
 
     [Fact]
-    public void Generates_PropertyDecorator_WrapsFieldValueAtConstruction()
+    public void Generates_PropertyDecorator_FieldValueIsUnwrapped()
     {
         var luauTree = Utility.GetLuauAST(
             """
-            fn clamp(f: fn(): number, name: string): number { return f(); }
+            fn clamp(): void { }
             interface Account {
                 [clamp]
                 balance: number
@@ -4558,18 +4548,15 @@ public class LuauGeneratorTest
         var table = Assert.IsType<Table>(declaration.Initializer);
         var propertyInitializer = Assert.IsType<PropertyTableInitializer>(Assert.Single(table.Initializers));
         Assert.Equal("balance", propertyInitializer.PropertyName);
-
-        var call = Assert.IsType<Call>(propertyInitializer.Value);
-        Assert.Equal("clamp", Assert.IsType<Identifier>(call.Callee).Name);
-        Assert.Equal("balance", Assert.IsType<StringLiteral>(call.Arguments[1]).Value);
+        Assert.IsType<NumberLiteral>(propertyInitializer.Value);
     }
 
     [Fact]
-    public void Generates_PropertyDecorator_ShorthandInitializer_IsWrapped()
+    public void Generates_PropertyDecorator_ShorthandInitializer_IsUnwrapped()
     {
         var luauTree = Utility.GetLuauAST(
             """
-            fn clamp(f: fn(): number, name: string): number { return f(); }
+            fn clamp(): void { }
             interface Account {
                 [clamp]
                 balance: number
@@ -4583,7 +4570,7 @@ public class LuauGeneratorTest
         var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "a");
         var table = Assert.IsType<Table>(declaration.Initializer);
         var propertyInitializer = Assert.IsType<PropertyTableInitializer>(Assert.Single(table.Initializers));
-        Assert.IsType<Call>(propertyInitializer.Value);
+        Assert.IsType<Identifier>(propertyInitializer.Value);
     }
 
     [Fact]
@@ -4599,8 +4586,86 @@ public class LuauGeneratorTest
 
         var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "my_event");
         var call = Assert.IsType<Call>(declaration.Initializer);
-        var callee = Assert.IsType<Luau.AST.PropertyAccess>(call.Callee);
+        var callee = Assert.IsType<PropertyAccess>(call.Callee);
         Assert.Equal(["Event", "new"], callee.Names);
         Assert.Empty(call.Arguments);
+    }
+
+    [Fact]
+    public void Generates_GetMetadata_FoldsToConstantArgsArray()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            enum Level { Low = 1, High = 2 }
+            fn tag(level: Level): void { }
+            interface Account {
+                [tag(Level.High)]
+                balance: number
+            }
+            let meta = get_metadata::<Account>("balance", tag);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "meta");
+        var table = Assert.IsType<Table>(declaration.Initializer);
+        var arg = Assert.IsType<TableInitializer>(Assert.Single(table.Initializers));
+        var value = Assert.IsType<NumberLiteral>(arg.Value);
+        Assert.Equal(2, value.Value);
+    }
+
+    [Fact]
+    public void Generates_GetMetadata_FoldsToNilWhenAttributeAbsent()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn tag(): void { }
+            interface Account {
+                balance: number
+            }
+            let meta = get_metadata::<Account>("balance", tag);
+            """,
+            true
+        );
+
+        var declaration = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "meta");
+        Assert.IsType<NilLiteral>(declaration.Initializer);
+    }
+
+    [Fact]
+    public void Generates_HasAttribute_FoldsToBooleanLiteral()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn tag(): void { }
+            interface Account {
+                [tag]
+                balance: number
+                other: string
+            }
+            let present = has_attribute::<Account>("balance", tag);
+            let absent = has_attribute::<Account>("other", tag);
+            """,
+            true
+        );
+
+        var present = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "present");
+        var absent = luauTree.Statements.OfType<ConstVariable>().Single(d => d.Name == "absent");
+        Assert.True(Assert.IsType<BooleanLiteral>(present.Initializer).Value);
+        Assert.False(Assert.IsType<BooleanLiteral>(absent.Initializer).Value);
+    }
+
+    [Fact]
+    public void Generates_UndecoratedInterface_NoExtraStatements()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            interface Foo { x: number }
+            let foo = new Foo { x: 1 };
+            """,
+            true
+        );
+
+        Assert.DoesNotContain(luauTree.Statements, s => s is ConstVariable { Name: "FooInfo" });
     }
 }

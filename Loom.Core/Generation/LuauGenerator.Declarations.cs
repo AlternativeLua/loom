@@ -72,27 +72,20 @@ public sealed partial class LuauGenerator
         LuauType? returnType,
         Chunk statements)
     {
-        var implName = _state.Scope.AddIdentifier($"_{functionDeclaration.Name.Text}_impl");
-        _state.Prereq(new Function(implName, typeParameters, parameters, returnType, statements));
-
-        var forwardedArguments = parameters.ConvertAll(p => (LuauExpression)new Identifier(p.Name));
-        var call = ApplyDecorators(
-            functionDeclaration.Attributes!,
-            new Call(new Identifier(implName), forwardedArguments),
-            functionDeclaration.Name.Text
-        );
-
+        var call = ApplyDecorators(functionDeclaration.Attributes!, statements, functionDeclaration.Name.Text);
         return new Function(functionDeclaration.Name.Text, typeParameters, parameters, returnType, new Chunk([new Luau.AST.Return(call)]));
     }
 
-    private LuauExpression ApplyDecorators(Attributes attributes, LuauExpression originalValue, string name)
+    private LuauExpression ApplyDecorators(Attributes attributes, Chunk originalBody, string name)
     {
-        var value = originalValue;
-        foreach (var attribute in attributes.AttributeList)
-        {
-            if (IsIntrinsicAttribute(attribute))
-                continue;
+        var nonIntrinsicAttributes = attributes.AttributeList.Where(a => !IsIntrinsicAttribute(a)).ToList();
+        LuauExpression value = new Call(
+            Visit<LuauExpression>(nonIntrinsicAttributes[0]),
+            [new AnonymousFunction(null, [], null, originalBody), new StringLiteral(name)]
+        );
 
+        foreach (var attribute in nonIntrinsicAttributes.Skip(1))
+        {
             var thunk = new AnonymousFunction(null, [], null, new Chunk([new Luau.AST.Return(value)]));
             value = new Call(Visit<LuauExpression>(attribute), [thunk, new StringLiteral(name)]);
         }

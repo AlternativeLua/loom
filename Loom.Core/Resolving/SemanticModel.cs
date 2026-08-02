@@ -113,7 +113,10 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
         expression is Literal or NameOf
         || expression is QualifiedName name && GetDeclaringSymbol(name.Identifier) is { Declaration: EnumDeclaration }
         || expression is PropertyAccess access && GetDeclaringSymbol(access.Expression) is { Declaration: EnumDeclaration }
-        || expression is ElementAccess elementAccess && GetDeclaringSymbol(elementAccess.Expression) is { Declaration: EnumDeclaration };
+        || expression is ElementAccess elementAccess && GetDeclaringSymbol(elementAccess.Expression) is { Declaration: EnumDeclaration }
+        || expression is UnaryOperator { Operator.Text: "-" } unary && IsCompileTimeConstant(unary.Operand)
+        || expression is BinaryOperator { Operator.Text: "+" or "-" or "*" or "/" or "//" or "^" or "%" or "&" or "|" or "~" or "<<" or ">>" or ">>>" } binary
+            && IsCompileTimeConstant(binary.Left) && IsCompileTimeConstant(binary.Right);
 
     public object? GetConstantValue(Expression expression) =>
         expression switch
@@ -121,7 +124,39 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
             QualifiedName qn when GetType(qn.Identifier) is ObjectType objectType
                 && objectType.GetProperty(qn.Names.First().Name.Text) is { ValueType: LiteralType literalType } =>
                 literalType.Value,
+            UnaryOperator { Operator.Text: "-" } unary when ToDouble(GetConstantValue(unary.Operand)) is { } d => -d,
+            BinaryOperator { Operator.Text: var op } binary
+                when ToDouble(GetConstantValue(binary.Left)) is { } l && ToDouble(GetConstantValue(binary.Right)) is { } r =>
+                EvaluateBinaryConstant(op, l, r),
             _ when GetType(expression) is LiteralType literalType => literalType.Value,
+            _ => null
+        };
+
+    private static double? ToDouble(object? value) =>
+        value switch
+        {
+            double d => d,
+            long l => l,
+            int i => i,
+            _ => null
+        };
+
+    private static double? EvaluateBinaryConstant(string op, double l, double r) =>
+        op switch
+        {
+            "+" => l + r,
+            "-" => l - r,
+            "*" => l * r,
+            "/" => l / r,
+            "//" => Math.Floor(l / r),
+            "^" => Math.Pow(l, r),
+            "%" => l % r,
+            "&" => (double)((long)l & (long)r),
+            "|" => (double)((long)l | (long)r),
+            "~" => (double)((long)l ^ (long)r),
+            "<<" => (double)((long)l << (int)r),
+            ">>" => (double)((long)l >> (int)r),
+            ">>>" => (double)(long)((ulong)(long)l >> (int)r),
             _ => null
         };
 

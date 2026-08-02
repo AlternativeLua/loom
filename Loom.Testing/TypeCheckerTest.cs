@@ -609,12 +609,28 @@ public class TypeCheckerTest
     [Fact]
     public void ThrowsFor_EnumMemberNonConstantInitializer()
     {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics("enum Test { A = 1 + 2, B }");
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x = 3; enum Test { A = x, B }");
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.DynamicEnumMemberInitializer,
             "Enum member initializers must be constant values."
         );
+    }
+
+    [Theory]
+    [InlineData("enum Test { A = 1 + 2 }", 3.0)]
+    [InlineData("enum Test { A = 1 << 0 }", 1.0)]
+    [InlineData("enum Test { A = 1 << 2 }", 4.0)]
+    [InlineData("enum Test { A = 0b0001 | 0b0010 }", 3.0)]
+    [InlineData("enum Test { A = 0b0110 & 0b0011 }", 2.0)]
+    [InlineData("enum Test { A = -5 }", -5.0)]
+    public void Checks_EnumMember_FoldsArithmeticAndBitwiseConstantInitializer(string source, double expectedValue)
+    {
+        var type = Utility.GetLastStatementType(source);
+        var objectType = Assert.IsType<ObjectType>(type);
+        var property = objectType.GetProperty("A");
+        var literalType = Assert.IsType<LiteralType>(property!.ValueType);
+        Assert.Equal(expectedValue, literalType.Value);
     }
 
     [Fact]
@@ -7684,7 +7700,7 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(
                 """
-                fn validate(f: fn(): Foo, name: string): Foo { return f(); }
+                fn validate(): void { }
                 [validate]
                 interface Foo { x: number }
                 let foo = new Foo { x: 1 };
@@ -7697,13 +7713,13 @@ public class TypeCheckerTest
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
-            fn bad_validate(f: fn(): Foo, name: string): number { return 1; }
+            fn bad_validate(): number { return 1; }
             [bad_validate]
             interface Foo { x: number }
             """
         );
 
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return a value assignable to 'Foo', but returns 'number'.");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return 'void', but returns 'number'.");
     }
 
     [Fact]
@@ -7711,7 +7727,7 @@ public class TypeCheckerTest
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(
                 """
-                fn log_event(f: fn(): Event<number>, name: string): Event<number> { return f(); }
+                fn log_event(): void { }
                 [log_event]
                 event scored(points: number);
                 """
@@ -7723,7 +7739,7 @@ public class TypeCheckerTest
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
-            fn bad_log(f: fn(): Event<number>, name: string): number { return 1; }
+            fn bad_log(): number { return 1; }
             [bad_log]
             event scored(points: number);
             """
@@ -7733,26 +7749,27 @@ public class TypeCheckerTest
     }
 
     [Fact]
-    public void Checks_InterfaceMemberEventAttribute_NotValidatedAsDecorator() =>
-        Utility.AssertNoErrors(
-            Utility.GetTypeCheckerDiagnostics(
-                """
-                let not_a_valid_decorator_shape = 1;
-                fn only_one_arg(x: number): void { }
-                interface Foo {
-                    [only_one_arg]
-                    event bar(x: number);
-                }
-                """
-            )
+    public void ThrowsFor_InterfaceMemberEventDecorator_ReturnTypeMismatch()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn bad_log(): number { return 1; }
+            interface Foo {
+                [bad_log]
+                event bar(x: number);
+            }
+            """
         );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return 'void', but returns 'number'.");
+    }
 
     [Fact]
     public void Checks_PropertyDecorator_NoErrors() =>
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(
                 """
-                fn clamp(f: fn(): number, name: string): number { return f(); }
+                fn clamp(): void { }
                 interface Account {
                     [clamp]
                     balance: number
@@ -7767,7 +7784,7 @@ public class TypeCheckerTest
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
-            fn bad_clamp(f: fn(): number, name: string): string { return "oops"; }
+            fn bad_clamp(): string { return "oops"; }
             interface Account {
                 [bad_clamp]
                 balance: number
@@ -7775,7 +7792,150 @@ public class TypeCheckerTest
             """
         );
 
-        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return a value assignable to 'number', but returns 'string'.");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return 'void', but returns 'string'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_PassiveDecorator_NonConstantArgument()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn tag(id: number): void { }
+            let x = 5;
+            interface Account {
+                [tag(x)]
+                balance: number
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.DecoratorArgumentNotConstant, "Decorator arguments must be compile-time constants.");
+    }
+
+    [Fact]
+    public void Checks_PassiveDecorator_ConstantEnumArgument_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                enum Level { Low = 1, High = 2 }
+                fn tag(level: Level): void { }
+                interface Account {
+                    [tag(Level.High)]
+                    balance: number
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_PassiveDecorator_FactoryStyleNotAllowed()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn log(ctx: string) -> fn<T>(f: fn(): T, name: string): T {
+                print(ctx);
+                return f();
+            };
+            interface Account {
+                [log("info")]
+                balance: number
+            }
+            """
+        );
+
+        Assert.Contains(diagnostics.Set, d => d.Code == InternalCodes.InvalidDecorator);
+    }
+
+    [Fact]
+    public void Checks_AttributeUsage_AllowsMatchingTarget() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [attribute_usage(AttributeTargets.Property)]
+                fn tag(): void { }
+                interface Account {
+                    [tag]
+                    balance: number
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_AttributeUsage_DisallowedTarget()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [attribute_usage(AttributeTargets.Function)]
+            fn tag(): void { }
+            interface Account {
+                [tag]
+                balance: number
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AttributeTargetNotAllowed, "Attribute 'tag' is not valid on Property.");
+    }
+
+    [Fact]
+    public void Checks_AttributeUsage_CombinedFlags_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [attribute_usage(AttributeTargets.Property | AttributeTargets.Event)]
+                fn tag(): void { }
+                interface Account {
+                    [tag]
+                    balance: number,
+                    [tag]
+                    event changed(value: number);
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_AttributeUsage_OnNonFunctionDeclaration()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [attribute_usage(AttributeTargets.Property)]
+            interface Account {
+                balance: number
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AttributeUsageNotOnFunction, "'attribute_usage' may only be applied to a function declaration.");
+    }
+
+    [Fact]
+    public void Checks_AttributeUsage_OnFunctionDecorator_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [attribute_usage(AttributeTargets.Function)]
+                fn log(f: fn(): void, name: string): void { f(); }
+                [log]
+                fn do_something() { }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_AttributeUsage_DisallowedOnFunctionDecorator()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [attribute_usage(AttributeTargets.Property)]
+            fn log(f: fn(): void, name: string): void { f(); }
+            [log]
+            fn do_something() { }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AttributeTargetNotAllowed, "Attribute 'log' is not valid on Function.");
     }
 
     [Fact]

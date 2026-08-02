@@ -146,7 +146,10 @@ public sealed partial class TypeChecker
 
         if (interfaceDeclaration.Attributes != null)
             foreach (var attribute in interfaceDeclaration.Attributes.AttributeList)
-                CheckDecoratorAttribute(attribute, name, interfaceType);
+            {
+                CheckPassiveDecorator(attribute);
+                CheckAttributeUsage(attribute, AttributeTargetsFlag.Interface);
+            }
 
         if (publishedType is GenericType generic)
             publishedType = VarianceInferrer.ApplyInferredVariance(generic);
@@ -271,7 +274,10 @@ public sealed partial class TypeChecker
 
             if (property.Attributes != null)
                 foreach (var attribute in property.Attributes.AttributeList)
-                    CheckDecoratorAttribute(attribute, name, valueType);
+                {
+                    CheckPassiveDecorator(attribute);
+                    CheckAttributeUsage(attribute, AttributeTargetsFlag.Property);
+                }
 
             properties.Add(new ObjectProperty(isMutable, name, valueType));
         }

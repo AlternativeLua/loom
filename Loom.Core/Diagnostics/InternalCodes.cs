@@ -112,6 +112,11 @@ public static class InternalCodes
     public const string InvalidTypePredicateSubject = "L387";
     public const string AttributesNotSupportedOnDeclaration = "L388";
     public const string InvalidDecorator = "L389";
+    public const string DecoratorArgumentNotConstant = "L390";
+    public const string UnknownMetadataMember = "L391";
+    public const string InvalidMetadataAttributeReference = "L392";
+    public const string AttributeTargetNotAllowed = "L393";
+    public const string AttributeUsageNotOnFunction = "L394";
 
     public const string SimplifiableCode = "L400";
 }

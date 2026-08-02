@@ -45,7 +45,7 @@ public sealed partial class TypeChecker
             if (member.EqualsValueClause != null && CheckEnumMemberIsConstant(member, member.EqualsValueClause.Value))
             {
                 var explicitType = Visit(member.EqualsValueClause);
-                memberValue = ExtractNumericLiteralValue(explicitType, nextValue);
+                memberValue = ExtractNumericConstantValue(member.EqualsValueClause.Value, nextValue);
                 _semanticModel.TypeSolver.AddConstraint(explicitType, baseType, member.EqualsValueClause.Value);
             }
 
@@ -82,12 +82,12 @@ public sealed partial class TypeChecker
         return properties;
     }
 
-    private static double ExtractNumericLiteralValue(Type type, double fallback) =>
-        type switch
+    private double ExtractNumericConstantValue(Expression expression, double fallback) =>
+        _semanticModel.GetConstantValue(expression) switch
         {
-            LiteralType { Value: long l } => l,
-            LiteralType { Value: int i } => i,
-            LiteralType { Value: double d } => d,
+            long l => l,
+            int i => i,
+            double d => d,
             _ => fallback
         };
 
