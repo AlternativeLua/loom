@@ -573,6 +573,136 @@ public class TypeInferrerTest
     }
 
     [Fact]
+    public void InferFunctionTypeArguments_ObjectParameterAgainstUnionOfObjectMembers_UnifiesReadonlyProperty()
+    {
+        var typeParameter = TypeParameter("T");
+        var parameterObject = ObjectType([ObjectProperty("Value", typeParameter)]);
+        var firstMember = ObjectType([ObjectProperty("Value", PrimitiveType.Number)]);
+        var secondMember = ObjectType([ObjectProperty("Value", PrimitiveType.Number)]);
+        var argumentUnion = new UnionType([firstMember, secondMember]);
+        var function = FunctionType([typeParameter], [parameterObject], typeParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentUnion]);
+        Assert.Equal(PrimitiveType.Number, result[typeParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_ObjectParameterAgainstUnionWithNonObjectMember_DoesNotInfer()
+    {
+        var typeParameter = TypeParameter("T");
+        var parameterObject = ObjectType([ObjectProperty("Value", typeParameter)]);
+        var member = ObjectType([ObjectProperty("Value", PrimitiveType.Number)]);
+        var argumentUnion = new UnionType([member, PrimitiveType.String]);
+        var function = FunctionType([typeParameter], [parameterObject], typeParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentUnion]);
+        Assert.Equal(PrimitiveType.Unknown, result[typeParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_ObjectParameterAgainstUnionMissingProperty_DoesNotInfer()
+    {
+        var typeParameter = TypeParameter("T");
+        var parameterObject = ObjectType([ObjectProperty("Value", typeParameter)]);
+        var memberWithProperty = ObjectType([ObjectProperty("Value", PrimitiveType.Number)]);
+        var memberWithoutProperty = ObjectType([ObjectProperty("Other", PrimitiveType.String)]);
+        var argumentUnion = new UnionType([memberWithProperty, memberWithoutProperty]);
+        var function = FunctionType([typeParameter], [parameterObject], typeParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentUnion]);
+        Assert.Equal(PrimitiveType.Unknown, result[typeParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_MutableObjectPropertyAgainstUnionWithDisagreeingMembers_DoesNotInfer()
+    {
+        var typeParameter = TypeParameter("T");
+        var parameterObject = ObjectType([new ObjectProperty(true, "Value", typeParameter)]);
+        var firstMember = ObjectType([ObjectProperty("Value", PrimitiveType.Number)]);
+        var secondMember = ObjectType([ObjectProperty("Value", PrimitiveType.String)]);
+        var argumentUnion = new UnionType([firstMember, secondMember]);
+        var function = FunctionType([typeParameter], [parameterObject], typeParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentUnion]);
+        Assert.Equal(PrimitiveType.Unknown, result[typeParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_MutableObjectPropertyAgainstUnionWithAgreeingMembers_InfersSharedType()
+    {
+        var typeParameter = TypeParameter("T");
+        var parameterObject = ObjectType([new ObjectProperty(true, "Value", typeParameter)]);
+        var firstMember = ObjectType([ObjectProperty("Value", PrimitiveType.Number), ObjectProperty("Extra", PrimitiveType.String)]);
+        var secondMember = ObjectType([ObjectProperty("Value", PrimitiveType.Number), ObjectProperty("Extra", PrimitiveType.Bool)]);
+        var argumentUnion = new UnionType([firstMember, secondMember]);
+        var function = FunctionType([typeParameter], [parameterObject], typeParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentUnion]);
+        Assert.Equal(PrimitiveType.Number, result[typeParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_ReadonlyObjectPropertyIncompatibleWithUnion_DoesNotInfer()
+    {
+        var parameterObject = ObjectType([ObjectProperty("Value", PrimitiveType.Bool)]);
+        var firstMember = ObjectType([ObjectProperty("Value", PrimitiveType.Number)]);
+        var secondMember = ObjectType([ObjectProperty("Value", PrimitiveType.String)]);
+        var argumentUnion = new UnionType([firstMember, secondMember]);
+        var outerParameter = TypeParameter("U");
+        var function = FunctionType([outerParameter], [parameterObject, outerParameter], outerParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentUnion, PrimitiveType.String]);
+        Assert.Equal(PrimitiveType.String, result[outerParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_ObjectParameterPropertyMissingInArgument_DoesNotInfer()
+    {
+        var typeParameter = TypeParameter("T");
+        var parameterObject = ObjectType([ObjectProperty("Missing", typeParameter)]);
+        var argumentObject = ObjectType([ObjectProperty("Other", PrimitiveType.Number)]);
+        var function = FunctionType([typeParameter], [parameterObject], typeParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentObject]);
+        Assert.Equal(PrimitiveType.Unknown, result[typeParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_ObjectParameterPropertyIncompatibleWithArgument_DoesNotInfer()
+    {
+        var parameterObject = ObjectType([ObjectProperty("Value", PrimitiveType.Bool)]);
+        var argumentObject = ObjectType([ObjectProperty("Value", PrimitiveType.String)]);
+        var outerParameter = TypeParameter("U");
+        var function = FunctionType([outerParameter], [parameterObject, outerParameter], outerParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [argumentObject, PrimitiveType.Number]);
+        Assert.Equal(PrimitiveType.Number, result[outerParameter]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_GenericFunctionArgumentWithOptionalParameter_SubstitutesInsideOptional()
+    {
+        var arrayElement = TypeParameter("T");
+        var outputParameter = TypeParameter("U");
+        var converterType = FunctionType([], [new OptionalType(arrayElement)], outputParameter);
+        var mapFunction = FunctionType(
+            [arrayElement, outputParameter],
+            [new ArrayType(arrayElement, false), converterType],
+            new ArrayType(outputParameter, false)
+        );
+
+        var idOwnParameter = TypeParameter("T2");
+        var idFunction = FunctionType([idOwnParameter], [idOwnParameter], idOwnParameter);
+
+        var result = TypeInferrer.InferFunctionTypeArguments(mapFunction, [new ArrayType(PrimitiveType.Number, false), idFunction]);
+
+        Assert.Equal(PrimitiveType.Number, result[arrayElement]);
+    }
+
+    [Fact]
+    public void InferFunctionTypeArguments_BareGenericTypeParameter_CollapsesToUnderlyingTypeWithoutBlockingOtherInference()
+    {
+        var innerParameter = TypeParameter("T");
+        var listGeneric = GenericType("List", [innerParameter], PrimitiveType.Unknown);
+        var outerParameter = TypeParameter("U");
+        var function = FunctionType([outerParameter], [listGeneric, outerParameter], outerParameter);
+        var result = TypeInferrer.InferFunctionTypeArguments(function, [listGeneric, PrimitiveType.Number]);
+        Assert.Equal(PrimitiveType.Number, result[outerParameter]);
+    }
+
+    [Fact]
     public void InferFunctionTypeArguments_GenericTypeArgument_InferTypeArgument()
     {
         var elementParameter = TypeParameter("T");
