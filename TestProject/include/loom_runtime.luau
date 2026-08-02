@@ -46,5 +46,68 @@ function Loom.merge_meta(...: {})
 	return mt
 end
 
+type Task<A... = ...any> = {
+	[number]: unknown;
+	duration: number,
+	elapsed: number,
+	condition: (() -> boolean)?,
+	body: (A...) -> (),
+}
+
+const tasks: { Task } = {}
+local heartbeatConn: RBXScriptConnection?
+
+const function stopIfEmpty(): ()
+	if #tasks == 0 and heartbeatConn then
+		heartbeatConn:Disconnect()
+		heartbeatConn = nil
+	end
+end
+
+const function start(): ()
+	if heartbeatConn then
+		return
+	end
+
+	heartbeatConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
+		local i = 1
+
+		while i <= #tasks do
+			local task = tasks[i]
+			if task.condition and not task.condition() then
+				table.remove(tasks, i)
+				continue
+			end
+
+			task.elapsed += dt
+			while task.elapsed >= task.duration do
+				task.elapsed -= task.duration
+				task.body(table.unpack(task)) -- args stored as array in task
+			end
+
+			i += 1
+		end
+
+		stopIfEmpty()
+	end)
+end
+
+function Loom.every<A...>(
+	duration: number,
+	condition: (() -> boolean)?,
+	body: (A...) -> (),
+	...: A...
+): ()
+	table.insert(tasks, {
+		duration = duration,
+		elapsed = 0,
+		body = body,
+		condition = condition,
+		...
+	})
+
+	start()
+end
+
 table.freeze(Loom)
 return Loom

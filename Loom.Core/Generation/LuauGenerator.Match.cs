@@ -9,6 +9,8 @@ using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using PrimitiveTypeKind = Loom.Core.TypeChecking.Types.PrimitiveTypeKind;
 using Type = Loom.Core.TypeChecking.Types.Type;
+using UnionType = Loom.Core.TypeChecking.Types.UnionType;
+using IntersectionType = Loom.Core.TypeChecking.Types.IntersectionType;
 
 namespace Loom.Core.Generation;
 
@@ -41,9 +43,6 @@ public sealed partial class LuauGenerator
 
         foreach (var arm in matchExpression.Arms)
         {
-            if (elseBranch != null)
-                break;
-
             var conditions = new List<LuauExpression>();
             var bindings = new List<LuauStatement>();
             if (!TryCompilePattern(arm.Pattern, subject, conditions, bindings, out var isIrrefutable))
@@ -436,11 +435,33 @@ public sealed partial class LuauGenerator
             conditions.Add(new BinaryOperator(TypeofCall(subject), "==", new StringLiteral(typeofString)));
     }
 
+    private static List<LuauExpression> BuildTypeCondition(Type type, LuauExpression subject, bool checkRequiredFields)
+    {
+        var conditions = new List<LuauExpression>();
+        AddTypeCondition(conditions, type, subject, checkRequiredFields);
+        return conditions;
+    }
+
     // `n when Foo` needs more than `typeof(n) == "table"`: a Roblox Instance subclass is checked with
     // `:IsA(...)`, and a plain interface has no runtime representation, so matching one structurally
     // requires checking each of its required fields exists.
     private static void AddTypeCondition(List<LuauExpression> conditions, Type type, LuauExpression subject, bool checkRequiredFields)
     {
+        if (type is InstantiatedType instantiated)
+            type = instantiated.Expand();
+
+        if (type is UnionType union)
+        {
+            conditions.Add(CombineWith(union.Types.ConvertAll(member => CombineWith(BuildTypeCondition(member, subject, checkRequiredFields), "and")), "or"));
+            return;
+        }
+
+        if (type is IntersectionType intersection)
+        {
+            conditions.AddRange(intersection.Types.SelectMany(member => BuildTypeCondition(member, subject, checkRequiredFields)));
+            return;
+        }
+
         if (type is not InterfaceType interfaceType)
         {
             AddTypeofCondition(conditions, type, subject);
@@ -474,7 +495,6 @@ public sealed partial class LuauGenerator
             LiteralType { Value: string } => "string",
             LiteralType { Value: bool } => "boolean",
             FunctionType => "function",
-            InstantiatedType instantiated => GetLuauTypeofString(instantiated.Expand()),
             NativelyIndexableType => "table",
             _ => null
         };

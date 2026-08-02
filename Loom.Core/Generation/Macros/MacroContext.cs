@@ -104,6 +104,7 @@ internal record MacroContext(SemanticModel SemanticModel, LuauState State, Diagn
     public Call TypeArgumentAsStringCall(string name, string newName, TypeArguments? typeArguments, LuauExpression instance, bool isMethod = true)
     {
         var instanceName = GetTextOfOnlyTypeArgument(typeArguments, name);
+        Console.WriteLine(instanceName);
         return new Call(new PropertyAccess(instance, [newName]), [new StringLiteral(instanceName)], isMethod);
     }
 
@@ -116,6 +117,8 @@ internal record MacroContext(SemanticModel SemanticModel, LuauState State, Diagn
             return null;
 
         var instanceType = SemanticModel.GetType(typeName);
+        // Console.WriteLine(typeName);
+        // Console.WriteLine(instanceType);
         if (instanceType is not TypeParameter)
             return typeName.ToString();
 

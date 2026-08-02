@@ -1,3 +1,7 @@
-let m = game.find_first_child_of_class::<ModuleScript>()!;
-let v = require(m);
-print(v)
+let collection_service = get_service::<CollectionService>();
+
+for obj : collection_service.get_tagged("Lava") {
+    if obj is BasePart {
+        obj.touched += fn(hit: BasePart) -> hit.parent?.find_first_child_of_class::<Humanoid>() as never
+    }
+}
