@@ -32,9 +32,65 @@ public sealed partial class TypeChecker
                 state
             ),
             InterfaceInvocation interfaceInvocation => CheckInterfaceInvocation(interfaceInvocation, expected, state),
+            FunctionExpression functionExpression when expected is Types.FunctionType expectedFunction => CheckFunctionExpression(
+                functionExpression,
+                expectedFunction,
+                state
+            ),
             _ => CheckSubsumption(expression, expected, state, out constraint)
         };
 
+    }
+
+    private Types.FunctionType CheckFunctionExpression(FunctionExpression functionExpression, Types.FunctionType expected, FlowState state)
+    {
+        var lastState = _flowState;
+        _flowState = state;
+
+        var typeParameters = functionExpression.TypeParameters?.ParameterList.ConvertAll(VisitTypeParameter) ?? [];
+        var parameterList = functionExpression.Parameters?.ParameterList ?? [];
+        var parameterTypes = new List<Type>(parameterList.Count);
+        for (var i = 0; i < parameterList.Count; i++)
+        {
+            var parameter = parameterList[i];
+            var declaredType = MaybeVisit(parameter.ColonTypeClause);
+            var initializerType = MaybeVisit(parameter.EqualsValueClause);
+            var contextualType = i < expected.ParameterTypes.Count ? expected.ParameterTypes[i] : null;
+            var type = declaredType ?? contextualType ?? initializerType;
+            if (type == null)
+            {
+                _diagnostics.Error(parameter, InternalCodes.MustHaveDefaultOrType, "Parameter must have a declared type or default value to infer from.");
+                type = PrimitiveType.Unknown;
+            }
+
+            if (declaredType != null && contextualType != null)
+                _semanticModel.TypeSolver.AddConstraint(contextualType, declaredType, parameter.ColonTypeClause!.Type);
+
+            if (declaredType != null && parameter.EqualsValueClause != null)
+                _semanticModel.TypeSolver.AddConstraint(initializerType!, declaredType, parameter.EqualsValueClause.Value);
+
+            parameterTypes.Add(BindType(parameter, type));
+        }
+
+        MaybeVisit(functionExpression.ReturnType);
+        var returnType = GetReturnType(functionExpression);
+        var functionType = BindType(
+            functionExpression,
+            new Types.FunctionType(typeParameters, parameterTypes, returnType, HasRestParameter(functionExpression.Parameters))
+        );
+
+        if (functionExpression.Body is ExpressionBody body)
+        {
+            if (functionExpression.ReturnType != null)
+                Check(body.Expression, returnType);
+        }
+        else
+        {
+            Visit(functionExpression.Body);
+        }
+
+        _flowState = lastState;
+        return functionType;
     }
     
     private Type CheckSubsumption(Expression expression, Type expected, FlowState state, out TypeSolver.TypeConstraint? constraint)

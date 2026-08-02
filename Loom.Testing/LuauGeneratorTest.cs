@@ -3383,6 +3383,32 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_EventConnect_AnonymousHandlerWithUntypedParameter_ConnectsDirectly()
+    {
+        const string source = """
+            event abc(x: number);
+            abc += fn(x) { print(x) };
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        var connectStatement = Assert.IsType<ExpressionStatement>(luauTree.Statements.Last());
+        var connectCall = Assert.IsType<Call>(connectStatement.Expression);
+        Assert.True(connectCall.IsMethod);
+
+        var callee = Assert.IsType<PropertyAccess>(connectCall.Callee);
+        Assert.Equal("Connect", Assert.Single(callee.Names));
+
+        var handler = Assert.IsType<AnonymousFunction>(Assert.Single(connectCall.Arguments));
+        var parameter = Assert.Single(handler.Parameters);
+        Assert.Equal("x", parameter.Name);
+        Assert.Null(parameter.DeclaredType);
+
+        var printStatement = Assert.IsType<ExpressionStatement>(Assert.Single(handler.Body.Statements));
+        var printCall = Assert.IsType<Call>(printStatement.Expression);
+        Assert.Equal("x", Assert.IsType<Identifier>(Assert.Single(printCall.Arguments)).Name);
+    }
+
+    [Fact]
     public void Generates_EventConnect_OnCallExpressionReceiver_UsesConnectionStore()
     {
         const string source = """

@@ -6721,6 +6721,48 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_EventConnect_AnonymousHandlerWithUntypedParameter_InfersFromEventDeclaration() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("event abc(x: number); abc += fn(x) { let y: number = x; };"));
+
+    [Fact]
+    public void ThrowsFor_EventConnect_AnonymousHandlerWithUntypedParameter_InferredTypeIsPrecise()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("event abc(x: number); abc += fn(x) { let y: string = x; };");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'number' is not assignable to type 'string'.");
+    }
+
+    [Fact]
+    public void Checks_EventConnect_AnonymousHandlerWithMixedExplicitAndInferredParameters_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics("event abc(x: number, y: string); abc += fn(x: number, y) { let z: string = y; };")
+        );
+
+    [Fact]
+    public void ThrowsFor_EventConnect_AnonymousHandlerWithExplicitParameterType_MismatchesEvent()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("event abc(x: number); abc += fn(x: string) { };");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.TypeMismatch, "Type 'number' is not assignable to type 'string'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_EventConnect_AnonymousHandlerWithMoreParametersThanEventDeclares()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("event abc(x: number); abc += fn(x, extra) { };");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.MustHaveDefaultOrType,
+            "Parameter must have a declared type or default value to infer from."
+        );
+    }
+
+    [Fact]
+    public void Checks_Parameter_MissingTypeAndDefault_FallsBackToUnknown_WithoutThrowing()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("fn foo(x) { x + 1 }");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidBinaryOp, "No binary operation for 'unknown' + 'number'.");
+    }
+
+    [Fact]
     public void Checks_InterfaceEventMember_Invocation_TypesAsVoid()
     {
         const string source = """

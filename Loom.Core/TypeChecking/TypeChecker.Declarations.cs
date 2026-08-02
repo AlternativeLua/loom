@@ -269,7 +269,7 @@ public sealed partial class TypeChecker
                 $"Rest parameter '{parameter.Name.Text}' must have an array type, but got '{declaredType}'."
             );
 
-        return BindType(parameter, declaredType ?? initializerType!);
+        return BindType(parameter, declaredType ?? initializerType ?? Types.PrimitiveType.Unknown);
     }
 
     private static bool IsArrayType(Type type) => (type is InstantiatedType instantiated ? instantiated.Expand() : type) is Types.ArrayType;

@@ -175,12 +175,20 @@ public sealed partial class Resolver
         var symbol = new Symbol(parameter, SymbolKind.Parameter, name);
         DeclareSymbol(symbol);
 
-        if (parameter.EqualsValueClause != null || parameter.ColonTypeClause != null || parameter.Parent?.Parent?.Parent is ImplementBody)
+        if (parameter.EqualsValueClause != null
+            || parameter.ColonTypeClause != null
+            || parameter.Parent?.Parent?.Parent is ImplementBody
+            || IsEventConnectionHandler(parameter))
             return base.VisitParameter(parameter);
 
         _diagnostics.Error(parameter, InternalCodes.MustHaveDefaultOrType, "Parameter must have a declared type or default value to infer from.");
         return false;
     }
+
+    private static bool IsEventConnectionHandler(Parameter parameter) =>
+        parameter.Parent?.Parent is FunctionExpression functionExpression
+        && functionExpression.Parent is AssignmentOperator { Operator.Kind: SyntaxKind.PlusEquals or SyntaxKind.MinusEquals } assignment
+        && assignment.Right == functionExpression;
 
     public override bool VisitEnumDeclaration(EnumDeclaration enumDeclaration) =>
         DeclareVariable(enumDeclaration, SymbolKind.Variable)

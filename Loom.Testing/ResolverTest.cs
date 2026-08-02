@@ -293,6 +293,36 @@ public class ResolverTest
     }
 
     [Fact]
+    public void Allows_UntypedParameter_OnFunctionExpressionConnectedToEvent() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("event abc(x: number); abc += fn(x) { };"));
+
+    [Fact]
+    public void Allows_UntypedParameter_OnFunctionExpressionDisconnectedFromEvent() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("event abc(x: number); abc -= fn(x) { };"));
+
+    [Fact]
+    public void ThrowsFor_UntypedParameter_OnFunctionExpression_NotConnectedToAnything()
+    {
+        var diagnostics = Utility.GetSemanticModel("let f = fn(x) { };").Diagnostics;
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.MustHaveDefaultOrType,
+            "Parameter must have a declared type or default value to infer from."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_UntypedParameter_OnFunctionExpressionAssignedWithEquals()
+    {
+        var diagnostics = Utility.GetSemanticModel("mut f = fn() {}; f = fn(x) { };").Diagnostics;
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.MustHaveDefaultOrType,
+            "Parameter must have a declared type or default value to infer from."
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_BreakOutsideLoop()
     {
         var diagnostics = Utility.GetSemanticModel("break").Diagnostics;

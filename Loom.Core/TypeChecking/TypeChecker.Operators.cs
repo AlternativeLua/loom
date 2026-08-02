@@ -128,6 +128,16 @@ public sealed partial class TypeChecker
     public override Type VisitBinaryOperator(BinaryOperator binaryOperator)
     {
         var leftType = Visit(binaryOperator.Left);
+
+        if (binaryOperator.Operator.Kind is SyntaxKind.PlusEquals or SyntaxKind.MinusEquals
+            && TryGetEventParameterTypes(binaryOperator, leftType, out var eventParameters))
+        {
+            var assignableFunction = new Types.FunctionType([], eventParameters, Types.PrimitiveType.Void);
+            var handlerType = Check(binaryOperator.Right, assignableFunction);
+            _semanticModel.TypeSolver.AddConstraint(handlerType, assignableFunction, binaryOperator.Right);
+            return BindType(binaryOperator, GetIntrinsicType(binaryOperator, "ScriptConnection"));
+        }
+
         Type rightType;
         switch (binaryOperator.Operator.Kind)
         {
@@ -171,13 +181,6 @@ public sealed partial class TypeChecker
                     );
 
                 return BindType(binaryOperator, TypeSimplifier.Simplify(new Types.UnionType([leftType, rightType]).NonNullable()));
-            }
-            case SyntaxKind.PlusEquals or SyntaxKind.MinusEquals
-                when TryGetEventParameterTypes(binaryOperator, leftType, out var eventParameters):
-            {
-                var assignableFunction = new Types.FunctionType([], eventParameters, Types.PrimitiveType.Void);
-                _semanticModel.TypeSolver.AddConstraint(rightType, assignableFunction, binaryOperator.Right);
-                return BindType(binaryOperator, GetIntrinsicType(binaryOperator, "ScriptConnection"));
             }
         }
 
