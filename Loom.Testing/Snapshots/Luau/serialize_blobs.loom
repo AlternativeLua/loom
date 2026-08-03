@@ -1,0 +1,5 @@
+[serializable]
+interface Marker {
+    kind: "spawn";
+    target: Part;
+}

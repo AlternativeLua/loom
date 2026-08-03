@@ -98,6 +98,8 @@ public sealed partial class LuauGenerator
             .Concat(eventDeclarations.Select(GenerateInterfaceEventType))
             .ToList();
 
+        EmitSerializers(interfaceSymbol);
+
         var tableType = new TableType(tableIndexer, properties);
         return new TypeAlias(
             interfaceDeclaration.Name.Text,
@@ -112,6 +114,25 @@ public sealed partial class LuauGenerator
                 )
                 : tableType
         );
+    }
+
+    /// <summary>
+    ///     Emits a <c>[serializable]</c> interface's serializer pair after its type alias, the same way an
+    ///     <c>implement</c> block trails its metatable. They live in the declaring file so a consumer in
+    ///     another module reaches them through the ordinary export path.
+    /// </summary>
+    private void EmitSerializers(InterfaceSymbol interfaceSymbol)
+    {
+        if (!_semanticModel.SerializationSchemas.TryGetValue(interfaceSymbol, out var schema))
+            return;
+
+        // The emitted signatures name Loom.Serialized and Loom.Result even when the source never
+        // mentions a runtime type, so the import has to be requested explicitly.
+        _semanticModel.RuntimeReferences += 1;
+
+        var emitter = new SerializationEmitter(schema, _bufferMembers);
+        _state.Postreq(emitter.EmitSerializer());
+        _state.Postreq(emitter.EmitDeserializer());
     }
 
     // Mirrors TypeChecker.Interfaces.cs's MergeOverloadedProperties: same-named function-typed table properties become one field typed as their intersection.

@@ -547,7 +547,9 @@ public class SerializationSchemaTest
             """
         );
 
-        Assert.Equal(128, schema.HeaderBits);
+        // Unlike Compressed, Precise writes four ordinary components next to the position rather than
+        // packing the rotation into header bits - bit-writing a float would truncate it to an integer.
+        Assert.Equal(0, schema.HeaderBits);
         Assert.Equal(28, schema.FixedByteCount);
     }
     #endregion Layout

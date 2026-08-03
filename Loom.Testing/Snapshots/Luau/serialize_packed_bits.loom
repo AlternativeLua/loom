@@ -1,0 +1,8 @@
+[serializable]
+interface Flags {
+    kind: "spawn";
+    alive: bool;
+    ready: bool;
+    [number_range(0, 100)]
+    health: number;
+}

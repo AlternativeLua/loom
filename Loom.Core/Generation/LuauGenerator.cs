@@ -29,6 +29,9 @@ public sealed partial class LuauGenerator
     private readonly Dictionary<Is, List<LuauStatement>> _isPreludes = [];
     private readonly Dictionary<Is, LuauExpression> _isSubjects = [];
     private readonly Lazy<HashSet<(EventTarget Target, Symbol Function)>> _localSafeConnections;
+
+    /// <summary>Buffer library members the file's serializers touched, hoisted into constants in <see cref="Generate" />.</summary>
+    private readonly List<string> _bufferMembers = [];
     private readonly MacroExpander _macroExpander;
     private readonly ModuleImportExportGenerator _moduleGenerator;
     // private readonly ModuleRequirePathResolver? _moduleRequirePaths;
@@ -54,6 +57,12 @@ public sealed partial class LuauGenerator
     {
         var moduleImports = _moduleGenerator.GenerateImports();
         var luauTree = VisitTree(_semanticModel.Tree);
+
+        // Hoisted after the walk, because which buffer members a file needs is only known once every
+        // serializer in it has been emitted.
+        if (_bufferMembers.Count > 0)
+            luauTree.Statements.InsertRange(0, SerializationEmitter.DeclareBufferConstants(_bufferMembers));
+
         luauTree.Statements.InsertRange(0, _eventConnections.StoreDeclarations);
         luauTree.Statements.InsertRange(0, moduleImports);
 

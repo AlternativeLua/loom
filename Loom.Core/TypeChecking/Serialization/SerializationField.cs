@@ -153,8 +153,13 @@ public sealed record CFrameField(string Path, Type ValueType, CFrameEncoding Enc
 {
     public const int SentinelStateCount = 2;
 
+    // Compressed packs the whole rotation into header bits; Precise writes four ordinary components
+    // alongside the position, since bit-writing a float would truncate it to an integer.
     public override int HeaderBits =>
-        Encoding.RotationBits(NumberType) + (UseSentinels ? BitWidth.ForStateCount(SentinelStateCount) : 0);
+        (Encoding == CFrameEncoding.Compressed ? CFrameEncodingExtensions.CompressedRotationBits : 0)
+        + (UseSentinels ? BitWidth.ForStateCount(SentinelStateCount) : 0);
 
-    public override int? BodyBytes => UseSentinels ? null : 3 * NumberType.ByteCount();
+    public int ComponentCount => Encoding == CFrameEncoding.Compressed ? 3 : 7;
+
+    public override int? BodyBytes => UseSentinels ? null : ComponentCount * NumberType.ByteCount();
 }
