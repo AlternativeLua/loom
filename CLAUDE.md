@@ -60,6 +60,10 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 - Per-stage expectations (from CONTRIBUTING.md): parser — valid parses/invalid errors/AST shape; resolver — symbols declared, scope rules; type checker —
   inference, assignability, and for new types test `Equals`, `IsAssignableTo`, `ToString`; codegen — Luau AST correct, rendering valid, edge cases (escaping,
   empty collections).
+- Round-trip tests: `Loom.Testing/Runtime/*.luau` assertion bodies pair by name with a `Snapshots/Luau` case and actually *execute* the emitted serializers
+  under Lune ([SerializationRuntimeTest.cs](Loom.Testing/SerializationRuntimeTest.cs)). Snapshots only prove the output did not change; these prove it works,
+  and caught several bugs snapshots could not (wrong value shape, a shadowed local, an undersized buffer). They skip when no runtime is on `PATH` (or
+  `LUNE_PATH`), but fail when `CI` is set, so CI installs Lune.
 
 ## Conventions
 
