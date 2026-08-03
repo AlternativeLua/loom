@@ -732,10 +732,11 @@ public class SerializationSchemaTest
     {
         var luau = Utility.GetLuauAST("[serializable] interface Scores { entries: Record<string, number> }", true).Render();
 
-        // A map has no length operator, so the count comes from the same walk that sizes it.
-        Assert.Contains("local entries_count = 0", luau);
-        Assert.Contains("entries_count += 1", luau);
-        Assert.Contains("buffer_writeu32(b, 0, entries_count)", luau);
+        // A map has no length operator, so both phases count by walking. The write counts its own
+        // rather than reusing the measure's, which is scoped to whatever branch or loop measured it.
+        Assert.Contains("local entries_measured = 0", luau);
+        Assert.Contains("local entries_written = 0", luau);
+        Assert.Contains("buffer_writeu32(b, 0, entries_written)", luau);
 
         // Pairs go out and come back keyed, not positional.
         Assert.Contains("for entries_k_out, entries_v_out in value.entries do", luau);

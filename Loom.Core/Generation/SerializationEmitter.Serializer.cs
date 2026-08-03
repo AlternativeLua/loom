@@ -286,7 +286,7 @@ internal sealed partial class SerializationEmitter
 
             // Counted here rather than by a pass of its own: a map has no length operator, and the write
             // needs the count for its prefix before the pairs go out.
-            var countLocal = MapCountLocal(mapField.Path);
+            var countLocal = ReserveLocal(LeafName(mapField.Path) + "_measured");
             statements.Add(new LocalVariable(countLocal, null, Zero));
 
             var keyLocal = ReserveLocal(LeafName(mapField.Key.Path));
@@ -456,8 +456,6 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>Whole bytes the shared bit block occupies, or zero when the entries need no bits.</summary>
-    private static string MapCountLocal(string path) => LeafName(path) + "_count";
-
     private static LuauExpression ElementBitBlockSize(int bitsPerElement, LuauExpression count) =>
         bitsPerElement == 0
             ? Zero
@@ -550,7 +548,21 @@ internal sealed partial class SerializationEmitter
             case MapField mapField:
             {
                 var leaf = LeafName(mapField.Path);
-                var count = new Identifier(MapCountLocal(mapField.Path));
+
+                // Counted here rather than reused from the measure: a map nested in an optional or a
+                // collection has one count per occurrence, and the measure's local is scoped to the
+                // branch or loop it was counted in.
+                var count = new Identifier(ReserveLocal(leaf + "_written"));
+                var counter = ReserveLocal(leaf + "_key");
+                body.Add(new LocalVariable(count.Name, null, Zero));
+                body.Add(
+                    new ForStatement(
+                        [counter],
+                        value,
+                        new Chunk([new ExpressionStatement(new BinaryOperator(count, "+=", One))])
+                    )
+                );
+
                 WriteNumber(cursor, mapField.LengthType, count, body);
                 cursor.GoDynamic(body);
 

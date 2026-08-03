@@ -488,9 +488,10 @@ internal sealed partial class SerializationEmitter
         var present = new List<LuauStatement>();
         EmitBoundsGuard(present, optionalField.Inner.BodyBytes ?? 0, optionalField.Path);
 
-        var initializers = EmitRead(optionalField.Inner, cursor, present);
-        foreach (var initializer in initializers.OfType<PropertyTableInitializer>())
-            present.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", initializer.Value)));
+        // Read as one value, not as a list of initializers: a nested struct contributes one per
+        // property, and assigning them in turn would leave the accumulator holding only the last.
+        var inner = EmitValueRead(optionalField.Inner, cursor, present);
+        present.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", inner)));
 
         statements.Add(new IfStatement(new Identifier(presentLocal), new Chunk(present), [], null));
         return new Identifier(leaf);

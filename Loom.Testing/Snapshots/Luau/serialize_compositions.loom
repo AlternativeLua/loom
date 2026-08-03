@@ -1,0 +1,14 @@
+[serializable]
+interface Leaf {
+    [number_type(NumberType.U8)]
+    n: number;
+}
+
+[serializable]
+interface Compositions {
+    maybe_map: Record<string, number>?;
+    map_list: Record<string, Leaf>[];
+    sparse: Record<string, string?>;
+    maybe_leaf: Leaf?;
+    maybe_names: string[]?;
+}

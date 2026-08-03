@@ -13,14 +13,18 @@ type Scores = {
 const function Scores_serialize_binary(value: Scores): Loom.Serialized
   local size = 0
   size += 4
-  local entries_count = 0
+  local entries_measured = 0
   for entries_k, entries_v in value.entries do
-    entries_count += 1
+    entries_measured += 1
     size += 4 + #entries_k
     size += 4
   end
   const b = buffer_create(size)
-  buffer_writeu32(b, 0, entries_count)
+  local entries_written = 0
+  for entries_key in value.entries do
+    entries_written += 1
+  end
+  buffer_writeu32(b, 0, entries_written)
   local offset = 4
   for entries_k_out, entries_v_out in value.entries do
     const entries_k_length = #entries_k_out

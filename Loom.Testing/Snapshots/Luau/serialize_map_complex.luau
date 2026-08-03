@@ -49,32 +49,36 @@ type Registry = {
 const function Registry_serialize_binary(value: Registry): Loom.Serialized
   local size = 0
   size += 4
-  local flags_count = 0
+  local flags_measured = 0
   for flags_k, flags_v in value.flags do
-    flags_count += 1
+    flags_measured += 1
     size += 4 + #flags_k
   end
-  size += (flags_count + 7) // 8
+  size += (flags_measured + 7) // 8
   size += 4
-  local entries_count = 0
+  local entries_measured = 0
   for entries_k, entries_v in value.entries do
-    entries_count += 1
+    entries_measured += 1
     size += 4
     size += 1
     size += 4 + #entries_v.label
   end
   size += 4
-  local lists_count = 0
+  local lists_measured = 0
   for lists_k, lists_v in value.lists do
-    lists_count += 1
+    lists_measured += 1
     size += 4 + #lists_k
     size += 4 + #lists_v * 4
   end
   const b = buffer_create(size)
-  buffer_writeu32(b, 0, flags_count)
+  local flags_written = 0
+  for flags_key in value.flags do
+    flags_written += 1
+  end
+  buffer_writeu32(b, 0, flags_written)
   local offset = 4
   const flags_bits = offset * 8
-  offset += (flags_count + 7) // 8
+  offset += (flags_written + 7) // 8
   local flags_index = 1
   for flags_k_out, flags_v_out in value.flags do
     const flags_k_length = #flags_k_out
@@ -85,7 +89,11 @@ const function Registry_serialize_binary(value: Registry): Loom.Serialized
     buffer_writebits(b, flags_bits + (flags_index - 1), 1, if flags_v_out then 1 else 0)
     flags_index += 1
   end
-  buffer_writeu32(b, offset, entries_count)
+  local entries_written = 0
+  for entries_key in value.entries do
+    entries_written += 1
+  end
+  buffer_writeu32(b, offset, entries_written)
   offset += 4
   for entries_k_out, entries_v_out in value.entries do
     buffer_writef32(b, offset, entries_k_out)
@@ -99,7 +107,11 @@ const function Registry_serialize_binary(value: Registry): Loom.Serialized
     buffer_writestring(b, offset, label_value)
     offset += label_length
   end
-  buffer_writeu32(b, offset, lists_count)
+  local lists_written = 0
+  for lists_key in value.lists do
+    lists_written += 1
+  end
+  buffer_writeu32(b, offset, lists_written)
   offset += 4
   for lists_k_out, lists_v_out in value.lists do
     const lists_k_length = #lists_k_out
