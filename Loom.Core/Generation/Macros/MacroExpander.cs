@@ -10,6 +10,7 @@ using Identifier = Loom.Core.Parsing.AST.Identifier;
 using PropertyAccess = Loom.Core.Parsing.AST.PropertyAccess;
 using Type = Loom.Core.TypeChecking.Types.Type;
 using FunctionType = Loom.Core.TypeChecking.Types.FunctionType;
+using OptionalType = Loom.Core.TypeChecking.Types.OptionalType;
 using Return = Loom.Luau.AST.Return;
 using Parameter = Loom.Luau.AST.Parameter;
 
@@ -89,6 +90,29 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
 
     public bool TryGetPropertyAccessMacro(PropertyAccess access, Luau.AST.PropertyAccess luauAccess, [MaybeNullWhen(false)] out LuauExpression expression) =>
         TryRewriteNamedAccess(access, access.Expression, access.Names, luauAccess, out expression);
+
+    public bool TryGetOptionalChainMemberMacro(
+        Expression access,
+        Expression rootExpression,
+        List<DotName> names,
+        LuauExpression receiverTarget,
+        [MaybeNullWhen(false)] out LuauExpression expression)
+    {
+        expression = null;
+        if (names.Count == 0)
+            return false;
+
+        _context.Node = access;
+        var receiverType = semanticModel.GetType(rootExpression);
+        for (var i = 0; i < names.Count - 1; i++)
+        {
+            receiverType = TypeSimplifier.GetMemberPropertyType(receiverType, names[i].Name.Text);
+            if (receiverType is null)
+                return false;
+        }
+
+        return GetProvider(receiverType) is { } provider && provider.TryProperty(_context, names[^1].Name.Text, receiverTarget, out expression);
+    }
 
     private bool TryDecomposeInvocationTarget(
         Expression expression,
@@ -246,5 +270,11 @@ internal sealed class MacroExpander(SemanticModel semanticModel, LuauState state
     private IMacroProvider? GetProvider(Expression receiver) =>
         GetProvider(semanticModel.GetType(receiver)) ?? Providers.FirstOrDefault(provider => provider.Supports(semanticModel, receiver));
 
-    private IMacroProvider? GetProvider(Type type) => Providers.FirstOrDefault(provider => provider.Supports(semanticModel, type));
+    private IMacroProvider? GetProvider(Type type)
+    {
+        if (type is OptionalType optionalType)
+            type = optionalType.NonNullableType;
+
+        return Providers.FirstOrDefault(provider => provider.Supports(semanticModel, type));
+    }
 }

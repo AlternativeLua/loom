@@ -4,6 +4,7 @@ using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking;
+using OptionalType = Loom.Core.TypeChecking.Types.OptionalType;
 using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Generation.Macros;
@@ -137,6 +138,11 @@ internal static class InvocationMacroReference
     private static IMacroProvider? GetProvider(SemanticModel semanticModel, Expression receiver) =>
         GetProvider(semanticModel, semanticModel.GetType(receiver)) ?? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(semanticModel, receiver));
 
-    private static IMacroProvider? GetProvider(SemanticModel semanticModel, Type? type) =>
-        type is not null ? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(semanticModel, type)) : null;
+    private static IMacroProvider? GetProvider(SemanticModel semanticModel, Type? type)
+    {
+        if (type is OptionalType optionalType)
+            type = optionalType.NonNullableType;
+
+        return type is not null ? MacroExpander.Providers.FirstOrDefault(provider => provider.Supports(semanticModel, type)) : null;
+    }
 }

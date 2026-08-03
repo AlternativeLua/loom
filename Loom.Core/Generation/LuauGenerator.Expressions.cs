@@ -48,7 +48,12 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitQualifiedName(QualifiedName qualifiedName)
     {
         if (qualifiedName.Names.Exists(n => n.IsOptional))
-            return GenerateOptionalChain(qualifiedName, Visit(qualifiedName.Identifier), qualifiedName.Names);
+            return GenerateOptionalChain(
+                qualifiedName,
+                Visit(qualifiedName.Identifier),
+                qualifiedName.Names,
+                target => FinalizeOptionalAccess(qualifiedName, qualifiedName.Identifier, qualifiedName.Names, target)
+            );
 
         var luauAccess = new Luau.AST.PropertyAccess(Visit(qualifiedName.Identifier), qualifiedName.Names.ConvertAll(dotName => dotName.Name.Text));
         if (_macroExpander.TryGetQualifiedNameMacro(qualifiedName, luauAccess, out var propertyReplacement))
@@ -62,7 +67,12 @@ public sealed partial class LuauGenerator
     public override LuauNode VisitPropertyAccess(PropertyAccess propertyAccess)
     {
         if (propertyAccess.Names.Exists(n => n.IsOptional))
-            return GenerateOptionalChain(propertyAccess, Visit(propertyAccess.Expression), propertyAccess.Names);
+            return GenerateOptionalChain(
+                propertyAccess,
+                Visit(propertyAccess.Expression),
+                propertyAccess.Names,
+                target => FinalizeOptionalAccess(propertyAccess, propertyAccess.Expression, propertyAccess.Names, target)
+            );
 
         var luauAccess = new Luau.AST.PropertyAccess(Visit(propertyAccess.Expression), propertyAccess.Names.ConvertAll(dotName => dotName.Name.Text));
         if (_macroExpander.TryGetPropertyAccessMacro(propertyAccess, luauAccess, out var propertyReplacement))
@@ -71,6 +81,18 @@ public sealed partial class LuauGenerator
         return _macroExpander.TryGetInvocationMacroReference(propertyAccess, luauAccess, out var referenceReplacement)
             ? referenceReplacement
             : GenerateRenamedAccess(propertyAccess, luauAccess.Target, luauAccess.Names);
+    }
+
+    private LuauExpression FinalizeOptionalAccess(Expression access, Expression rootExpression, List<DotName> names, LuauExpression target)
+    {
+        if (target is not Luau.AST.PropertyAccess { Names: [.., _] } propertyAccess)
+            return target;
+
+        var receiver = propertyAccess.Names.Count > 1
+            ? new Luau.AST.PropertyAccess(propertyAccess.Target, propertyAccess.Names[..^1])
+            : propertyAccess.Target;
+
+        return _macroExpander.TryGetOptionalChainMemberMacro(access, rootExpression, names, receiver, out var replacement) ? replacement : target;
     }
 
     // a?.b?.c => if a ~= nil then if a.b ~= nil then a.b.c else nil else nil

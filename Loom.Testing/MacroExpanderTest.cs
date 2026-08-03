@@ -560,6 +560,118 @@ public class MacroExpanderTest
         Assert.Equal("#", unaryOperator.Operator);
     }
 
+    [Fact]
+    public void Generates_Array_Length_ThroughOptionalChain()
+    {
+        const string source = "let a: number[]? = [1, 2, 3]; a?.length";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+
+        var unaryOperator = Assert.IsType<UnaryOperator>(ifExpression.ThenBranch);
+        Assert.Equal("#", unaryOperator.Operator);
+        Assert.Equal("a", Assert.IsType<Identifier>(unaryOperator.Operand).Name);
+    }
+
+    [Fact]
+    public void Generates_Array_Push_ThroughOptionalChain()
+    {
+        const string source = "let a: number[mut]? = mut [1, 2, 3]; a?.push(4)";
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+        Assert.Equal(2, luauTree.Statements.Count);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+
+        var tableCall = Assert.IsType<Call>(ifExpression.ThenBranch);
+        var callee = Assert.IsType<PropertyAccess>(tableCall.Callee);
+        Assert.Equal("table", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("insert", Assert.Single(callee.Names));
+        Assert.Equal("a", Assert.IsType<Identifier>(tableCall.Arguments.First()).Name);
+    }
+
+    [Fact]
+    public void Generates_Array_Length_ThroughNestedOptionalChain()
+    {
+        const string source = """
+            interface Foo {
+                mut bar: number[]?;
+            }
+            let foo: Foo? = none as never as Foo?;
+            foo?.bar?.length
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var outerIf = Assert.IsType<IfExpression>(variable.Initializer);
+        var innerIf = Assert.IsType<IfExpression>(outerIf.ThenBranch);
+        Assert.IsType<NilLiteral>(innerIf.ElseBranch);
+
+        var unaryOperator = Assert.IsType<UnaryOperator>(innerIf.ThenBranch);
+        Assert.Equal("#", unaryOperator.Operator);
+
+        var operand = Assert.IsType<PropertyAccess>(unaryOperator.Operand);
+        Assert.Equal("bar", Assert.Single(operand.Names));
+        Assert.Equal("foo", Assert.IsType<Identifier>(operand.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_Array_Length_ThroughOptionalChain_MixedWithPlainAccess()
+    {
+        const string source = """
+            interface Foo {
+                mut bar: number[]?;
+            }
+            let foo: Foo? = none as never as Foo?;
+            foo?.bar.length
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+
+        var unaryOperator = Assert.IsType<UnaryOperator>(ifExpression.ThenBranch);
+        Assert.Equal("#", unaryOperator.Operator);
+
+        var operand = Assert.IsType<PropertyAccess>(unaryOperator.Operand);
+        Assert.Equal("bar", Assert.Single(operand.Names));
+        Assert.Equal("foo", Assert.IsType<Identifier>(operand.Target).Name);
+    }
+
+    [Fact]
+    public void Generates_PropertyAccess_ThroughOptionalChain_WithoutMacro_UnaffectedByMacroLookup()
+    {
+        const string source = """
+            interface Baz {
+                mut name: string;
+            }
+            let b: Baz? = none as never as Baz?;
+            b?.name
+            """;
+
+        var luauTree = Utility.GetLuauAST(source, true);
+        Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+
+        var access = Assert.IsType<PropertyAccess>(ifExpression.ThenBranch);
+        Assert.Equal("name", Assert.Single(access.Names));
+        Assert.Equal("b", Assert.IsType<Identifier>(access.Target).Name);
+    }
+
     [Theory]
     [InlineData("(1..10).length")]
     [InlineData("(1..10)['length']")]
