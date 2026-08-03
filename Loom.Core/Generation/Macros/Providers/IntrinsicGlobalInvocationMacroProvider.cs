@@ -156,6 +156,20 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
         var schemaEntry = semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
         if (schemaEntry == null)
         {
+            // A schema built in another module is absent from this file's table, so an interface that is
+            // genuinely serializable is indistinguishable here from one that is not - separate the two
+            // rather than blaming the user for a missing attribute they already wrote.
+            if (semanticModel.ImportBindings.Any(binding => binding.Symbol is InterfaceSymbol imported && imported.Name == interfaceType.Name))
+            {
+                context.Diagnostics.NotImplemented(
+                    context.Node,
+                    $"Serializing '{interfaceType.Name}' across a module boundary is not yet generated.",
+                    "the declaring module exports its codec, but resolving it through the import binding is unfinished."
+                );
+
+                return false;
+            }
+
             context.Diagnostics.Error(
                 context.Node,
                 InternalCodes.NotSerializable,
