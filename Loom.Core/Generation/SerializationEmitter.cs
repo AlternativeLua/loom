@@ -130,10 +130,18 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         foreach (var stringField in schema.Fields.OfType<StringField>())
             size = Add(size, Add(new NumberLiteral(stringField.LengthType.ByteCount()), Length(Access(new Identifier(ValueParameter), stringField.Path))));
 
+        foreach (var optional in schema.Fields.OfType<OptionalField>())
+            size = Add(
+                size,
+                new IfExpression(IsPresent(Access(new Identifier(ValueParameter), optional.Path)), new NumberLiteral(optional.Inner.BodyBytes ?? 0), [], Zero)
+            );
+
         return size;
     }
 
     private static LuauExpression Length(LuauExpression value) => new UnaryOperator("#", value);
+
+    private static LuauExpression IsPresent(LuauExpression value) => new BinaryOperator(value, "~=", new NilLiteral());
 
     /// <summary>
     ///     An all-zero-width type sends no buffer, and a type with no blob fields sends no blobs array.
@@ -165,7 +173,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 return;
 
             case NumberField numberField:
-                body.Add(new ExpressionStatement(WriteNumber(cursor, numberField.NumberType, value, body)));
+                WriteNumber(cursor, numberField.NumberType, value, body);
                 return;
 
             case RangedNumberField ranged:
@@ -190,10 +198,26 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 body.Add(new ExpressionStatement(LuauFactory.TableCall("insert", [new Identifier(BlobsLocal), value])));
                 return;
 
+            case OptionalField optionalField:
+            {
+                body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(IsPresent(value), One, [], Zero))));
+
+                // Offsets diverge here, so the cursor commits to a runtime position before the branch and
+                // both paths advance the same local.
+                cursor.GoDynamic(body);
+
+                var present = new List<LuauStatement>();
+                EmitWrite(optionalField.Inner, source, cursor, present);
+                body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
+
+                return;
+            }
+
             case StringField stringField:
             {
                 var length = Length(value);
-                body.Add(new ExpressionStatement(WriteNumber(cursor, stringField.LengthType, length, body)));
+                WriteNumber(cursor, stringField.LengthType, length, body);
+                cursor.GoDynamic(body);
                 body.Add(new ExpressionStatement(BufferCall("writestring", [new Identifier(BufferLocal), cursor.Position, value])));
                 cursor.AdvanceBy(body, length);
                 return;
@@ -201,7 +225,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
             case DatatypeField datatypeField:
                 foreach (var component in datatypeField.Datatype.Components)
-                    body.Add(new ExpressionStatement(WriteNumber(cursor, datatypeField.NumberType, Access(value, component), body)));
+                    WriteNumber(cursor, datatypeField.NumberType, Access(value, component), body);
 
                 return;
 
@@ -220,7 +244,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private void EmitCFrameWrite(CFrameField cframeField, LuauExpression value, Cursor cursor, List<LuauStatement> body)
     {
         foreach (var component in CFramePositionComponents)
-            body.Add(new ExpressionStatement(WriteNumber(cursor, cframeField.NumberType, Access(value, component), body)));
+            WriteNumber(cursor, cframeField.NumberType, Access(value, component), body);
 
         var quaternion = LuauFactory.RuntimeLibraryCall(["cframe_to_quaternion"], [value]);
         if (cframeField.Encoding == CFrameEncoding.Compressed)
@@ -231,16 +255,15 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
         body.Add(new MultiConstVariable(QuaternionLocals, quaternion));
         foreach (var local in QuaternionLocals)
-            body.Add(new ExpressionStatement(WriteNumber(cursor, cframeField.NumberType, new Identifier(local), body)));
+            WriteNumber(cursor, cframeField.NumberType, new Identifier(local), body);
     }
 
     private static LuauExpression PackQuaternion(LuauExpression quaternion) => LuauFactory.RuntimeLibraryCall(["pack_quaternion"], [quaternion]);
 
-    private LuauExpression WriteNumber(Cursor cursor, NumberType numberType, LuauExpression value, List<LuauStatement> body)
+    private void WriteNumber(Cursor cursor, NumberType numberType, LuauExpression value, List<LuauStatement> body)
     {
-        var call = BufferCall("write" + numberType.BufferSuffix(), [new Identifier(BufferLocal), cursor.Position, value]);
+        body.Add(new ExpressionStatement(BufferCall("write" + numberType.BufferSuffix(), [new Identifier(BufferLocal), cursor.Position, value])));
         cursor.Advance(body, numberType.ByteCount());
-        return call;
     }
 
     private LuauExpression WriteBits(Cursor cursor, int bitCount, LuauExpression value)
@@ -385,6 +408,9 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             case BlobField blobField:
                 return [new PropertyTableInitializer(name, EmitBlobRead(blobField, statements))];
 
+            case OptionalField optionalField:
+                return [new PropertyTableInitializer(name, EmitOptionalRead(optionalField, cursor, statements))];
+
             case StringField stringField:
                 return [new PropertyTableInitializer(name, EmitStringRead(stringField, cursor, statements))];
 
@@ -464,6 +490,27 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     }
 
     /// <summary>
+    ///     Reads a presence bit, then the payload only when it is set. The local starts nil so an absent
+    ///     value needs no else branch.
+    /// </summary>
+    private LuauExpression EmitOptionalRead(OptionalField optionalField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var leaf = LeafName(optionalField.Path);
+        var presentLocal = leaf + "_present";
+        statements.Add(new ConstVariable(presentLocal, null, new BinaryOperator(ReadBits(cursor, 1), "==", One)));
+        statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
+        cursor.GoDynamic(statements);
+
+        var present = new List<LuauStatement>();
+        var initializers = EmitRead(optionalField.Inner, cursor, present);
+        foreach (var initializer in initializers.OfType<PropertyTableInitializer>())
+            present.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", initializer.Value)));
+
+        statements.Add(new IfStatement(new Identifier(presentLocal), new Chunk(present), [], null));
+        return new Identifier(leaf);
+    }
+
+    /// <summary>
     ///     Reads a length-prefixed string, checking the prefix against what the buffer actually holds so a
     ///     hostile length reports rather than throwing out of the read.
     /// </summary>
@@ -512,9 +559,22 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private LuauExpression ReadNumber(Cursor cursor, NumberType numberType, List<LuauStatement> statements)
     {
         var call = BufferCall("read" + numberType.BufferSuffix(), [new Identifier(BufferLocal), cursor.Position]);
+        if (!cursor.IsDynamic)
+        {
+            cursor.Advance(statements, numberType.ByteCount());
+            return call;
+        }
+
+        var local = ReserveTemporary();
+        statements.Add(new ConstVariable(local, null, call));
         cursor.Advance(statements, numberType.ByteCount());
-        return call;
+
+        return new Identifier(local);
     }
+
+    private int _temporaries;
+
+    private string ReserveTemporary() => $"read_{_temporaries++}";
 
     private LuauExpression ReadBits(Cursor cursor, int bitCount)
     {

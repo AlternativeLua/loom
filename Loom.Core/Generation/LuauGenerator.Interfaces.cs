@@ -182,7 +182,7 @@ public sealed partial class LuauGenerator
     {
         foreach (var serializationField in fields)
         {
-            if (serializationField is ArrayField or OptionalField or UnionField)
+            if (serializationField is ArrayField or UnionField)
                 return serializationField;
 
             if (FindUnsupportedField(serializationField.Children) is { } nested)

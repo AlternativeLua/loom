@@ -15,8 +15,8 @@ const function Player_serialize_binary(value: Player): Loom.Serialized
   const b = buffer_create(1 + 4 + #value.name)
   buffer_writeu8(b, 0, value.id)
   buffer_writeu32(b, 1, #value.name)
-  buffer_writestring(b, 5, value.name)
   local offset = 5
+  buffer_writestring(b, offset, value.name)
   offset += #value.name
   return { buffer = b }
 end
