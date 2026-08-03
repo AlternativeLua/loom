@@ -376,6 +376,67 @@ public class SerializationSchemaTest
         // The count is bounds-checked before the loop rather than running off the end element by element.
         Assert.Contains("if buffer_len(b) < offset + values_count * 1 then", luau);
     }
+    [Fact]
+    public void PackedSentinel_SkipsComponentsOnMatch()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable, packed] interface Entity {
+                    [number_type(NumberType.I16)]
+                    position: Vector3;
+                }
+                """,
+                true
+            )
+            .Render();
+
+        // The sentinel resolves before the allocation, because a match writes no components at all.
+        Assert.Contains("if position_value == Vector3.zero then", luau);
+        Assert.Contains("buffer_create(1 + if position_sentinel == 0 then 6 else 0)", luau);
+        Assert.Contains("if position_sentinel == 0 then", luau);
+
+        // Reserved tags decode to nothing the type allows, so they report instead.
+        Assert.Contains("kind = \"invalid_tag\"", luau);
+    }
+
+    [Fact]
+    public void PackedCFrame_KeepsIdentityToASingleByte()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable, packed] interface Waypoint {
+                    [number_type(NumberType.F32)]
+                    frame: CFrame;
+                }
+                """,
+                true
+            )
+            .Render();
+
+        // Header bits are paid for unconditionally, so a sentinelled rotation moves to the body where it
+        // rides behind the same conditional as the position - identity costs one byte, not five.
+        Assert.Contains("buffer_create(1 + if frame_sentinel == 0 then 16 else 0)", luau);
+        Assert.Contains("buffer_writeu32(b, offset, Loom.pack_quaternion(", luau);
+    }
+
+    [Fact]
+    public void ConditionalPayload_IsBoundsCheckedBeforeReading()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Entity {
+                    [number_type(NumberType.I16)]
+                    target: number?;
+                }
+                """,
+                true
+            )
+            .Render();
+
+        // The up-front minimum only covers what every payload carries, so a branch the sender chose to
+        // take has to prove its bytes are present rather than throwing out of the read.
+        Assert.Contains("if buffer_len(b) < offset + 2 then", luau);
+    }
     #endregion Calls
 
     #region Layout

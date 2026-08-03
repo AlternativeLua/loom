@@ -153,12 +153,6 @@ public sealed partial class LuauGenerator
     private bool CheckSchemaIsEmittable(InterfaceSymbol interfaceSymbol, SerializationSchema schema)
     {
         var declaration = interfaceSymbol.Declaration;
-        if (schema.IsPacked)
-        {
-            _diagnostics.NotImplemented(declaration, $"Sentinel bitpacking for 'packed' interface '{interfaceSymbol.Name}' is not yet generated.");
-            return false;
-        }
-
         if (FindUnsupportedField(schema.Fields) is not { } unsupported)
             return true;
 

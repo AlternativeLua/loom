@@ -98,6 +98,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         if (schema.HasBlobs)
             body.Add(new ConstVariable(BlobsLocal, null, Table.Empty));
 
+        EmitSentinelPrologue(body);
+
         if (!schema.IsEmpty)
             body.Add(new ConstVariable(BufferLocal, null, BufferCall("create", [SizeExpression()])));
 
@@ -116,6 +118,55 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             new Chunk(body)
         );
     }
+
+    /// <summary>
+    ///     Binds each sentinelled field's value and resolves which sentinel it matched, ahead of the
+    ///     allocation that depends on the answer. A match writes no components at all, so the width is
+    ///     not known until the comparison chain has run.
+    /// </summary>
+    private void EmitSentinelPrologue(List<LuauStatement> body)
+    {
+        foreach (var serializationField in schema.Fields)
+        {
+            if (SentinelNamesOf(serializationField) is not { Count: > 0 } sentinels)
+                continue;
+
+            var valueLocal = SentinelValueLocal(serializationField.Path);
+            body.Add(new ConstVariable(valueLocal, null, Access(new Identifier(ValueParameter), serializationField.Path)));
+            body.Add(new LocalVariable(SentinelIndexLocal(serializationField.Path), null, Zero));
+
+            // Index zero stays reserved for "no match, components follow".
+            var branches = new List<ElseIfBranch>();
+            for (var index = 0; index < sentinels.Count; index++)
+            {
+                var condition = new BinaryOperator(new Identifier(valueLocal), "==", new Identifier(sentinels[index]));
+                var assign = new Chunk(
+                    [
+                        new ExpressionStatement(
+                            new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "=", new NumberLiteral(index + 1))
+                        )
+                    ]
+                );
+
+                if (index == 0)
+                    body.Add(new IfStatement(condition, assign, branches, null));
+                else
+                    branches.Add(new ElseIfBranch(condition, assign));
+            }
+        }
+    }
+
+    /// <summary>Luau-side sentinel constants for a field, or null when it is not sentinelled.</summary>
+    private static IReadOnlyList<string>? SentinelNamesOf(SerializationField serializationField) =>
+        serializationField switch
+        {
+            DatatypeField { UseSentinels: true } datatypeField => datatypeField.Datatype.Sentinels,
+            CFrameField { UseSentinels: true } => CFrameSentinels,
+            _ => null
+        };
+
+    private static string SentinelValueLocal(string path) => LeafName(path) + "_value";
+    private static string SentinelIndexLocal(string path) => LeafName(path) + "_sentinel";
 
     /// <summary>
     ///     Total width. A fixed schema folds to a literal; variable-width fields add their runtime
@@ -140,6 +191,22 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 )
             );
 
+        foreach (var serializationField in schema.Fields)
+        {
+            if (SentinelNamesOf(serializationField) is not { Count: > 0 })
+                continue;
+
+            size = Add(
+                size,
+                new IfExpression(
+                    new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "==", Zero),
+                    new NumberLiteral(SentinelComponentBytes(serializationField)),
+                    [],
+                    Zero
+                )
+            );
+        }
+
         foreach (var optional in schema.Fields.OfType<OptionalField>())
             size = Add(
                 size,
@@ -148,6 +215,19 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
         return size;
     }
+
+    private static readonly List<string> CFrameSentinels = ["CFrame.identity"];
+
+    /// <summary>Bytes a sentinelled field writes when nothing matched and its components go out in full.</summary>
+    private static int SentinelComponentBytes(SerializationField serializationField) =>
+        serializationField switch
+        {
+            DatatypeField datatypeField => datatypeField.Datatype.Components.Count * datatypeField.NumberType.ByteCount(),
+            // Position components plus, for Compressed, the packed rotation now living in the body.
+            CFrameField cframeField => cframeField.ComponentCount * cframeField.NumberType.ByteCount()
+                + (cframeField.Encoding == CFrameEncoding.Compressed ? sizeof(uint) : 0),
+            _ => 0
+        };
 
     private static LuauExpression Length(LuauExpression value) => new UnaryOperator("#", value);
 
@@ -246,15 +326,36 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 return;
             }
 
-            case DatatypeField datatypeField:
+            case DatatypeField datatypeField when !datatypeField.UseSentinels:
                 foreach (var component in datatypeField.Datatype.Components)
                     WriteNumber(cursor, datatypeField.NumberType, Access(value, component), body);
 
                 return;
 
-            case CFrameField cframeField:
+            case CFrameField { UseSentinels: false } cframeField:
                 EmitCFrameWrite(cframeField, value, cursor, body);
                 return;
+
+            case DatatypeField or CFrameField:
+            {
+                var sentinels = SentinelNamesOf(serializationField)!;
+                var indexLocal = new Identifier(SentinelIndexLocal(serializationField.Path));
+                var bound = new Identifier(SentinelValueLocal(serializationField.Path));
+                body.Add(new ExpressionStatement(WriteBits(cursor, BitWidth.ForStateCount(sentinels.Count + 1), indexLocal)));
+
+                // Components are written only when nothing matched, so offsets past this point diverge.
+                cursor.GoDynamic(body);
+
+                var components = new List<LuauStatement>();
+                if (serializationField is DatatypeField datatype)
+                    foreach (var component in datatype.Datatype.Components)
+                        WriteNumber(cursor, datatype.NumberType, Access(bound, component), components);
+                else
+                    EmitCFrameWrite((CFrameField)serializationField, bound, cursor, components);
+
+                body.Add(new IfStatement(new BinaryOperator(indexLocal, "==", Zero), new Chunk(components), [], null));
+                return;
+            }
 
             case TupleField tupleField:
                 foreach (var element in tupleField.Elements)
@@ -272,7 +373,12 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         var quaternion = LuauFactory.RuntimeLibraryCall(["cframe_to_quaternion"], [value]);
         if (cframeField.Encoding == CFrameEncoding.Compressed)
         {
-            body.Add(new ExpressionStatement(WriteBits(cursor, CFrameEncodingExtensions.CompressedRotationBits, PackQuaternion(quaternion))));
+            // Exactly 32 bits either way; in the body it is a u32 so it can be skipped on a sentinel hit.
+            if (cframeField.UseSentinels)
+                WriteNumber(cursor, NumberType.U32, PackQuaternion(quaternion), body);
+            else
+                body.Add(new ExpressionStatement(WriteBits(cursor, CFrameEncodingExtensions.CompressedRotationBits, PackQuaternion(quaternion))));
+
             return;
         }
 
@@ -449,7 +555,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             case StringField stringField:
                 return [new PropertyTableInitializer(name, EmitStringRead(stringField, cursor, statements))];
 
-            case DatatypeField datatypeField:
+            case DatatypeField { UseSentinels: false } datatypeField:
                 return
                 [
                     new PropertyTableInitializer(
@@ -461,8 +567,11 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                     )
                 ];
 
-            case CFrameField cframeField:
+            case CFrameField { UseSentinels: false } cframeField:
                 return [new PropertyTableInitializer(name, EmitCFrameRead(cframeField, cursor, statements))];
+
+            case DatatypeField or CFrameField:
+                return [new PropertyTableInitializer(name, EmitSentinelRead(serializationField, cursor, statements))];
 
             case TupleField tupleField:
                 return tupleField.Elements.SelectMany(element => EmitRead(element, cursor, statements)).ToList();
@@ -578,6 +687,77 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     }
 
     /// <summary>
+    ///     Guards a conditionally-present payload. The up-front minimum only covers what every payload
+    ///     carries, so a branch the sender chose to take has to prove the bytes are actually there -
+    ///     otherwise a truncated buffer throws out of the read instead of reporting.
+    /// </summary>
+    private void EmitBoundsGuard(List<LuauStatement> statements, int byteCount, string path)
+    {
+        if (byteCount <= 0)
+            return;
+
+        statements.Add(
+            new IfStatement(
+                new BinaryOperator(
+                    BufferCall("len", [new Identifier(BufferLocal)]),
+                    "<",
+                    Add(new Identifier(OffsetLocal), new NumberLiteral(byteCount))
+                ),
+                new Chunk([new Return(BuildErrorTable("truncated", path, null))]),
+                [],
+                null
+            )
+        );
+    }
+
+    /// <summary>
+    ///     Reads a sentinel tag, rebuilding the well-known value it names or falling through to the
+    ///     components. Reserved tags report rather than producing a value the type never allowed.
+    /// </summary>
+    private LuauExpression EmitSentinelRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var sentinels = SentinelNamesOf(serializationField)!;
+        var leaf = LeafName(serializationField.Path);
+        var indexLocal = leaf + "_sentinel";
+
+        statements.Add(new ConstVariable(indexLocal, null, ReadBits(cursor, BitWidth.ForStateCount(sentinels.Count + 1))));
+        statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
+        cursor.GoDynamic(statements);
+
+        var componentBody = new List<LuauStatement>();
+        EmitBoundsGuard(componentBody, SentinelComponentBytes(serializationField), serializationField.Path);
+
+        var rebuilt = serializationField is DatatypeField datatypeField
+            ? new Call(
+                new Identifier(datatypeField.Datatype.Constructor),
+                datatypeField.Datatype.Components.Select(_ => ReadNumber(cursor, datatypeField.NumberType, componentBody)).ToList()
+            )
+            : EmitCFrameRead((CFrameField)serializationField, cursor, componentBody);
+
+        componentBody.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", rebuilt)));
+
+        var branches = new List<ElseIfBranch>();
+        for (var index = 0; index < sentinels.Count; index++)
+            branches.Add(
+                new ElseIfBranch(
+                    new BinaryOperator(new Identifier(indexLocal), "==", new NumberLiteral(index + 1)),
+                    new Chunk([new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", new Identifier(sentinels[index])))])
+                )
+            );
+
+        statements.Add(
+            new IfStatement(
+                new BinaryOperator(new Identifier(indexLocal), "==", Zero),
+                new Chunk(componentBody),
+                branches,
+                new Chunk([new Return(BuildErrorTable("invalid_tag", serializationField.Path, null))])
+            )
+        );
+
+        return new Identifier(leaf);
+    }
+
+    /// <summary>
     ///     Reads a presence bit, then the payload only when it is set. The local starts nil so an absent
     ///     value needs no else branch.
     /// </summary>
@@ -590,6 +770,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         cursor.GoDynamic(statements);
 
         var present = new List<LuauStatement>();
+        EmitBoundsGuard(present, optionalField.Inner.BodyBytes ?? 0, optionalField.Path);
+
         var initializers = EmitRead(optionalField.Inner, cursor, present);
         foreach (var initializer in initializers.OfType<PropertyTableInitializer>())
             present.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", initializer.Value)));
@@ -634,7 +816,11 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         var arguments = CFramePositionComponents.ConvertAll(_ => ReadNumber(cursor, cframeField.NumberType, statements));
         if (cframeField.Encoding == CFrameEncoding.Compressed)
         {
-            arguments.Add(LuauFactory.RuntimeLibraryCall(["unpack_quaternion"], [ReadBits(cursor, CFrameEncodingExtensions.CompressedRotationBits)]));
+            var packed = cframeField.UseSentinels
+                ? ReadNumber(cursor, NumberType.U32, statements)
+                : ReadBits(cursor, CFrameEncodingExtensions.CompressedRotationBits);
+
+            arguments.Add(LuauFactory.RuntimeLibraryCall(["unpack_quaternion"], [packed]));
             return new Call(new Identifier("CFrame.new"), arguments);
         }
 

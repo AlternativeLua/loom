@@ -155,8 +155,12 @@ public sealed record CFrameField(string Path, Type ValueType, CFrameEncoding Enc
 
     // Compressed packs the whole rotation into header bits; Precise writes four ordinary components
     // alongside the position, since bit-writing a float would truncate it to an integer.
+    //
+    // Under sentinels the rotation moves to the body instead. Header bits sit at fixed positions and so
+    // are always paid for, which would leave a sentinelled identity costing the full 32 bits it exists
+    // to avoid - in the body they ride behind the same conditional as the position.
     public override int HeaderBits =>
-        (Encoding == CFrameEncoding.Compressed ? CFrameEncodingExtensions.CompressedRotationBits : 0)
+        (Encoding == CFrameEncoding.Compressed && !UseSentinels ? CFrameEncodingExtensions.CompressedRotationBits : 0)
         + (UseSentinels ? BitWidth.ForStateCount(SentinelStateCount) : 0);
 
     public int ComponentCount => Encoding == CFrameEncoding.Compressed ? 3 : 7;
