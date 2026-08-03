@@ -179,9 +179,12 @@ public sealed partial class LuauGenerator
             if (serializationField is UnionField)
                 return serializationField;
 
-            // Only fixed-width numeric elements are emitted so far; anything else would need the
-            // measuring traversal that inline sizing has avoided up to now.
-            if (serializationField is ArrayField array && array.Element is not NumberField)
+            // An element whose width is neither fixed nor a length-prefixed string cannot be measured,
+            // so the allocation would be wrong before a single byte was written. Header bits are worse:
+            // they sit at fixed positions in a header sized once for the whole schema, so every element
+            // would write over the same bits.
+            if (serializationField is ArrayField { Element: var element }
+                && (element is { BodyBytes: null } and not StringField || element.HeaderBits > 0))
                 return serializationField;
 
             if (FindUnsupportedField(serializationField.Children) is { } nested)

@@ -1,0 +1,6 @@
+[serializable]
+interface Roster {
+    names: string[];
+    [number_type(NumberType.I16)]
+    positions: Vector3[];
+}

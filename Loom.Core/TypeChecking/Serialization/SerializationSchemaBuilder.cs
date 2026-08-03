@@ -132,8 +132,10 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
             case Types.FunctionType:
                 return new BlobField(path, type, "function", null);
 
+            // Elements do not take sentinels: those resolve once per field before the allocation, which
+            // cannot express a different choice for every entry.
             case Types.ArrayType array:
-                return TryBuildField(path + "[]", array.ElementType, options, isPacked, reportNode) is { } element
+                return TryBuildField(path + "[]", array.ElementType, options, false, reportNode) is { } element
                     ? new ArrayField(path, type, options.LengthType ?? DefaultLengthType, element)
                     : null;
 

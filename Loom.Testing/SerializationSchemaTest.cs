@@ -341,18 +341,32 @@ public class SerializationSchemaTest
         );
     }
     [Fact]
-    public void ArrayOfStrings_IsStillGuarded()
+    public void ArrayOfStrings_MeasuresByWalkingTheValue()
     {
-        var diagnostics = Utility.GetGeneratorDiagnostics(
-            """
-            [serializable] interface Names { values: string[] }
-            """,
-            true
-        );
+        var luau = Utility.GetLuauAST("[serializable] interface Names { values: string[] }", true).Render();
 
-        // Sizing an array of variable-width elements needs the measuring traversal inline sizing has
-        // avoided, so it must report rather than emit a serializer that drops the field.
-        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.NotImplemented));
+        // A variable-width element cannot state its width as an expression, so the total is accumulated
+        // by walking the value before the buffer is allocated.
+        Assert.Contains("local size = 0", luau);
+        Assert.Contains("size += 4 + #value.values[i]", luau);
+        Assert.Contains("buffer_create(size)", luau);
+
+        // Element locals must not collide with the collection's own, nor carry brackets into a name.
+        Assert.Contains("values_element", luau);
+        Assert.DoesNotContain("values[]_", luau);
+    }
+
+    [Fact]
+    public void ArrayOfUnmeasurableElements_IsGuarded()
+    {
+        // A bool lives in header bits, which sit at fixed positions in a header sized once for the whole
+        // schema - every element would write over the same bits.
+        var bits = Utility.GetGeneratorDiagnostics("[serializable] interface Flags { values: bool[] }", true);
+        Assert.NotNull(bits.Find(d => d.Code == InternalCodes.NotImplemented));
+
+        // A nested array has no width the enclosing measure can state either.
+        var nested = Utility.GetGeneratorDiagnostics("[serializable] interface Grid { values: string[][] }", true);
+        Assert.NotNull(nested.Find(d => d.Code == InternalCodes.NotImplemented));
     }
 
     [Fact]

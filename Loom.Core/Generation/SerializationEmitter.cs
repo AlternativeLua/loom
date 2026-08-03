@@ -24,6 +24,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private const string BlobIndexLocal = "blob_index";
     private const string OffsetLocal = "offset";
     private const string LoopLocal = "i";
+    private const string SizeLocal = "size";
 
     public static string SerializeName(string interfaceName) => $"{interfaceName}_serialize_binary";
     public static string DeserializeName(string interfaceName) => $"{interfaceName}_deserialize_binary";
@@ -101,7 +102,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         EmitSentinelPrologue(body);
 
         if (!schema.IsEmpty)
-            body.Add(new ConstVariable(BufferLocal, null, BufferCall("create", [SizeExpression()])));
+            body.Add(new ConstVariable(BufferLocal, null, BufferCall("create", [EmitSizeComputation(body)])));
 
         // Walked even for a zero-byte schema: blob fields still have to be appended, and a schema is
         // only empty when nothing writes bytes or bits, so the absent buffer local is never referenced.
@@ -169,52 +170,80 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private static string SentinelIndexLocal(string path) => LeafName(path) + "_sentinel";
 
     /// <summary>
-    ///     Total width. A fixed schema folds to a literal; variable-width fields add their runtime
-    ///     contribution, so no separate measuring traversal is needed for widths expressible inline.
+    ///     Computes the total width, appending statements to <paramref name="body" /> only when some field
+    ///     cannot state its contribution as an expression. A fixed schema folds to a literal, widths that
+    ///     are inline-expressible stay in one arithmetic expression, and anything needing control flow -
+    ///     an array of variable-width elements, a union whose width follows its tag - falls back to
+    ///     accumulating into a local.
     /// </summary>
-    private LuauExpression SizeExpression()
+    private LuauExpression EmitSizeComputation(List<LuauStatement> body)
     {
         if (schema.FixedByteCount is { } fixedByteCount)
             return new NumberLiteral(fixedByteCount);
 
-        var constant = schema.HeaderBytes + schema.Fields.Sum(f => f.BodyBytes ?? 0);
-        LuauExpression size = new NumberLiteral(constant);
-        foreach (var stringField in schema.Fields.OfType<StringField>())
-            size = Add(size, Add(new NumberLiteral(stringField.LengthType.ByteCount()), Length(Access(new Identifier(ValueParameter), stringField.Path))));
-
-        foreach (var array in schema.Fields.OfType<ArrayField>())
-            size = Add(
-                size,
-                Add(
-                    new NumberLiteral(array.LengthType.ByteCount()),
-                    Multiply(Length(Access(new Identifier(ValueParameter), array.Path)), new NumberLiteral(array.Element.BodyBytes ?? 0))
-                )
-            );
-
+        LuauExpression inline = new NumberLiteral(schema.HeaderBytes + schema.Fields.Sum(f => f.BodyBytes ?? 0));
+        var traversal = new List<LuauStatement>();
         foreach (var serializationField in schema.Fields)
         {
-            if (SentinelNamesOf(serializationField) is not { Count: > 0 })
+            var value = Access(new Identifier(ValueParameter), serializationField.Path);
+            if (InlineContribution(serializationField, value) is { } contribution)
+            {
+                inline = Add(inline, contribution);
                 continue;
+            }
 
-            size = Add(
-                size,
-                new IfExpression(
-                    new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "==", Zero),
-                    new NumberLiteral(SentinelComponentBytes(serializationField)),
-                    [],
-                    Zero
-                )
-            );
+            EmitMeasure(serializationField, value, traversal);
         }
 
-        foreach (var optional in schema.Fields.OfType<OptionalField>())
-            size = Add(
-                size,
-                new IfExpression(IsPresent(Access(new Identifier(ValueParameter), optional.Path)), new NumberLiteral(optional.Inner.BodyBytes ?? 0), [], Zero)
+        if (traversal.Count == 0)
+            return inline;
+
+        body.Add(new LocalVariable(SizeLocal, null, inline));
+        body.AddRange(traversal);
+
+        return new Identifier(SizeLocal);
+    }
+
+    /// <summary>A field's contribution as an expression, or null when it needs the traversal.</summary>
+    private LuauExpression? InlineContribution(SerializationField serializationField, LuauExpression value)
+    {
+        if (SentinelNamesOf(serializationField) is { Count: > 0 })
+            return new IfExpression(
+                new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "==", Zero),
+                new NumberLiteral(SentinelComponentBytes(serializationField)),
+                [],
+                Zero
             );
 
-        return size;
+        return serializationField switch
+        {
+            StringField stringField => Add(new NumberLiteral(stringField.LengthType.ByteCount()), Length(value)),
+            ArrayField { Element.BodyBytes: { } elementBytes } arrayField =>
+                Add(new NumberLiteral(arrayField.LengthType.ByteCount()), Multiply(Length(value), new NumberLiteral(elementBytes))),
+            OptionalField { Inner.BodyBytes: { } innerBytes } optional =>
+                new IfExpression(IsPresent(value), new NumberLiteral(innerBytes), [], Zero),
+            _ => null
+        };
     }
+
+    /// <summary>Accumulates a field's width into the size local, for shapes that need control flow.</summary>
+    private void EmitMeasure(SerializationField serializationField, LuauExpression value, List<LuauStatement> statements)
+    {
+        if (serializationField is not ArrayField arrayField)
+            return;
+
+        statements.Add(AddToSize(new NumberLiteral(arrayField.LengthType.ByteCount())));
+
+        // The element width varies per entry, so the only way to total it is to walk the value.
+        var elementValue = new ElementAccess(value, new Identifier(LoopLocal));
+        if (InlineContribution(arrayField.Element, elementValue) is not { } elementSize)
+            return;
+
+        statements.Add(new NumericForStatement(LoopLocal, One, Length(value), null, new Chunk([AddToSize(elementSize)])));
+    }
+
+    private static LuauStatement AddToSize(LuauExpression amount) =>
+        new ExpressionStatement(new BinaryOperator(new Identifier(SizeLocal), "+=", amount));
 
     private static readonly List<string> CFrameSentinels = ["CFrame.identity"];
 
@@ -249,9 +278,15 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         return new Table(initializers);
     }
 
-    private void EmitWrite(SerializationField serializationField, LuauExpression source, Cursor cursor, List<LuauStatement> body)
+    private void EmitWrite(SerializationField serializationField, LuauExpression source, Cursor cursor, List<LuauStatement> body) =>
+        EmitValueWrite(serializationField, Access(source, serializationField.Path), cursor, body);
+
+    /// <summary>
+    ///     Writes a field given the expression holding its value, rather than resolving it from a path.
+    ///     Array elements are reached by index, so they have no path of their own and reuse this directly.
+    /// </summary>
+    private void EmitValueWrite(SerializationField serializationField, LuauExpression value, Cursor cursor, List<LuauStatement> body)
     {
-        var value = Access(source, serializationField.Path);
         switch (serializationField)
         {
             // Pinned by its type - the reader rebuilds it as a constant, so nothing goes on the wire.
@@ -297,7 +332,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 cursor.GoDynamic(body);
 
                 var present = new List<LuauStatement>();
-                EmitWrite(optionalField.Inner, source, cursor, present);
+                EmitWrite(optionalField.Inner, new Identifier(ValueParameter), cursor, present);
                 body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
 
                 return;
@@ -310,7 +345,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 cursor.GoDynamic(body);
 
                 var elementBody = new List<LuauStatement>();
-                EmitElementWrite(arrayField, new ElementAccess(value, new Identifier(LoopLocal)), cursor, elementBody);
+                EmitValueWrite(arrayField.Element, new ElementAccess(value, new Identifier(LoopLocal)), cursor, elementBody);
                 body.Add(new NumericForStatement(LoopLocal, One, count, null, new Chunk(elementBody)));
 
                 return;
@@ -359,7 +394,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
             case TupleField tupleField:
                 foreach (var element in tupleField.Elements)
-                    EmitWrite(element, source, cursor, body);
+                    EmitWrite(element, new Identifier(ValueParameter), cursor, body);
 
                 return;
         }
@@ -634,19 +669,17 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     }
 
     /// <summary>
-    ///     Elements of an array are written through their indexed access rather than a property path, so
-    ///     the generic field walk cannot be reused directly.
-    /// </summary>
-    private void EmitElementWrite(ArrayField arrayField, LuauExpression element, Cursor cursor, List<LuauStatement> body)
-    {
-        if (arrayField.Element is NumberField numberField)
-            WriteNumber(cursor, numberField.NumberType, element, body);
-    }
-
-    /// <summary>
     ///     Reads a length-prefixed array. The count is checked against the buffer before the loop, so a
     ///     hostile length reports rather than running off the end one element at a time.
     /// </summary>
+    /// <summary>
+    ///     Reads one value of a field's shape, returning the expression that reconstructs it. Unlike the
+    ///     property walk this produces no table initializer, so an array element can bind it by index.
+    /// </summary>
+    private LuauExpression EmitValueRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements) =>
+        EmitRead(serializationField, cursor, statements).OfType<PropertyTableInitializer>().FirstOrDefault()?.Value
+        ?? new NilLiteral();
+
     private LuauExpression EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)
     {
         var leaf = LeafName(arrayField.Path);
@@ -654,33 +687,27 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, arrayField.LengthType, statements)));
         cursor.GoDynamic(statements);
 
-        var elementBytes = arrayField.Element.BodyBytes ?? 0;
-        statements.Add(
-            new IfStatement(
-                new BinaryOperator(
-                    BufferCall("len", [new Identifier(BufferLocal)]),
-                    "<",
-                    Add(new Identifier(OffsetLocal), Multiply(new Identifier(countLocal), new NumberLiteral(elementBytes)))
-                ),
-                new Chunk([new Return(BuildErrorTable("invalid_length", arrayField.Path, null))]),
-                [],
-                null
-            )
-        );
+        if (arrayField.Element.BodyBytes is { } elementBytes)
+            statements.Add(
+                new IfStatement(
+                    new BinaryOperator(
+                        BufferCall("len", [new Identifier(BufferLocal)]),
+                        "<",
+                        Add(new Identifier(OffsetLocal), Multiply(new Identifier(countLocal), new NumberLiteral(elementBytes)))
+                    ),
+                    new Chunk([new Return(BuildErrorTable("invalid_length", arrayField.Path, null))]),
+                    [],
+                    null
+                )
+            );
 
         statements.Add(new ConstVariable(leaf, null, Table.Empty));
 
         var elementBody = new List<LuauStatement>();
-        if (arrayField.Element is NumberField numberField)
-        {
-            var read = ReadNumber(cursor, numberField.NumberType, elementBody);
-            elementBody.Insert(
-                elementBody.Count == 0 ? 0 : elementBody.Count - 1,
-                new ExpressionStatement(
-                    new BinaryOperator(new ElementAccess(new Identifier(leaf), new Identifier(LoopLocal)), "=", read)
-                )
-            );
-        }
+        var element = EmitValueRead(arrayField.Element, cursor, elementBody);
+        elementBody.Add(
+            new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), new Identifier(LoopLocal)), "=", element))
+        );
 
         statements.Add(new NumericForStatement(LoopLocal, One, new Identifier(countLocal), null, new Chunk(elementBody)));
         return new Identifier(leaf);
@@ -907,7 +934,21 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
     private static LuauExpression Access(LuauExpression source, string path) => new PropertyAccess(source, [..path.Split('.')]);
 
-    private static string LeafName(string path) => path[(path.LastIndexOf('.') + 1)..];
+    /// <summary>
+    ///     Last segment of a path, as a usable Luau identifier. Element paths carry brackets - <c>names[]</c>,
+    ///     <c>pair[1]</c> - which are neither valid in a name nor distinct from the collection's own local,
+    ///     so they become a suffix instead.
+    /// </summary>
+    private static string LeafName(string path)
+    {
+        var leaf = path[(path.LastIndexOf('.') + 1)..];
+        var bracket = leaf.IndexOf('[');
+        if (bracket < 0)
+            return leaf;
+
+        var index = leaf[(bracket + 1)..].TrimEnd(']');
+        return leaf[..bracket] + (index.Length == 0 ? "_element" : "_" + index);
+    }
 
     private static LuauExpression ToLiteral(object? value) =>
         value switch

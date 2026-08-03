@@ -31,8 +31,8 @@ const function Scores_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
   const values = {}
   for i = 1, values_count do
     const read_0 = buffer_readu8(b, offset)
-    values[i] = read_0
     offset += 1
+    values[i] = read_0
   end
   return { ok = true, value = { values = values } }
 end
