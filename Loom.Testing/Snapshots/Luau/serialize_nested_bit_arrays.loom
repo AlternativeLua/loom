@@ -1,0 +1,15 @@
+interface IShape<Kind: string> { kind: Kind }
+
+[serializable]
+interface Dot: IShape<"Dot">;
+
+[serializable]
+interface Line: IShape<"Line"> {
+    label: string;
+}
+
+[serializable]
+interface Canvas {
+    masks: bool[][];
+    shapes: (Dot | Line)[];
+}

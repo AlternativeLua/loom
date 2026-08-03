@@ -356,14 +356,6 @@ public class SerializationSchemaTest
         Assert.DoesNotContain("values[]_", luau);
     }
 
-    [Fact]
-    public void ArrayOfUnmeasurableElements_IsGuarded()
-    {
-        // A nested array has no width the enclosing measure can state as one expression.
-        var nested = Utility.GetGeneratorDiagnostics("[serializable] interface Grid { values: string[][] }", true);
-        Assert.NotNull(nested.Find(d => d.Code == InternalCodes.NotImplemented));
-    }
-
     [Theory]
     [InlineData("values: bool[]")]
     [InlineData("value: bool[]?")]
@@ -559,21 +551,6 @@ public class SerializationSchemaTest
         Utility.AssertNoErrors(diagnostics);
     }
 
-    [Fact]
-    public void UnionOfUnmeasurableVariants_IsGuarded()
-    {
-        var diagnostics = Utility.GetGeneratorDiagnostics(
-            """
-            interface IShape<Kind: string> { kind: Kind }
-            [serializable] interface Dot: IShape<"Dot">;
-            [serializable] interface Sketch: IShape<"Sketch"> { points: string[][] }
-            [serializable] interface Drawing { shape: Dot | Sketch }
-            """,
-            true
-        );
-
-        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.NotImplemented));
-    }
     #endregion Unions
 
     #region Measurability
@@ -589,12 +566,20 @@ public class SerializationSchemaTest
         Assert.Contains(expected, luau);
     }
 
-    [Theory]
-    [InlineData("values: string[][]")]
-    public void UnmeasurableField_IsGuarded(string property)
+    [Fact]
+    public void NestedArray_MeasuresWithALoopPerLevel()
     {
-        var diagnostics = Utility.GetGeneratorDiagnostics($"[serializable] interface Probe {{ {property} }}", true);
-        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.NotImplemented));
+        var luau = Utility.GetLuauAST("[serializable] interface Grid { rows: string[][] }", true).Render();
+
+        // A counter per level, or an inner loop would clobber the outer's, and a length prefix per level.
+        Assert.Contains("for i = 1, #value.rows do", luau);
+        Assert.Contains("for i_2 = 1, #value.rows[i] do", luau);
+        Assert.Contains("size += 4 + #value.rows[i][i_2]", luau);
+
+        // Nested paths carry a bracket group per level; stopping after the first leaves the rest in the
+        // name and produces something that is not an identifier at all.
+        Assert.Contains("rows_element_element_length", luau);
+        Assert.DoesNotContain("rows_][", luau);
     }
 
     [Fact]

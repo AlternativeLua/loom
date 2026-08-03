@@ -146,9 +146,10 @@ public sealed partial class LuauGenerator
     }
 
     /// <summary>
-    ///     Refuses to emit a schema the generator does not fully cover yet. The schema builder understands
-    ///     more of the type matrix than the emitter does, and a field the emitter skipped would go missing
-    ///     from the payload silently rather than loudly - so the gap is reported instead of generated.
+    ///     Refuses to emit a schema the generator cannot fully cover. Every field kind the schema builder
+    ///     produces is emittable today, so this reports nothing - it stays as a backstop for the next one
+    ///     added, since a field the emitter skips goes missing from the payload silently rather than
+    ///     loudly, which is how several bugs reached the snapshot suite unnoticed.
     /// </summary>
     private bool CheckSchemaIsEmittable(InterfaceSymbol interfaceSymbol, SerializationSchema schema)
     {
@@ -198,19 +199,15 @@ public sealed partial class LuauGenerator
             StringField => true,
             // Sentinelled: either the components in full or nothing, and which is known before allocating.
             DatatypeField or CFrameField => true,
-            // A loop body can only add an expression, so the element's own width has to be one. Header
-            // bits are fine: entries share a block reserved after the length prefix.
-            ArrayField arrayField => IsInlineMeasurable(arrayField.Element),
+            // Entries share a bit block reserved after the length prefix, and an entry whose own width
+            // needs walking gets a nested loop, so the only requirement left is that it be measurable.
+            ArrayField arrayField => IsMeasurable(arrayField.Element),
             OptionalField optionalField => IsMeasurable(optionalField.Inner),
             // A flattened nested struct, or a real tuple: measurable exactly when its parts are.
             TupleField tupleField => tupleField.Elements.All(IsMeasurable),
             UnionField unionField => unionField.Variants.All(v => v.Fields.All(IsMeasurable)),
             _ => false
         };
-
-    /// <summary>Whether a width can be stated as a single expression, which is all a loop body can add.</summary>
-    private static bool IsInlineMeasurable(SerializationField serializationField) =>
-        serializationField.BodyBytes != null || serializationField is StringField;
 
     // Mirrors TypeChecker.Interfaces.cs's MergeOverloadedProperties: same-named function-typed table properties become one field typed as their intersection.
     private static List<TableTypeProperty> MergeOverloadedPropertyTypes(List<TableTypeProperty> properties)

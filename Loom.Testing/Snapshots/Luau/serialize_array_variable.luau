@@ -20,8 +20,8 @@ const function Roster_serialize_binary(value: Roster): Loom.Serialized
   const b = buffer_create(size)
   buffer_writeu32(b, 0, #value.names)
   local offset = 4
-  for i = 1, #value.names do
-    const names_item = value.names[i]
+  for i_2 = 1, #value.names do
+    const names_item = value.names[i_2]
     const names_element_length = #names_item
     buffer_writeu32(b, offset, names_element_length)
     offset += 4
@@ -30,8 +30,8 @@ const function Roster_serialize_binary(value: Roster): Loom.Serialized
   end
   buffer_writeu32(b, offset, #value.positions)
   offset += 4
-  for i_2 = 1, #value.positions do
-    const positions_item = value.positions[i_2]
+  for i_3 = 1, #value.positions do
+    const positions_item = value.positions[i_3]
     buffer_writei16(b, offset, positions_item.X)
     offset += 2
     buffer_writei16(b, offset, positions_item.Y)

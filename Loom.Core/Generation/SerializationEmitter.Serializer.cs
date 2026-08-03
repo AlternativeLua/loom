@@ -47,7 +47,8 @@ internal sealed partial class SerializationEmitter
         {
             if (serializationField is UnionField unionField)
             {
-                EmitUnionTag(unionField, body);
+                EmitUnionTag(unionField, Access(new Identifier(ValueParameter), unionField.Path), body);
+                _prologueTags.Add(unionField.Path);
                 continue;
             }
 
@@ -97,11 +98,11 @@ internal sealed partial class SerializationEmitter
     ///     is the fallback rather than a reserved escape - the type guarantees some variant matches, so
     ///     the first needs no test of its own.
     /// </summary>
-    private void EmitUnionTag(UnionField unionField, List<LuauStatement> body)
+    private void EmitUnionTag(UnionField unionField, LuauExpression value, List<LuauStatement> body)
     {
         var valueLocal = SentinelValueLocal(unionField.Path);
         var tagLocal = UnionTagLocal(unionField.Path);
-        body.Add(new ConstVariable(valueLocal, null, Access(new Identifier(ValueParameter), unionField.Path)));
+        body.Add(new ConstVariable(valueLocal, null, value));
         body.Add(new LocalVariable(tagLocal, null, Zero));
 
         var branches = new List<ElseIfBranch>();
@@ -139,7 +140,7 @@ internal sealed partial class SerializationEmitter
     ///     need measuring - a string variant sized only by its fixed part would under-allocate and then
     ///     overrun the buffer it was given.
     /// </summary>
-    private LuauExpression? VariantSizeExpression(SerializationVariant variant)
+    private LuauExpression? VariantSizeExpression(UnionField unionField, SerializationVariant variant, LuauExpression value)
     {
         var constant = 0;
         LuauExpression? dynamic = null;
@@ -151,7 +152,7 @@ internal sealed partial class SerializationEmitter
                 continue;
             }
 
-            if (InlineContribution(variantField, Access(new Identifier(ValueParameter), variantField.Path)) is not { } contribution)
+            if (InlineContribution(variantField, AccessRelative(value, variantField.Path, unionField.Path)) is not { } contribution)
                 continue;
 
             dynamic = dynamic == null ? contribution : Add(dynamic, contribution);
@@ -254,16 +255,21 @@ internal sealed partial class SerializationEmitter
 
         if (serializationField is UnionField unionField)
         {
+            if (!_prologueTags.Contains(unionField.Path))
+                EmitUnionTag(unionField, value, statements);
+
             var tag = new Identifier(UnionTagLocal(unionField.Path));
             var branches = new List<ElseIfBranch>();
             IfStatement? head = null;
             for (var index = 0; index < unionField.Variants.Count; index++)
             {
-                if (VariantSizeExpression(unionField.Variants[index]) is not { } variantSize)
+                if (VariantSizeExpression(unionField, unionField.Variants[index], value) is not { } variantSize)
                     continue;
 
                 var condition = new BinaryOperator(tag, "==", new NumberLiteral(index));
-                var add = new Chunk([AddToSize(variantSize)]);
+                var addStatements = new List<LuauStatement>();
+                AddToSize(addStatements, variantSize);
+                var add = new Chunk(addStatements);
                 if (head == null)
                     statements.Add(head = new IfStatement(condition, add, branches, null));
                 else
@@ -276,14 +282,18 @@ internal sealed partial class SerializationEmitter
         if (serializationField is not ArrayField arrayField)
             return;
 
-        statements.Add(AddToSize(new NumberLiteral(arrayField.LengthType.ByteCount())));
+        AddToSize(statements, new NumberLiteral(arrayField.LengthType.ByteCount()));
+        AddToSize(statements, ElementBitBlockSize(arrayField.Element.HeaderBits, Length(value)));
 
-        // The element width varies per entry, so the only way to total it is to walk the value.
-        var elementValue = new ElementAccess(value, new Identifier(LoopLocal));
-        if (InlineContribution(arrayField.Element, elementValue) is not { } elementSize)
-            return;
+        // The element width varies per entry, so the only way to total it is to walk the value. A loop
+        // per nesting level needs a counter of its own, or an inner one would clobber the outer's.
+        var loop = ReserveLocal(LoopLocal);
+        var elementValue = new ElementAccess(value, new Identifier(loop));
+        var elementStatements = new List<LuauStatement>();
+        MeasureField(arrayField.Element, elementValue, elementStatements);
 
-        statements.Add(new NumericForStatement(LoopLocal, One, Length(value), null, new Chunk([AddToSize(elementSize)])));
+        if (elementStatements.Count > 0)
+            statements.Add(new NumericForStatement(loop, One, Length(value), null, new Chunk(elementStatements)));
     }
 
     /// <summary>Adds one field's width, inline when it can be stated as an expression.</summary>
@@ -291,14 +301,14 @@ internal sealed partial class SerializationEmitter
     {
         if (InlineContribution(serializationField, value) is { } contribution)
         {
-            statements.Add(AddToSize(contribution));
+            AddToSize(statements, contribution);
             return;
         }
 
         if (serializationField.BodyBytes is { } fixedBytes)
         {
             if (fixedBytes > 0)
-                statements.Add(AddToSize(new NumberLiteral(fixedBytes)));
+                AddToSize(statements, new NumberLiteral(fixedBytes));
 
             return;
         }
@@ -306,8 +316,14 @@ internal sealed partial class SerializationEmitter
         EmitMeasure(serializationField, value, statements);
     }
 
-    private static LuauStatement AddToSize(LuauExpression amount) =>
-        new ExpressionStatement(new BinaryOperator(new Identifier(SizeLocal), "+=", amount));
+    /// <summary>Adds to the running size, emitting nothing at all when the amount folds to zero.</summary>
+    private static void AddToSize(List<LuauStatement> statements, LuauExpression amount)
+    {
+        if (amount is NumberLiteral { Value: 0 })
+            return;
+
+        statements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(SizeLocal), "+=", amount)));
+    }
 
     private static readonly List<string> CFrameSentinels = ["CFrame.identity"];
 
@@ -581,12 +597,15 @@ internal sealed partial class SerializationEmitter
             // bound element, whose path segment ('leaves[]') is not a property that could be indexed.
             case TupleField tupleField:
                 foreach (var element in tupleField.Elements)
-                    EmitValueWrite(element, Access(value, RelativePath(element.Path, tupleField.Path)), cursor, body);
+                    EmitValueWrite(element, AccessRelative(value, element.Path, tupleField.Path), cursor, body);
 
                 return;
 
             case UnionField unionField:
             {
+                if (!_prologueTags.Contains(unionField.Path))
+                    EmitUnionTag(unionField, value, body);
+
                 var tag = new Identifier(UnionTagLocal(unionField.Path));
                 body.Add(new ExpressionStatement(WriteBits(cursor, unionField.TagBits, tag)));
                 cursor.GoDynamic(body);
@@ -602,7 +621,7 @@ internal sealed partial class SerializationEmitter
                     cursor.BitOffset = startBit;
                     var variantBody = new List<LuauStatement>();
                     foreach (var variantField in unionField.Variants[index].Fields)
-                        EmitWrite(variantField, new Identifier(ValueParameter), cursor, variantBody);
+                        EmitValueWrite(variantField, AccessRelative(value, variantField.Path, unionField.Path), cursor, variantBody);
 
                     widestBit = Math.Max(widestBit, cursor.BitOffset);
 

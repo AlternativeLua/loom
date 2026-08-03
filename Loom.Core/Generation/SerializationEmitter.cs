@@ -91,4 +91,10 @@ internal sealed partial class SerializationEmitter(SerializationSchema schema, L
     }
 
     private LuauExpression BufferCall(string member, List<LuauExpression> arguments) => new Call(Buffer(member), arguments);
+
+    /// <summary>
+    ///     Unions whose tag the prologue already resolved. A union inside a collection has one tag per
+    ///     entry, so it cannot be hoisted there and is resolved in the loop instead.
+    /// </summary>
+    private readonly HashSet<string> _prologueTags = [];
 }

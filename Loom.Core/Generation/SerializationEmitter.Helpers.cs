@@ -1,3 +1,4 @@
+using System.Text;
 using Loom.Core.TypeChecking.Serialization;
 using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
@@ -76,6 +77,14 @@ internal sealed partial class SerializationEmitter
         return new Identifier(local);
     }
 
+    /// <summary>
+    ///     Reaches a field from the value its enclosing path names. A runtime-kind union's variant carries
+    ///     the union's own path rather than one beneath it - the value <em>is</em> the payload - so there
+    ///     is nothing left to index.
+    /// </summary>
+    private static LuauExpression AccessRelative(LuauExpression value, string path, string enclosing) =>
+        path == enclosing ? value : Access(value, RelativePath(path, enclosing));
+
     /// <summary>Strips an enclosing path, leaving the segments to index from the value that path names.</summary>
     private static string RelativePath(string path, string enclosing) =>
         path.StartsWith(enclosing + ".", StringComparison.Ordinal) ? path[(enclosing.Length + 1)..] : path;
@@ -90,12 +99,30 @@ internal sealed partial class SerializationEmitter
     private static string LeafName(string path)
     {
         var leaf = path[(path.LastIndexOf('.') + 1)..];
-        var bracket = leaf.IndexOf('[');
-        if (bracket < 0)
+        if (!leaf.Contains('['))
             return leaf;
 
-        var index = leaf[(bracket + 1)..].TrimEnd(']');
-        return leaf[..bracket] + (index.Length == 0 ? "_element" : "_" + index);
+        // Every bracket group becomes a suffix, not just the first - a nested collection's path carries
+        // one per level, and stopping after one leaves the rest in the name.
+        var name = new StringBuilder();
+        for (var index = 0; index < leaf.Length;)
+        {
+            if (leaf[index] != '[')
+            {
+                name.Append(leaf[index++]);
+                continue;
+            }
+
+            var close = leaf.IndexOf(']', index);
+            if (close < 0)
+                break;
+
+            var inner = leaf[(index + 1)..close];
+            name.Append(inner.Length == 0 ? "_element" : "_" + inner);
+            index = close + 1;
+        }
+
+        return name.ToString();
     }
 
     private static LuauExpression ToLiteral(object? value) =>
