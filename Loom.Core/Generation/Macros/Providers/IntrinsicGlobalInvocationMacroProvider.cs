@@ -105,11 +105,15 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                     ? invocation.Arguments.ArgumentList.FirstOrDefault()
                     : typeArguments?.ArgumentsList.FirstOrDefault();
 
-                if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName))
+                if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName, out var declaringFile))
                 {
                     expression = new NilLiteral();
                     return true;
                 }
+
+                // Only the codec object crosses a module boundary, so an imported interface's calls go
+                // through it rather than through function names that are local to the declaring file.
+                var isImported = declaringFile != context.SemanticModel.Tree.File.AbsolutePath;
 
                 // 'serializer' hands back the codec value itself rather than calling through it.
                 if (name == "serializer")
@@ -118,11 +122,14 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                     return true;
                 }
 
-                expression = new Call(
-                    new Identifier(isSerialize ? SerializationEmitter.SerializeName(interfaceName) : SerializationEmitter.DeserializeName(interfaceName)),
-                    call.Arguments
-                );
+                LuauExpression callee = isImported
+                    ? new Luau.AST.PropertyAccess(
+                        new Identifier(SerializationEmitter.SerializerName(interfaceName)),
+                        [isSerialize ? "serialize" : "deserialize"]
+                    )
+                    : new Identifier(isSerialize ? SerializationEmitter.SerializeName(interfaceName) : SerializationEmitter.DeserializeName(interfaceName));
 
+                expression = new Call(callee, call.Arguments);
                 return true;
             }
         }
@@ -137,9 +144,10 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
     ///     interface has to be caught here rather than silently emitting a call to a function that was
     ///     never generated.
     /// </summary>
-    private static bool TryGetSerializableName(MacroContext context, Node subject, string name, out string interfaceName)
+    private static bool TryGetSerializableName(MacroContext context, Node subject, string name, out string interfaceName, out string declaringFile)
     {
         interfaceName = "";
+        declaringFile = "";
         var semanticModel = context.SemanticModel;
         var subjectType = semanticModel.GetType(subject);
         if (subjectType is not Loom.Core.TypeChecking.Types.InterfaceType interfaceType)
@@ -156,20 +164,6 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
         var schemaEntry = semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
         if (schemaEntry == null)
         {
-            // A schema built in another module is absent from this file's table, so an interface that is
-            // genuinely serializable is indistinguishable here from one that is not - separate the two
-            // rather than blaming the user for a missing attribute they already wrote.
-            if (semanticModel.ImportBindings.Any(binding => binding.Symbol is InterfaceSymbol imported && imported.Name == interfaceType.Name))
-            {
-                context.Diagnostics.NotImplemented(
-                    context.Node,
-                    $"Serializing '{interfaceType.Name}' across a module boundary is not yet generated.",
-                    "the declaring module exports its codec, but resolving it through the import binding is unfinished."
-                );
-
-                return false;
-            }
-
             context.Diagnostics.Error(
                 context.Node,
                 InternalCodes.NotSerializable,
@@ -181,6 +175,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
         }
 
         interfaceName = interfaceType.Name;
+        declaringFile = schemaEntry.File.AbsolutePath;
         return true;
     }
 

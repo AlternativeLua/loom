@@ -127,6 +127,11 @@ public sealed partial class LuauGenerator
         if (!_semanticModel.SerializationSchemas.TryGetValue(interfaceSymbol, out var schema))
             return;
 
+        // An imported interface's codec belongs to its declaring module; emitting a second copy here
+        // would shadow the import binding that already brought it in.
+        if (interfaceSymbol.File.AbsolutePath != _semanticModel.Tree.File.AbsolutePath)
+            return;
+
         if (!CheckSchemaIsEmittable(interfaceSymbol, schema))
             return;
 

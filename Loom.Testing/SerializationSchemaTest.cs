@@ -303,6 +303,43 @@ public class SerializationSchemaTest
 
         Utility.AssertDiagnostic(diagnostics, InternalCodes.NotSerializable, "Interface 'Plain' is not serializable.");
     }
+    [Fact]
+    public void SerializesInterface_ImportedFromAnotherModule()
+    {
+        Utility.WithTempProject(
+            [
+                ("packets.loom",
+                    """
+                    [serializable]
+                    export interface MyData {
+                        [number_type(NumberType.U8)]
+                        id: number;
+                    }
+                    """),
+                ("main.server.loom",
+                    """
+                    import { MyData } from "./packets";
+                    let payload = serialize_binary(new MyData { id: 3 });
+                    let restored = deserialize_binary::<MyData>(payload);
+                    """)
+            ],
+            (_, result) =>
+            {
+                Utility.AssertNoErrors(result.Diagnostics);
+
+                var declaring = result.Files.Single(f => f.SourceFile.Name.Contains("packets")).RenderedLuau;
+                var consumer = result.Files.Single(f => f.SourceFile.Name.Contains("main")).RenderedLuau;
+
+                // The codec is emitted and exported once, and the consumer reaches it through the import
+                // rather than through function names local to the declaring file.
+                Assert.Contains("MyData_serializer = MyData_serializer", declaring);
+                Assert.Contains("const MyData_serializer = packets.MyData_serializer", consumer);
+                Assert.Contains("MyData_serializer.serialize(", consumer);
+                Assert.Contains("MyData_serializer.deserialize(", consumer);
+                Assert.DoesNotContain("MyData_serialize_binary(", consumer);
+            }
+        );
+    }
     #endregion Calls
 
     #region Layout

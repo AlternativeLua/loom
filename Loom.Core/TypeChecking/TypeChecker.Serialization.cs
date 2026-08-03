@@ -38,6 +38,29 @@ public sealed partial class TypeChecker
             if (builder.Build(interfaceSymbol) is { } schema)
                 _semanticModel.SerializationSchemas[interfaceSymbol] = schema;
         }
+
+        BuildImportedSchemas(builder);
+    }
+
+    /// <summary>
+    ///     Schemas are per-file, so an interface imported from another module has none here and would
+    ///     look unmarked. An import binding carries the exporting module's own symbol instance, so the
+    ///     schema can simply be rebuilt - the generator then skips emitting it and references the
+    ///     declaring module's codec instead.
+    /// </summary>
+    private void BuildImportedSchemas(SerializationSchemaBuilder builder)
+    {
+        foreach (var binding in _semanticModel.ImportBindings)
+        {
+            if (binding.Symbol is not InterfaceSymbol interfaceSymbol || _semanticModel.SerializationSchemas.ContainsKey(interfaceSymbol))
+                continue;
+
+            if (interfaceSymbol.Declaration is not InterfaceDeclaration declaration || !TryGetInterfaceAttribute(declaration, "serializable", out _))
+                continue;
+
+            if (builder.Build(interfaceSymbol) is { } schema)
+                _semanticModel.SerializationSchemas[interfaceSymbol] = schema;
+        }
     }
 
     /// <summary>
@@ -238,14 +261,23 @@ public sealed partial class TypeChecker
             _ => type
         };
 
+    /// <summary>
+    ///     Matches an intrinsic attribute by name. Symbol resolution is per-file, so an interface reached
+    ///     through an import has attributes belonging to another file's tree that this model has no
+    ///     reference entry for - the name is then all there is to go on.
+    /// </summary>
+    internal static bool IsIntrinsicAttributeNamed(Resolving.SemanticModel semanticModel, Attribute attribute, string name) =>
+        semanticModel.GetSymbol(attribute.Expression) is { } symbol
+            ? symbol is { IsIntrinsic: true } && symbol.Name == name
+            : attribute.Expression is Identifier identifier && identifier.Name.Text == name;
+
     private bool TryGetInterfaceAttribute(InterfaceDeclaration interfaceDeclaration, string name, out Attribute attribute)
     {
         attribute = null!;
         if (interfaceDeclaration.Attributes == null)
             return false;
 
-        var found = interfaceDeclaration.Attributes.AttributeList
-            .Find(a => _semanticModel.GetSymbol(a.Expression) is { IsIntrinsic: true } symbol && symbol.Name == name);
+        var found = interfaceDeclaration.Attributes.AttributeList.Find(a => IsIntrinsicAttributeNamed(_semanticModel, a, name));
 
         if (found == null)
             return false;

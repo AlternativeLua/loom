@@ -422,5 +422,5 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
     private bool HasIntrinsicAttribute(InterfaceSymbol interfaceSymbol, string name) =>
         interfaceSymbol.Declaration is IWithAttributes { Attributes: { } attributes }
-        && attributes.AttributeList.Exists(a => semanticModel.GetSymbol(a.Expression) is { IsIntrinsic: true } symbol && symbol.Name == name);
+        && attributes.AttributeList.Exists(a => TypeChecker.IsIntrinsicAttributeNamed(semanticModel, a, name));
 }
