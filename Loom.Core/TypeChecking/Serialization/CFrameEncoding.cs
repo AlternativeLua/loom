@@ -9,7 +9,8 @@ public enum CFrameEncoding : byte
     /// <summary>
     ///     Position plus a smallest-three quaternion: the largest-magnitude component is dropped and
     ///     recovered from the unit-length constraint, leaving 2 index bits and 3 components at 10 bits
-    ///     each - exactly 32 bits of rotation, with a worst-case angular error near 0.1 degrees.
+    ///     each - exactly 32 bits of rotation. Measured worst-case angular error is about 0.24 degrees
+    ///     over 200k random rotations.
     /// </summary>
     Compressed,
 

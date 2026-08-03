@@ -112,5 +112,95 @@ function Loom.every<A...>(
 	start()
 end
 
+-- Serialization support. Emitted serializers inline everything they can; these are the pieces that
+-- are either too large to repeat per field or need real math.
+
+function Loom.assert_int_range(value: number, minimum: number, maximum: number, name: string, ty: string): ()
+	if value ~= value or value < minimum or value > maximum or value % 1 ~= 0 then
+		error(`{name}: {value} is out of range for {ty} [{minimum}, {maximum}]`, 3)
+	end
+end
+
+function Loom.assert_range(value: number, minimum: number, maximum: number, name: string): ()
+	if value ~= value or value < minimum or value > maximum then
+		error(`{name}: {value} is outside the declared range [{minimum}, {maximum}]`, 3)
+	end
+end
+
+-- Roblox exposes no CFrame:ToQuaternion, so the rotation comes out of GetComponents as a 3x3 matrix
+-- and is converted here (Shepperd's method - pivot on the largest diagonal term to keep the divisor
+-- away from zero).
+function Loom.cframe_to_quaternion(cf: CFrame): (number, number, number, number)
+	const _, _, _, r00, r01, r02, r10, r11, r12, r20, r21, r22 = cf:GetComponents()
+	const trace = r00 + r11 + r22
+	if trace > 0 then
+		const s = math.sqrt(trace + 1) * 2
+		return (r21 - r12) / s, (r02 - r20) / s, (r10 - r01) / s, 0.25 * s
+	elseif r00 > r11 and r00 > r22 then
+		const s = math.sqrt(1 + r00 - r11 - r22) * 2
+		return 0.25 * s, (r01 + r10) / s, (r02 + r20) / s, (r21 - r12) / s
+	elseif r11 > r22 then
+		const s = math.sqrt(1 + r11 - r00 - r22) * 2
+		return (r01 + r10) / s, 0.25 * s, (r12 + r21) / s, (r02 - r20) / s
+	else
+		const s = math.sqrt(1 + r22 - r00 - r11) * 2
+		return (r02 + r20) / s, (r12 + r21) / s, 0.25 * s, (r10 - r01) / s
+	end
+end
+
+-- Smallest-three: a unit quaternion's largest component is recoverable from the other three, and
+-- negating the whole quaternion (which names the same rotation) pins its sign positive. The three
+-- kept components are then each at most 1/sqrt(2), so scaling by sqrt(2) uses the full range.
+const QUATERNION_SCALE = math.sqrt(2)
+const QUATERNION_STEPS = 1023
+
+const function quantize_component(value: number): number
+	return math.clamp(math.round((value * QUATERNION_SCALE + 1) * 0.5 * QUATERNION_STEPS), 0, QUATERNION_STEPS)
+end
+
+const function dequantize_component(value: number): number
+	return (value / QUATERNION_STEPS * 2 - 1) / QUATERNION_SCALE
+end
+
+function Loom.pack_quaternion(qx: number, qy: number, qz: number, qw: number): number
+	local largest, magnitude = 0, math.abs(qx)
+	if math.abs(qy) > magnitude then
+		largest, magnitude = 1, math.abs(qy)
+	end
+	if math.abs(qz) > magnitude then
+		largest, magnitude = 2, math.abs(qz)
+	end
+	if math.abs(qw) > magnitude then
+		largest, magnitude = 3, math.abs(qw)
+	end
+
+	const components = { qx, qy, qz, qw }
+	if components[largest + 1] < 0 then
+		components[1], components[2], components[3], components[4] = -qx, -qy, -qz, -qw
+	end
+
+	local packed = largest
+	for index = 1, 4 do
+		if index - 1 ~= largest then
+			packed = bit32.bor(bit32.lshift(packed, 10), quantize_component(components[index]))
+		end
+	end
+
+	return packed
+end
+
+function Loom.unpack_quaternion(packed: number): (number, number, number, number)
+	const third = dequantize_component(bit32.band(packed, 0x3FF))
+	const second = dequantize_component(bit32.band(bit32.rshift(packed, 10), 0x3FF))
+	const first = dequantize_component(bit32.band(bit32.rshift(packed, 20), 0x3FF))
+	const largest = bit32.band(bit32.rshift(packed, 30), 0x3)
+
+	const missing = math.sqrt(math.max(0, 1 - (first * first + second * second + third * third)))
+	const components = { first, second, third }
+	table.insert(components, largest + 1, missing)
+
+	return components[1], components[2], components[3], components[4]
+end
+
 table.freeze(Loom)
 return Loom
