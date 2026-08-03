@@ -129,6 +129,12 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     {
         foreach (var serializationField in schema.Fields)
         {
+            if (serializationField is UnionField unionField)
+            {
+                EmitUnionTag(unionField, body);
+                continue;
+            }
+
             if (SentinelNamesOf(serializationField) is not { Count: > 0 } sentinels)
                 continue;
 
@@ -168,6 +174,78 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
     private static string SentinelValueLocal(string path) => LeafName(path) + "_value";
     private static string SentinelIndexLocal(string path) => LeafName(path) + "_sentinel";
+    private static string UnionTagLocal(string path) => LeafName(path) + "_tag";
+
+    /// <summary>
+    ///     Resolves which variant a union value is, ahead of the allocation that depends on it. Index zero
+    ///     is the fallback rather than a reserved escape - the type guarantees some variant matches, so
+    ///     the first needs no test of its own.
+    /// </summary>
+    private void EmitUnionTag(UnionField unionField, List<LuauStatement> body)
+    {
+        var valueLocal = SentinelValueLocal(unionField.Path);
+        var tagLocal = UnionTagLocal(unionField.Path);
+        body.Add(new ConstVariable(valueLocal, null, Access(new Identifier(ValueParameter), unionField.Path)));
+        body.Add(new LocalVariable(tagLocal, null, Zero));
+
+        var branches = new List<ElseIfBranch>();
+        for (var index = 1; index < unionField.Variants.Count; index++)
+        {
+            var condition = VariantCondition(unionField, new Identifier(valueLocal), index);
+            var assign = new Chunk([new ExpressionStatement(new BinaryOperator(new Identifier(tagLocal), "=", new NumberLiteral(index)))]);
+            if (index == 1)
+                body.Add(new IfStatement(condition, assign, branches, null));
+            else
+                branches.Add(new ElseIfBranch(condition, assign));
+        }
+    }
+
+    /// <summary>Test that identifies a variant, by literal value, runtime kind, or shared discriminant.</summary>
+    private static LuauExpression VariantCondition(UnionField unionField, LuauExpression value, int index)
+    {
+        var discriminant = unionField.Variants[index].Discriminant;
+        return unionField.Discrimination switch
+        {
+            UnionDiscrimination.LiteralValue => new BinaryOperator(value, "==", ToLiteral(discriminant)),
+            UnionDiscrimination.RuntimeKind => new BinaryOperator(
+                new Call(new Identifier("typeof"), [value]),
+                "==",
+                new StringLiteral((string)discriminant!)
+            ),
+            _ => new BinaryOperator(new PropertyAccess(value, [unionField.DiscriminantName!]), "==", ToLiteral(discriminant))
+        };
+    }
+
+    private static int VariantBytes(SerializationVariant variant) => variant.Fields.Sum(f => f.BodyBytes ?? 0);
+
+    /// <summary>
+    ///     A variant's width, or null when it writes nothing. Variable-width fields inside a variant still
+    ///     need measuring - a string variant sized only by its fixed part would under-allocate and then
+    ///     overrun the buffer it was given.
+    /// </summary>
+    private LuauExpression? VariantSizeExpression(SerializationVariant variant)
+    {
+        var constant = 0;
+        LuauExpression? dynamic = null;
+        foreach (var variantField in variant.Fields)
+        {
+            if (variantField.BodyBytes is { } fixedBytes)
+            {
+                constant += fixedBytes;
+                continue;
+            }
+
+            if (InlineContribution(variantField, Access(new Identifier(ValueParameter), variantField.Path)) is not { } contribution)
+                continue;
+
+            dynamic = dynamic == null ? contribution : Add(dynamic, contribution);
+        }
+
+        if (dynamic == null)
+            return constant > 0 ? new NumberLiteral(constant) : null;
+
+        return constant > 0 ? Add(new NumberLiteral(constant), dynamic) : dynamic;
+    }
 
     /// <summary>
     ///     Computes the total width, appending statements to <paramref name="body" /> only when some field
@@ -191,6 +269,10 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 inline = Add(inline, contribution);
                 continue;
             }
+
+            // Anything with a known width is already folded into the constant above.
+            if (serializationField.BodyBytes != null)
+                continue;
 
             EmitMeasure(serializationField, value, traversal);
         }
@@ -229,6 +311,27 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// <summary>Accumulates a field's width into the size local, for shapes that need control flow.</summary>
     private void EmitMeasure(SerializationField serializationField, LuauExpression value, List<LuauStatement> statements)
     {
+        if (serializationField is UnionField unionField)
+        {
+            var tag = new Identifier(UnionTagLocal(unionField.Path));
+            var branches = new List<ElseIfBranch>();
+            IfStatement? head = null;
+            for (var index = 0; index < unionField.Variants.Count; index++)
+            {
+                if (VariantSizeExpression(unionField.Variants[index]) is not { } variantSize)
+                    continue;
+
+                var condition = new BinaryOperator(tag, "==", new NumberLiteral(index));
+                var add = new Chunk([AddToSize(variantSize)]);
+                if (head == null)
+                    statements.Add(head = new IfStatement(condition, add, branches, null));
+                else
+                    branches.Add(new ElseIfBranch(condition, add));
+            }
+
+            return;
+        }
+
         if (serializationField is not ArrayField arrayField)
             return;
 
@@ -397,6 +500,42 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                     EmitWrite(element, new Identifier(ValueParameter), cursor, body);
 
                 return;
+
+            case UnionField unionField:
+            {
+                var tag = new Identifier(UnionTagLocal(unionField.Path));
+                body.Add(new ExpressionStatement(WriteBits(cursor, unionField.TagBits, tag)));
+                cursor.GoDynamic(body);
+
+                // Only one variant is live, so their header bits deliberately overlap - each branch
+                // restarts from the same bit position and the widest one sizes the region.
+                var startBit = cursor.BitOffset;
+                var widestBit = startBit;
+                var branches = new List<ElseIfBranch>();
+                IfStatement? head = null;
+                for (var index = 0; index < unionField.Variants.Count; index++)
+                {
+                    cursor.BitOffset = startBit;
+                    var variantBody = new List<LuauStatement>();
+                    foreach (var variantField in unionField.Variants[index].Fields)
+                        EmitWrite(variantField, new Identifier(ValueParameter), cursor, variantBody);
+
+                    widestBit = Math.Max(widestBit, cursor.BitOffset);
+
+                    // A literal union carries its whole value in the tag, so every variant writes nothing.
+                    if (variantBody.Count == 0)
+                        continue;
+
+                    var condition = new BinaryOperator(tag, "==", new NumberLiteral(index));
+                    if (head == null)
+                        body.Add(head = new IfStatement(condition, new Chunk(variantBody), branches, null));
+                    else
+                        branches.Add(new ElseIfBranch(condition, new Chunk(variantBody)));
+                }
+
+                cursor.BitOffset = widestBit;
+                return;
+            }
         }
     }
 
@@ -611,6 +750,9 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             case TupleField tupleField:
                 return tupleField.Elements.SelectMany(element => EmitRead(element, cursor, statements)).ToList();
 
+            case UnionField unionField:
+                return [new PropertyTableInitializer(name, EmitUnionRead(unionField, cursor, statements))];
+
             default:
                 return [];
         }
@@ -735,6 +877,73 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 null
             )
         );
+    }
+
+    /// <summary>
+    ///     Reads a variant tag and rebuilds the selected shape. A tag outside the declared variants
+    ///     reports rather than producing a value the union never admitted.
+    /// </summary>
+    private LuauExpression EmitUnionRead(UnionField unionField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var leaf = LeafName(unionField.Path);
+        var tagLocal = leaf + "_tag";
+        statements.Add(new ConstVariable(tagLocal, null, ReadBits(cursor, unionField.TagBits)));
+        statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
+        cursor.GoDynamic(statements);
+
+        var startBit = cursor.BitOffset;
+        var widestBit = startBit;
+        var branches = new List<ElseIfBranch>();
+        for (var index = 0; index < unionField.Variants.Count; index++)
+        {
+            cursor.BitOffset = startBit;
+            var variant = unionField.Variants[index];
+            var variantBody = new List<LuauStatement>();
+            EmitBoundsGuard(variantBody, VariantBytes(variant), unionField.Path);
+
+            var rebuilt = RebuildVariant(unionField, variant, cursor, variantBody);
+            variantBody.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", rebuilt)));
+            widestBit = Math.Max(widestBit, cursor.BitOffset);
+
+            var condition = new BinaryOperator(new Identifier(tagLocal), "==", new NumberLiteral(index));
+            if (index == 0)
+                statements.Add(
+                    new IfStatement(
+                        condition,
+                        new Chunk(variantBody),
+                        branches,
+                        new Chunk([new Return(BuildErrorTable("invalid_tag", unionField.Path, null))])
+                    )
+                );
+            else
+                branches.Add(new ElseIfBranch(condition, new Chunk(variantBody)));
+        }
+
+        cursor.BitOffset = widestBit;
+        return new Identifier(leaf);
+    }
+
+    /// <summary>
+    ///     Reconstructs one variant. A literal union carries its whole value in the tag; a discriminated
+    ///     one rebuilds the table, restoring the discriminant the tag already encoded.
+    /// </summary>
+    private LuauExpression RebuildVariant(UnionField unionField, SerializationVariant variant, Cursor cursor, List<LuauStatement> body)
+    {
+        if (unionField.Discrimination == UnionDiscrimination.LiteralValue)
+            return ToLiteral(variant.Discriminant);
+
+        if (unionField.Discrimination == UnionDiscrimination.RuntimeKind)
+            return variant.Fields.Count == 1 ? EmitValueRead(variant.Fields[0], cursor, body) : new NilLiteral();
+
+        var initializers = new List<TableInitializer>
+        {
+            new PropertyTableInitializer(unionField.DiscriminantName!, ToLiteral(variant.Discriminant))
+        };
+
+        foreach (var variantField in variant.Fields)
+            initializers.AddRange(EmitRead(variantField, cursor, body));
+
+        return new Table(initializers);
     }
 
     /// <summary>

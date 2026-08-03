@@ -451,6 +451,122 @@ public class SerializationSchemaTest
         // take has to prove its bytes are present rather than throwing out of the read.
         Assert.Contains("if buffer_len(b) < offset + 2 then", luau);
     }
+    #region Unions
+    private const string ActionUnion =
+        """
+        interface IAction<Kind: string> { kind: Kind }
+        [serializable] interface LogOutAction: IAction<"LogOut">;
+        [serializable] interface ClickAction: IAction<"Click"> {
+            [number_type(NumberType.U8)]
+            x: number;
+        }
+
+        [serializable] interface Envelope { action: LogOutAction | ClickAction }
+        """;
+
+    [Fact]
+    public void DiscriminatedUnion_RestoresDiscriminantFromTheTag()
+    {
+        var luau = Utility.GetLuauAST(ActionUnion, true).Render();
+
+        Assert.Contains("if action_value.kind == \"Click\" then", luau);
+        Assert.Contains("buffer_writebits(b, 0, 1, action_tag)", luau);
+
+        // The tag carries 'kind', so it costs nothing on the wire and is rebuilt on the way back.
+        Assert.Contains("action = { kind = \"LogOut\" }", luau);
+        Assert.Contains("action = { kind = \"Click\", x = ", luau);
+        Assert.DoesNotContain("value.action.kind)", luau);
+    }
+
+    [Fact]
+    public void DiscriminatedUnion_SizesPerVariant()
+    {
+        var luau = Utility.GetLuauAST(ActionUnion, true).Render();
+
+        // The empty variant adds nothing, so only the one with a payload gets a branch.
+        Assert.Contains("if action_tag == 1 then", luau);
+        Assert.Contains("size += 1", luau);
+        Assert.DoesNotContain("size += 0", luau);
+    }
+
+    [Fact]
+    public void LiteralUnion_IsTagOnly()
+    {
+        var luau = Utility.GetLuauAST("[serializable] interface Paint { color: \"red\" | \"green\" | \"blue\" }", true).Render();
+
+        // Three variants fit in two bits and the value is the tag, so nothing follows it.
+        Assert.Contains("buffer_writebits(b, 0, 2, color_tag)", luau);
+        Assert.Contains("color = \"red\"", luau);
+        Assert.Contains("buffer_create(1)", luau);
+    }
+
+    [Fact]
+    public void RuntimeKindUnion_DiscriminatesWithTypeof()
+    {
+        var luau = Utility.GetLuauAST("[serializable] interface Cell { content: number | string }", true).Render();
+
+        Assert.Contains("if typeof(content_value) == \"string\" then", luau);
+
+        // A variant carrying a string has to be measured, not just its fixed part, or the allocation
+        // would be short before the variant's own writes began.
+        Assert.Contains("size += 4 + #value.content", luau);
+    }
+
+    [Fact]
+    public void Union_ReportsTagsOutsideTheDeclaredVariants()
+    {
+        var luau = Utility.GetLuauAST(ActionUnion, true).Render();
+        Assert.Contains("kind = \"invalid_tag\", field = \"action\"", luau);
+    }
+
+    [Fact]
+    public void Union_BoundsChecksVariantPayload()
+    {
+        var luau = Utility.GetLuauAST(ActionUnion, true).Render();
+
+        // The minimum only covers the tag, so a variant the sender chose has to prove its bytes exist.
+        Assert.Contains("if buffer_len(b) < offset + 1 then", luau);
+    }
+
+    [Fact]
+    public void Union_ResolvesVariantsThatShadowIntrinsicNames()
+    {
+        // 'Path' is also a Roblox class, and resolving the intrinsic instead would leave a perfectly
+        // serializable variant looking unserializable.
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface IShape<Kind: string> { kind: Kind }
+            [serializable] interface Dot: IShape<"Dot">;
+            [serializable] interface Path: IShape<"Path"> {
+                [number_type(NumberType.U8)]
+                n: number;
+            }
+
+            [serializable] interface Drawing { shape: Dot | Path }
+            """,
+            true
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void UnionOfUnmeasurableVariants_IsGuarded()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface IShape<Kind: string> { kind: Kind }
+            [serializable] interface Dot: IShape<"Dot">;
+            [serializable] interface Sketch: IShape<"Sketch"> { points: bool[] }
+            [serializable] interface Drawing { shape: Dot | Sketch }
+            """,
+            true
+        );
+
+        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.NotImplemented));
+    }
+    #endregion Unions
+
     #endregion Calls
 
     #region Layout

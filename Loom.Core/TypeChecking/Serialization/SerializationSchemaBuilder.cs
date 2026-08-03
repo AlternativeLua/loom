@@ -364,11 +364,21 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
     private static bool IsInstanceType(Types.InterfaceType interfaceType) =>
         interfaceType.Name == "Instance" || interfaceType.Constraints.Any(IsInstanceType);
 
-    private InterfaceSymbol? FindInterfaceSymbol(Types.InterfaceType interfaceType) =>
-        semanticModel.Declarations
+    /// <summary>
+    ///     Resolves an interface by name, preferring a declared one over an intrinsic. Plenty of Roblox
+    ///     classes share obvious names - <c>Path</c>, <c>Player</c>, <c>Camera</c> - and a user type that
+    ///     shadows one would otherwise resolve to the intrinsic and look unserializable.
+    /// </summary>
+    private InterfaceSymbol? FindInterfaceSymbol(Types.InterfaceType interfaceType)
+    {
+        var matches = semanticModel.Declarations
             .SelectMany(pair => pair.Value)
             .OfType<InterfaceSymbol>()
-            .FirstOrDefault(s => s.Name == interfaceType.Name);
+            .Where(s => s.Name == interfaceType.Name)
+            .ToList();
+
+        return matches.Find(s => !s.IsIntrinsic) ?? matches.FirstOrDefault();
+    }
 
     private FieldOptions ReadFieldOptions(PropertySymbol property) =>
         new(

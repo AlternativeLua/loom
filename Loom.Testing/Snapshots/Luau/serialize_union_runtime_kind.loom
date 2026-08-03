@@ -1,0 +1,4 @@
+[serializable]
+interface Cell {
+    content: number | string;
+}

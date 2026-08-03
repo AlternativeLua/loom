@@ -1,0 +1,16 @@
+interface IAction<Kind: string> { kind: Kind }
+
+[serializable]
+interface LogOutAction: IAction<"LogOut">;
+
+[serializable]
+interface ClickAction: IAction<"Click"> {
+    [number_type(NumberType.U8)]
+    x: number;
+}
+
+[serializable]
+interface Envelope {
+    action: LogOutAction | ClickAction;
+    color: "red" | "green" | "blue";
+}

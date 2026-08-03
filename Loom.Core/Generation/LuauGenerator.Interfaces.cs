@@ -176,13 +176,16 @@ public sealed partial class LuauGenerator
     {
         foreach (var serializationField in fields)
         {
-            if (serializationField is UnionField)
-                return serializationField;
-
             // An element whose width is neither fixed nor a length-prefixed string cannot be measured,
             // so the allocation would be wrong before a single byte was written. Header bits are worse:
             // they sit at fixed positions in a header sized once for the whole schema, so every element
             // would write over the same bits.
+            // A variant field with no measurable width would leave the allocation short before the
+            // variant's own writes began.
+            if (serializationField is UnionField union
+                && union.Variants.Any(v => v.Fields.Any(f => f.BodyBytes == null && f is not StringField)))
+                return serializationField;
+
             if (serializationField is ArrayField { Element: var element }
                 && (element is { BodyBytes: null } and not StringField || element.HeaderBits > 0))
                 return serializationField;
