@@ -254,6 +254,29 @@ declare sealed interface CFrame {
     [luau_name("XVector")] x_vector: Vector3;
     [luau_name("YVector")] y_vector: Vector3;
     [luau_name("ZVector")] z_vector: Vector3;
+
+    [luau_name("Inverse"), luau_method] inverse: fn: CFrame;
+    [luau_name("Lerp"), luau_method] lerp: fn(goal: CFrame, alpha: number): CFrame;
+    [luau_name("ToWorldSpace"), luau_method] to_world_space: fn(cf: CFrame): CFrame;
+    [luau_name("ToObjectSpace"), luau_method] to_object_space: fn(cf: CFrame): CFrame;
+    [luau_name("PointToWorldSpace"), luau_method] point_to_world_space: fn(point: Vector3): Vector3;
+    [luau_name("PointToObjectSpace"), luau_method] point_to_object_space: fn(point: Vector3): Vector3;
+    [luau_name("VectorToWorldSpace"), luau_method] vector_to_world_space: fn(vector: Vector3): Vector3;
+    [luau_name("VectorToObjectSpace"), luau_method] vector_to_object_space: fn(vector: Vector3): Vector3;
+
+    ## Decomposition. Roblox exposes no ToQuaternion, so serializing a rotation goes through
+    ## get_components and converts the 3x3 rotation matrix by hand - see the runtime library.
+    [luau_name("GetComponents"), luau_method] get_components: fn: (
+        number, number, number,
+        number, number, number,
+        number, number, number,
+        number, number, number
+    );
+
+    [luau_name("ToOrientation"), luau_method] to_orientation: fn: (number, number, number);
+    [luau_name("ToEulerAnglesXYZ"), luau_method] to_euler_angles_xyz: fn: (number, number, number);
+    [luau_name("ToEulerAnglesYXZ"), luau_method] to_euler_angles_yxz: fn: (number, number, number);
+    [luau_name("ToAxisAngle"), luau_method] to_axis_angle: fn: (Vector3, number);
 }
 
 declare sealed interface CFrameStatic {

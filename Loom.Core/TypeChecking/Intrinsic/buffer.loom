@@ -1,0 +1,44 @@
+## Typings for Luau's built-in buffer library.
+##
+## Member names are the raw Luau ones rather than snake_case, matching math.loom: these are already
+## lowercase in Luau, so renaming them would mean a luau_name on every member and would leave
+## hand-written Loom code reading differently from the buffer calls the serializer emits.
+##
+## The 'buffer' type itself is declared in Loom.TypeGenerator/roblox.loom and shared ambiently.
+
+declare interface BufferLib {
+    create: fn(size: number): buffer;
+    fromstring: fn(str: string): buffer;
+    tostring: fn(b: buffer): string;
+    len: fn(b: buffer): number;
+
+    readi8: fn(b: buffer, offset: number): number;
+    readu8: fn(b: buffer, offset: number): number;
+    readi16: fn(b: buffer, offset: number): number;
+    readu16: fn(b: buffer, offset: number): number;
+    readi32: fn(b: buffer, offset: number): number;
+    readu32: fn(b: buffer, offset: number): number;
+    readf32: fn(b: buffer, offset: number): number;
+    readf64: fn(b: buffer, offset: number): number;
+
+    writei8: fn(b: buffer, offset: number, value: number): void;
+    writeu8: fn(b: buffer, offset: number, value: number): void;
+    writei16: fn(b: buffer, offset: number, value: number): void;
+    writeu16: fn(b: buffer, offset: number, value: number): void;
+    writei32: fn(b: buffer, offset: number, value: number): void;
+    writeu32: fn(b: buffer, offset: number, value: number): void;
+    writef32: fn(b: buffer, offset: number, value: number): void;
+    writef64: fn(b: buffer, offset: number, value: number): void;
+
+    readstring: fn(b: buffer, offset: number, count: number): string;
+    writestring: fn(b: buffer, offset: number, value: string, count: number?): void;
+
+    ## Bit offsets, not byte offsets; count is capped at 32 bits.
+    readbits: fn(b: buffer, bitOffset: number, bitCount: number): number;
+    writebits: fn(b: buffer, bitOffset: number, bitCount: number, value: number): void;
+
+    copy: fn(target: buffer, targetOffset: number, source: buffer, sourceOffset: number?, count: number?): void;
+    fill: fn(b: buffer, offset: number, value: number, count: number?): void;
+}
+
+declare let buffer: BufferLib;
