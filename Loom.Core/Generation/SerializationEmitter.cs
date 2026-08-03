@@ -95,6 +95,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     #region Serializer
     public Function EmitSerializer()
     {
+        _locals.Clear();
         var body = new List<LuauStatement>();
         if (schema.HasBlobs)
             body.Add(new ConstVariable(BlobsLocal, null, Table.Empty));
@@ -259,14 +260,15 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         if (schema.FixedByteCount is { } fixedByteCount)
             return new NumberLiteral(fixedByteCount);
 
-        LuauExpression inline = new NumberLiteral(schema.HeaderBytes + schema.Fields.Sum(f => f.BodyBytes ?? 0));
+        var constant = schema.HeaderBytes + schema.Fields.Sum(f => f.BodyBytes ?? 0);
+        LuauExpression? inline = constant > 0 ? new NumberLiteral(constant) : null;
         var traversal = new List<LuauStatement>();
         foreach (var serializationField in schema.Fields)
         {
             var value = Access(new Identifier(ValueParameter), serializationField.Path);
             if (InlineContribution(serializationField, value) is { } contribution)
             {
-                inline = Add(inline, contribution);
+                inline = inline == null ? contribution : Add(inline, contribution);
                 continue;
             }
 
@@ -278,9 +280,9 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         }
 
         if (traversal.Count == 0)
-            return inline;
+            return inline ?? Zero;
 
-        body.Add(new LocalVariable(SizeLocal, null, inline));
+        body.Add(new LocalVariable(SizeLocal, null, inline ?? Zero));
         body.AddRange(traversal);
 
         return new Identifier(SizeLocal);
@@ -492,20 +494,19 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 return;
 
             case RangedNumberField ranged:
-                body.Add(
-                    new ExpressionStatement(
-                        WriteBits(
-                            cursor,
-                            ranged.HeaderBits,
-                            LuauFactory.MathCall(
-                                "round",
-                                [Divide(new Parenthesized(Subtract(value, new NumberLiteral(ranged.Minimum))), new NumberLiteral(ranged.Step))]
-                            )
-                        )
-                    )
-                );
+            {
+                // The common grid starts at zero and steps by one, where the shift and scale are both
+                // identities - emitting them would cost a subtract and a divide on every write.
+                var scaled = value;
+                if (ranged.Minimum != 0)
+                    scaled = new Parenthesized(Subtract(scaled, new NumberLiteral(ranged.Minimum)));
 
+                if (ranged.Step != 1)
+                    scaled = Divide(scaled, new NumberLiteral(ranged.Step));
+
+                body.Add(new ExpressionStatement(WriteBits(cursor, ranged.HeaderBits, LuauFactory.MathCall("round", [scaled]))));
                 return;
+            }
 
             // Blobs cost zero buffer bytes: they are appended in schema order and consumed in the same
             // order, so position alone identifies them.
@@ -535,7 +536,9 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 cursor.GoDynamic(body);
 
                 var elementBody = new List<LuauStatement>();
-                EmitValueWrite(arrayField.Element, new ElementAccess(value, new Identifier(LoopLocal)), cursor, elementBody);
+                var element = new Identifier(ReserveLocal(LeafName(arrayField.Path) + "_item"));
+                elementBody.Add(new ConstVariable(element.Name, null, new ElementAccess(value, new Identifier(LoopLocal))));
+                EmitValueWrite(arrayField.Element, element, cursor, elementBody);
                 body.Add(new NumericForStatement(LoopLocal, One, count, null, new Chunk(elementBody)));
 
                 return;
@@ -543,19 +546,27 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
             case StringField stringField:
             {
-                var length = Length(value);
+                // Bound once: the source would otherwise be indexed three times and measured twice, and
+                // inside an array loop that cost is per element.
+                var text = BindIfReused(value, 2, LeafName(stringField.Path), body);
+                var length = new Identifier(ReserveLocal(LeafName(stringField.Path) + "_length"));
+                body.Add(new ConstVariable(length.Name, null, Length(text)));
+
                 WriteNumber(cursor, stringField.LengthType, length, body);
                 cursor.GoDynamic(body);
-                body.Add(new ExpressionStatement(BufferCall("writestring", [new Identifier(BufferLocal), cursor.Position, value])));
+                body.Add(new ExpressionStatement(BufferCall("writestring", [new Identifier(BufferLocal), cursor.Position, text])));
                 cursor.AdvanceBy(body, length);
                 return;
             }
 
             case DatatypeField datatypeField when !datatypeField.UseSentinels:
+            {
+                var bound = BindIfReused(value, datatypeField.Datatype.Components.Count, LeafName(datatypeField.Path), body);
                 foreach (var component in datatypeField.Datatype.Components)
-                    WriteNumber(cursor, datatypeField.NumberType, Access(value, component), body);
+                    WriteNumber(cursor, datatypeField.NumberType, Access(bound, component), body);
 
                 return;
+            }
 
             case CFrameField { UseSentinels: false } cframeField:
                 EmitCFrameWrite(cframeField, value, cursor, body);
@@ -671,6 +682,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     #region Deserializer
     public Function EmitDeserializer()
     {
+        _locals.Clear();
         var body = new List<LuauStatement>();
         var readCursor = new Cursor(schema.HeaderBytes);
         var reads = new List<LuauStatement>();
@@ -797,13 +809,16 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 return [new PropertyTableInitializer(name, ReadNumber(cursor, numberField.NumberType, statements))];
 
             case RangedNumberField ranged:
-                return
-                [
-                    new PropertyTableInitializer(
-                        name,
-                        Add(new NumberLiteral(ranged.Minimum), Multiply(ReadBits(cursor, ranged.HeaderBits), new NumberLiteral(ranged.Step)))
-                    )
-                ];
+            {
+                LuauExpression decoded = ReadBits(cursor, ranged.HeaderBits);
+                if (ranged.Step != 1)
+                    decoded = Multiply(decoded, new NumberLiteral(ranged.Step));
+
+                if (ranged.Minimum != 0)
+                    decoded = Add(new NumberLiteral(ranged.Minimum), decoded);
+
+                return [new PropertyTableInitializer(name, decoded)];
+            }
 
             case BlobField blobField:
                 return [new PropertyTableInitializer(name, EmitBlobRead(blobField, statements))];
@@ -1245,6 +1260,18 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             body.Add(new LocalVariable(OffsetLocal, null, new NumberLiteral(ByteOffset)));
             IsDynamic = true;
         }
+    }
+
+    /// <summary>Binds an expression to a local when it is about to be read more than once.</summary>
+    private LuauExpression BindIfReused(LuauExpression value, int uses, string preferred, List<LuauStatement> body)
+    {
+        if (uses < 2 || value is Identifier)
+            return value;
+
+        var local = ReserveLocal(preferred + "_value");
+        body.Add(new ConstVariable(local, null, value));
+
+        return new Identifier(local);
     }
 
     private static LuauExpression Access(LuauExpression source, string path) => new PropertyAccess(source, [..path.Split('.')]);

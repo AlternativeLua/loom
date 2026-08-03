@@ -9,11 +9,12 @@ type Scores = {
   read values: { number },
 }
 const function Scores_serialize_binary(value: Scores): Loom.Serialized
-  const b = buffer_create(0 + 4 + #value.values * 1)
+  const b = buffer_create(4 + #value.values * 1)
   buffer_writeu32(b, 0, #value.values)
   local offset = 4
   for i = 1, #value.values do
-    buffer_writeu8(b, offset, value.values[i])
+    const values_item = value.values[i]
+    buffer_writeu8(b, offset, values_item)
     offset += 1
   end
   return { buffer = b }

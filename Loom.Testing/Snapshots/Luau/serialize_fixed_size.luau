@@ -12,9 +12,10 @@ type MyData = {
 const function MyData_serialize_binary(value: MyData): Loom.Serialized
   const b = buffer_create(7)
   buffer_writeu8(b, 0, value.id)
-  buffer_writei16(b, 1, value.position.X)
-  buffer_writei16(b, 3, value.position.Y)
-  buffer_writei16(b, 5, value.position.Z)
+  const position_value = value.position
+  buffer_writei16(b, 1, position_value.X)
+  buffer_writei16(b, 3, position_value.Y)
+  buffer_writei16(b, 5, position_value.Z)
   return { buffer = b }
 end
 const function MyData_deserialize_binary(serialized: Loom.Serialized): Loom.Result<MyData, Loom.DeserializeError>

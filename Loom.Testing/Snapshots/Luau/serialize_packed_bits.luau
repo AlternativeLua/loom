@@ -13,7 +13,7 @@ const function Flags_serialize_binary(value: Flags): Loom.Serialized
   const b = buffer_create(2)
   buffer_writebits(b, 0, 1, if value.alive then 1 else 0)
   buffer_writebits(b, 1, 1, if value.ready then 1 else 0)
-  buffer_writebits(b, 2, 7, math.round((value.health - 0) / 1))
+  buffer_writebits(b, 2, 7, math.round(value.health))
   return { buffer = b }
 end
 const function Flags_deserialize_binary(serialized: Loom.Serialized): Loom.Result<Flags, Loom.DeserializeError>
@@ -21,6 +21,6 @@ const function Flags_deserialize_binary(serialized: Loom.Serialized): Loom.Resul
   if b == nil or buffer_len(b) < 2 then
     return { ok = false, error = { kind = "truncated", offset = 0 } }
   end
-  return { ok = true, value = { kind = "spawn", alive = buffer_readbits(b, 0, 1) == 1, ready = buffer_readbits(b, 1, 1) == 1, health = 0 + buffer_readbits(b, 2, 7) * 1 } }
+  return { ok = true, value = { kind = "spawn", alive = buffer_readbits(b, 0, 1) == 1, ready = buffer_readbits(b, 1, 1) == 1, health = buffer_readbits(b, 2, 7) } }
 end
 const Flags_serializer: Loom.Serializer<Flags> = { serialize = Flags_serialize_binary, deserialize = Flags_deserialize_binary }

@@ -12,7 +12,7 @@ type Roster = {
   read positions: { Vector3 },
 }
 const function Roster_serialize_binary(value: Roster): Loom.Serialized
-  local size = 0 + 4 + #value.positions * 6
+  local size = 4 + #value.positions * 6
   size += 4
   for i = 1, #value.names do
     size += 4 + #value.names[i]
@@ -21,19 +21,22 @@ const function Roster_serialize_binary(value: Roster): Loom.Serialized
   buffer_writeu32(b, 0, #value.names)
   local offset = 4
   for i = 1, #value.names do
-    buffer_writeu32(b, offset, #value.names[i])
+    const names_item = value.names[i]
+    const names_element_length = #names_item
+    buffer_writeu32(b, offset, names_element_length)
     offset += 4
-    buffer_writestring(b, offset, value.names[i])
-    offset += #value.names[i]
+    buffer_writestring(b, offset, names_item)
+    offset += names_element_length
   end
   buffer_writeu32(b, offset, #value.positions)
   offset += 4
   for i = 1, #value.positions do
-    buffer_writei16(b, offset, value.positions[i].X)
+    const positions_item = value.positions[i]
+    buffer_writei16(b, offset, positions_item.X)
     offset += 2
-    buffer_writei16(b, offset, value.positions[i].Y)
+    buffer_writei16(b, offset, positions_item.Y)
     offset += 2
-    buffer_writei16(b, offset, value.positions[i].Z)
+    buffer_writei16(b, offset, positions_item.Z)
     offset += 2
   end
   return { buffer = b }

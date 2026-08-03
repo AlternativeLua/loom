@@ -14,10 +14,12 @@ type Player = {
 const function Player_serialize_binary(value: Player): Loom.Serialized
   const b = buffer_create(1 + 4 + #value.name)
   buffer_writeu8(b, 0, value.id)
-  buffer_writeu32(b, 1, #value.name)
+  const name_value = value.name
+  const name_length = #name_value
+  buffer_writeu32(b, 1, name_length)
   local offset = 5
-  buffer_writestring(b, offset, value.name)
-  offset += #value.name
+  buffer_writestring(b, offset, name_value)
+  offset += name_length
   return { buffer = b }
 end
 const function Player_deserialize_binary(serialized: Loom.Serialized): Loom.Result<Player, Loom.DeserializeError>

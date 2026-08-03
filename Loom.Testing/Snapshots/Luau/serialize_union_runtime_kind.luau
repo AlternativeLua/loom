@@ -31,10 +31,12 @@ const function Cell_serialize_binary(value: Cell): Loom.Serialized
     buffer_writef32(b, offset, value.content)
     offset += 4
   elseif content_tag == 1 then
-    buffer_writeu32(b, offset, #value.content)
+    const content_value = value.content
+    const content_length = #content_value
+    buffer_writeu32(b, offset, content_length)
     offset += 4
-    buffer_writestring(b, offset, value.content)
-    offset += #value.content
+    buffer_writestring(b, offset, content_value)
+    offset += content_length
   end
   return { buffer = b }
 end

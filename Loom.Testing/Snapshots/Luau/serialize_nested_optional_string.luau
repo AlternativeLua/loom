@@ -23,10 +23,12 @@ const function Profile_serialize_binary(value: Profile): Loom.Serialized
   buffer_writebits(b, 0, 1, if value.nickname ~= nil then 1 else 0)
   local offset = 2
   if value.nickname ~= nil then
-    buffer_writeu32(b, offset, #value.nickname)
+    const nickname_value = value.nickname
+    const nickname_length = #nickname_value
+    buffer_writeu32(b, offset, nickname_length)
     offset += 4
-    buffer_writestring(b, offset, value.nickname)
-    offset += #value.nickname
+    buffer_writestring(b, offset, nickname_value)
+    offset += nickname_length
   end
   return { buffer = b }
 end
@@ -70,17 +72,21 @@ const function Account_serialize_binary(value: Account): Loom.Serialized
   buffer_writebits(b, 0, 1, if value.profile.nickname ~= nil then 1 else 0)
   local offset = 2
   if value.profile.nickname ~= nil then
-    buffer_writeu32(b, offset, #value.profile.nickname)
+    const nickname_value = value.profile.nickname
+    const nickname_length = #nickname_value
+    buffer_writeu32(b, offset, nickname_length)
     offset += 4
-    buffer_writestring(b, offset, value.profile.nickname)
-    offset += #value.profile.nickname
+    buffer_writestring(b, offset, nickname_value)
+    offset += nickname_length
   end
   buffer_writebits(b, 1, 1, if value.tag ~= nil then 1 else 0)
   if value.tag ~= nil then
-    buffer_writeu32(b, offset, #value.tag)
+    const tag_value = value.tag
+    const tag_length = #tag_value
+    buffer_writeu32(b, offset, tag_length)
     offset += 4
-    buffer_writestring(b, offset, value.tag)
-    offset += #value.tag
+    buffer_writestring(b, offset, tag_value)
+    offset += tag_length
   end
   return { buffer = b }
 end

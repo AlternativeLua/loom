@@ -30,11 +30,13 @@ type Chat = IEvent<"Chat"> & {
 }
 const function Chat_serialize_binary(value: Chat): Loom.Serialized
   const b = buffer_create(1 + 4 + #value.message)
-  buffer_writeu32(b, 1, #value.message)
+  const message_value = value.message
+  const message_length = #message_value
+  buffer_writeu32(b, 1, message_length)
   local offset = 5
-  buffer_writestring(b, offset, value.message)
-  offset += #value.message
-  buffer_writebits(b, 0, 7, math.round((value.volume - 0) / 1))
+  buffer_writestring(b, offset, message_value)
+  offset += message_length
+  buffer_writebits(b, 0, 7, math.round(value.volume))
   return { buffer = b }
 end
 const function Chat_deserialize_binary(serialized: Loom.Serialized): Loom.Result<Chat, Loom.DeserializeError>
@@ -49,7 +51,7 @@ const function Chat_deserialize_binary(serialized: Loom.Serialized): Loom.Result
   end
   const message = buffer_readstring(b, offset, message_length)
   offset += message_length
-  return { ok = true, value = { message = message, volume = 0 + buffer_readbits(b, 0, 7) * 1, kind = "Chat" } }
+  return { ok = true, value = { message = message, volume = buffer_readbits(b, 0, 7), kind = "Chat" } }
 end
 const Chat_serializer: Loom.Serializer<Chat> = { serialize = Chat_serialize_binary, deserialize = Chat_deserialize_binary }
 type Inner = {
@@ -99,28 +101,33 @@ const function KitchenSink_serialize_binary(value: KitchenSink): Loom.Serialized
   buffer_writebits(b, 1, 1, if value.label ~= nil then 1 else 0)
   local offset = 3
   if value.label ~= nil then
-    buffer_writeu32(b, offset, #value.label)
+    const label_value = value.label
+    const label_length = #label_value
+    buffer_writeu32(b, offset, label_length)
     offset += 4
-    buffer_writestring(b, offset, value.label)
-    offset += #value.label
+    buffer_writestring(b, offset, label_value)
+    offset += label_length
   end
   buffer_writeu32(b, offset, #value.points)
   offset += 4
   for i = 1, #value.points do
-    buffer_writei16(b, offset, value.points[i].X)
+    const points_item = value.points[i]
+    buffer_writei16(b, offset, points_item.X)
     offset += 2
-    buffer_writei16(b, offset, value.points[i].Y)
+    buffer_writei16(b, offset, points_item.Y)
     offset += 2
-    buffer_writei16(b, offset, value.points[i].Z)
+    buffer_writei16(b, offset, points_item.Z)
     offset += 2
   end
   buffer_writebits(b, 2, 1, payload_tag)
   if payload_tag == 1 then
-    buffer_writeu32(b, offset, #value.payload.message)
+    const message_value = value.payload.message
+    const message_length = #message_value
+    buffer_writeu32(b, offset, message_length)
     offset += 4
-    buffer_writestring(b, offset, value.payload.message)
-    offset += #value.payload.message
-    buffer_writebits(b, 3, 7, math.round((value.payload.volume - 0) / 1))
+    buffer_writestring(b, offset, message_value)
+    offset += message_length
+    buffer_writebits(b, 3, 7, math.round(value.payload.volume))
   end
   table.insert(blobs, value.owner)
   buffer_writef32(b, offset, value.frame.X)
@@ -193,7 +200,7 @@ const function KitchenSink_deserialize_binary(serialized: Loom.Serialized): Loom
     end
     const message = buffer_readstring(b, offset, message_length)
     offset += message_length
-    payload = { kind = "Chat", message = message, volume = 0 + buffer_readbits(b, 3, 7) * 1 }
+    payload = { kind = "Chat", message = message, volume = buffer_readbits(b, 3, 7) }
   else
     return { ok = false, error = { kind = "invalid_tag", field = "payload" } }
   end
