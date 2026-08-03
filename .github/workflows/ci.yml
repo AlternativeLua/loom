@@ -23,17 +23,6 @@ jobs:
       - name: Install ReportGenerator
         run: dotnet tool install --global dotnet-reportgenerator-globaltool --version 5.*
 
-      # Runs the emitted serializers rather than only comparing them against snapshots; see
-      # Loom.Testing/SerializationRuntimeTest.cs. Without it those tests fail rather than skip.
-      - name: Install Lune
-        run: |
-          LUNE_VERSION=0.10.5
-          mkdir -p "$HOME/.local/bin"
-          curl -fsSL -o lune.zip "https://github.com/lune-org/lune/releases/download/v${LUNE_VERSION}/lune-${LUNE_VERSION}-linux-x86_64.zip"
-          unzip -o -q lune.zip -d "$HOME/.local/bin"
-          chmod +x "$HOME/.local/bin/lune"
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
-
       - name: Configure PATH for tools
         run: echo "/home/runner/.dotnet/tools" >> $GITHUB_PATH
 
