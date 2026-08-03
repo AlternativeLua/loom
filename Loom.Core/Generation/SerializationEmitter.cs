@@ -23,6 +23,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private const string BlobsLocal = "blobs";
     private const string BlobIndexLocal = "blob_index";
     private const string OffsetLocal = "offset";
+    private const string LoopLocal = "i";
 
     public static string SerializeName(string interfaceName) => $"{interfaceName}_serialize_binary";
     public static string DeserializeName(string interfaceName) => $"{interfaceName}_deserialize_binary";
@@ -130,6 +131,15 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         foreach (var stringField in schema.Fields.OfType<StringField>())
             size = Add(size, Add(new NumberLiteral(stringField.LengthType.ByteCount()), Length(Access(new Identifier(ValueParameter), stringField.Path))));
 
+        foreach (var array in schema.Fields.OfType<ArrayField>())
+            size = Add(
+                size,
+                Add(
+                    new NumberLiteral(array.LengthType.ByteCount()),
+                    Multiply(Length(Access(new Identifier(ValueParameter), array.Path)), new NumberLiteral(array.Element.BodyBytes ?? 0))
+                )
+            );
+
         foreach (var optional in schema.Fields.OfType<OptionalField>())
             size = Add(
                 size,
@@ -209,6 +219,19 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 var present = new List<LuauStatement>();
                 EmitWrite(optionalField.Inner, source, cursor, present);
                 body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
+
+                return;
+            }
+
+            case ArrayField arrayField:
+            {
+                var count = Length(value);
+                WriteNumber(cursor, arrayField.LengthType, count, body);
+                cursor.GoDynamic(body);
+
+                var elementBody = new List<LuauStatement>();
+                EmitElementWrite(arrayField, new ElementAccess(value, new Identifier(LoopLocal)), cursor, elementBody);
+                body.Add(new NumericForStatement(LoopLocal, One, count, null, new Chunk(elementBody)));
 
                 return;
             }
@@ -359,7 +382,16 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// </summary>
     private int MinimumByteCount() =>
         schema.HeaderBytes
-        + schema.Fields.Sum(f => f.BodyBytes ?? (f is StringField stringField ? stringField.LengthType.ByteCount() : 0));
+        + schema.Fields.Sum(f => f.BodyBytes ?? MinimumOf(f));
+
+    /// <summary>Unavoidable width of a variable field: a length prefix is written even when empty.</summary>
+    private static int MinimumOf(SerializationField serializationField) =>
+        serializationField switch
+        {
+            StringField stringField => stringField.LengthType.ByteCount(),
+            ArrayField arrayField => arrayField.LengthType.ByteCount(),
+            _ => 0
+        };
 
     private static Table BuildErrorTable(string kind, string? fieldPath, int? offset)
     {
@@ -410,6 +442,9 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
             case OptionalField optionalField:
                 return [new PropertyTableInitializer(name, EmitOptionalRead(optionalField, cursor, statements))];
+
+            case ArrayField arrayField:
+                return [new PropertyTableInitializer(name, EmitArrayRead(arrayField, cursor, statements))];
 
             case StringField stringField:
                 return [new PropertyTableInitializer(name, EmitStringRead(stringField, cursor, statements))];
@@ -487,6 +522,59 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         );
 
         return new Identifier(local);
+    }
+
+    /// <summary>
+    ///     Elements of an array are written through their indexed access rather than a property path, so
+    ///     the generic field walk cannot be reused directly.
+    /// </summary>
+    private void EmitElementWrite(ArrayField arrayField, LuauExpression element, Cursor cursor, List<LuauStatement> body)
+    {
+        if (arrayField.Element is NumberField numberField)
+            WriteNumber(cursor, numberField.NumberType, element, body);
+    }
+
+    /// <summary>
+    ///     Reads a length-prefixed array. The count is checked against the buffer before the loop, so a
+    ///     hostile length reports rather than running off the end one element at a time.
+    /// </summary>
+    private LuauExpression EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var leaf = LeafName(arrayField.Path);
+        var countLocal = leaf + "_count";
+        statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, arrayField.LengthType, statements)));
+        cursor.GoDynamic(statements);
+
+        var elementBytes = arrayField.Element.BodyBytes ?? 0;
+        statements.Add(
+            new IfStatement(
+                new BinaryOperator(
+                    BufferCall("len", [new Identifier(BufferLocal)]),
+                    "<",
+                    Add(new Identifier(OffsetLocal), Multiply(new Identifier(countLocal), new NumberLiteral(elementBytes)))
+                ),
+                new Chunk([new Return(BuildErrorTable("invalid_length", arrayField.Path, null))]),
+                [],
+                null
+            )
+        );
+
+        statements.Add(new ConstVariable(leaf, null, Table.Empty));
+
+        var elementBody = new List<LuauStatement>();
+        if (arrayField.Element is NumberField numberField)
+        {
+            var read = ReadNumber(cursor, numberField.NumberType, elementBody);
+            elementBody.Insert(
+                elementBody.Count == 0 ? 0 : elementBody.Count - 1,
+                new ExpressionStatement(
+                    new BinaryOperator(new ElementAccess(new Identifier(leaf), new Identifier(LoopLocal)), "=", read)
+                )
+            );
+        }
+
+        statements.Add(new NumericForStatement(LoopLocal, One, new Identifier(countLocal), null, new Chunk(elementBody)));
+        return new Identifier(leaf);
     }
 
     /// <summary>

@@ -1,0 +1,5 @@
+[serializable]
+interface Scores {
+    [number_type(NumberType.U8)]
+    values: number[];
+}

@@ -340,6 +340,42 @@ public class SerializationSchemaTest
             }
         );
     }
+    [Fact]
+    public void ArrayOfStrings_IsStillGuarded()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            [serializable] interface Names { values: string[] }
+            """,
+            true
+        );
+
+        // Sizing an array of variable-width elements needs the measuring traversal inline sizing has
+        // avoided, so it must report rather than emit a serializer that drops the field.
+        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.NotImplemented));
+    }
+
+    [Fact]
+    public void ArrayOfNumbers_EmitsLengthPrefixedLoop()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Scores {
+                    [number_type(NumberType.U8)]
+                    values: number[];
+                }
+                """,
+                true
+            )
+            .Render();
+
+        Assert.Contains("buffer_writeu32(b, 0, #value.values)", luau);
+        Assert.Contains("for i = 1, #value.values do", luau);
+        Assert.Contains("offset += 1", luau);
+
+        // The count is bounds-checked before the loop rather than running off the end element by element.
+        Assert.Contains("if buffer_len(b) < offset + values_count * 1 then", luau);
+    }
     #endregion Calls
 
     #region Layout

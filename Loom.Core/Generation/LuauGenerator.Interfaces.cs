@@ -182,7 +182,12 @@ public sealed partial class LuauGenerator
     {
         foreach (var serializationField in fields)
         {
-            if (serializationField is ArrayField or UnionField)
+            if (serializationField is UnionField)
+                return serializationField;
+
+            // Only fixed-width numeric elements are emitted so far; anything else would need the
+            // measuring traversal that inline sizing has avoided up to now.
+            if (serializationField is ArrayField array && array.Element is not NumberField)
                 return serializationField;
 
             if (FindUnsupportedField(serializationField.Children) is { } nested)
