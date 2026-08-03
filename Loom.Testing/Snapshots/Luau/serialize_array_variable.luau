@@ -30,8 +30,8 @@ const function Roster_serialize_binary(value: Roster): Loom.Serialized
   end
   buffer_writeu32(b, offset, #value.positions)
   offset += 4
-  for i = 1, #value.positions do
-    const positions_item = value.positions[i]
+  for i_2 = 1, #value.positions do
+    const positions_item = value.positions[i_2]
     buffer_writei16(b, offset, positions_item.X)
     offset += 2
     buffer_writei16(b, offset, positions_item.Y)
@@ -67,14 +67,14 @@ const function Roster_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
     return { ok = false, error = { kind = "invalid_length", field = "positions" } }
   end
   const positions = {}
-  for i = 1, positions_count do
+  for i_2 = 1, positions_count do
     const read_2 = buffer_readi16(b, offset)
     offset += 2
     const read_3 = buffer_readi16(b, offset)
     offset += 2
     const read_4 = buffer_readi16(b, offset)
     offset += 2
-    positions[i] = Vector3.new(read_2, read_3, read_4)
+    positions[i_2] = Vector3.new(read_2, read_3, read_4)
   end
   return { ok = true, value = { names = names, positions = positions } }
 end

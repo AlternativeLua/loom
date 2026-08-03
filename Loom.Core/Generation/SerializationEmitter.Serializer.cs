@@ -218,7 +218,10 @@ internal sealed partial class SerializationEmitter
         {
             StringField stringField => Add(new NumberLiteral(stringField.LengthType.ByteCount()), Length(value)),
             ArrayField { Element.BodyBytes: { } elementBytes } arrayField =>
-                Add(new NumberLiteral(arrayField.LengthType.ByteCount()), Multiply(Length(value), new NumberLiteral(elementBytes))),
+                Add(
+                    Add(new NumberLiteral(arrayField.LengthType.ByteCount()), Multiply(Length(value), new NumberLiteral(elementBytes))),
+                    ElementBitBlockSize(arrayField.Element.HeaderBits, Length(value))
+                ),
             OptionalField { Inner.BodyBytes: { } innerBytes } optional =>
                 new IfExpression(IsPresent(value), new NumberLiteral(innerBytes), [], Zero),
             _ => null
@@ -365,6 +368,62 @@ internal sealed partial class SerializationEmitter
         return nested;
     }
 
+    /// <summary>
+    ///     Reserves the bit block a collection's entries share, returning its origin in bits, or null when
+    ///     the entries need no bits at all. The block is claimed before any body so the bodies keep their
+    ///     byte alignment.
+    /// </summary>
+    private LuauExpression? ReserveElementBits(int bitsPerElement, string leaf, LuauExpression count, Cursor cursor, List<LuauStatement> body)
+    {
+        if (bitsPerElement == 0)
+            return null;
+
+        var origin = ReserveLocal(leaf + "_bits");
+        body.Add(new ConstVariable(origin, null, Multiply(cursor.Position, new NumberLiteral(8))));
+
+        // Rounded up to whole bytes, since the bodies that follow are byte-addressed.
+        var blockBytes = FloorDivide(
+            new Parenthesized(Add(Multiply(count, new NumberLiteral(bitsPerElement)), new NumberLiteral(7))),
+            new NumberLiteral(8)
+        );
+
+        cursor.AdvanceBy(body, blockBytes);
+        return new Identifier(origin);
+    }
+
+    /// <summary>
+    ///     Points the cursor at one entry's slice of the shared bit block, returning the undo. Bit offsets
+    ///     restart per entry; byte offsets keep running, since bodies follow one another.
+    /// </summary>
+    private static Action EnterElement(Cursor cursor, LuauExpression? bitBase, int bitsPerElement, string loopLocal)
+    {
+        if (bitBase == null)
+            return () => { };
+
+        var previousBase = cursor.BitBase;
+        var previousOffset = cursor.BitOffset;
+
+        cursor.BitBase = Add(bitBase, Multiply(new Parenthesized(Subtract(new Identifier(loopLocal), One)), new NumberLiteral(bitsPerElement)));
+        cursor.BitOffset = 0;
+
+        return () =>
+        {
+            cursor.BitBase = previousBase;
+            cursor.BitOffset = previousOffset;
+        };
+    }
+
+    /// <summary>Whole bytes the shared bit block occupies, or zero when the entries need no bits.</summary>
+    private static LuauExpression ElementBitBlockSize(int bitsPerElement, LuauExpression count) =>
+        bitsPerElement == 0
+            ? Zero
+            : FloorDivide(
+                new Parenthesized(Add(Multiply(count, new NumberLiteral(bitsPerElement)), new NumberLiteral(7))),
+                new NumberLiteral(8)
+            );
+
+    private static LuauExpression FloorDivide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "//", right);
+
     private static LuauExpression Length(LuauExpression value) => new UnaryOperator("#", value);
 
     private static LuauExpression IsPresent(LuauExpression value) => new BinaryOperator(value, "~=", new NilLiteral());
@@ -446,16 +505,26 @@ internal sealed partial class SerializationEmitter
 
             case ArrayField arrayField:
             {
+                var leaf = LeafName(arrayField.Path);
                 var count = Length(value);
                 WriteNumber(cursor, arrayField.LengthType, count, body);
                 cursor.GoDynamic(body);
 
-                var elementBody = new List<LuauStatement>();
-                var element = new Identifier(ReserveLocal(LeafName(arrayField.Path) + "_item"));
-                elementBody.Add(new ConstVariable(element.Name, null, new ElementAccess(value, new Identifier(LoopLocal))));
-                EmitValueWrite(arrayField.Element, element, cursor, elementBody);
-                body.Add(new NumericForStatement(LoopLocal, One, count, null, new Chunk(elementBody)));
+                // Entries needing header bits share a block reserved ahead of the bodies, so the bodies
+                // stay byte-aligned and each entry gets a slice of its own rather than overwriting the
+                // schema-wide header.
+                var bitBase = ReserveElementBits(arrayField.Element.HeaderBits, leaf, count, cursor, body);
 
+                var loop = ReserveLocal(LoopLocal);
+                var elementBody = new List<LuauStatement>();
+                var element = new Identifier(ReserveLocal(leaf + "_item"));
+                elementBody.Add(new ConstVariable(element.Name, null, new ElementAccess(value, new Identifier(loop))));
+
+                var restore = EnterElement(cursor, bitBase, arrayField.Element.HeaderBits, loop);
+                EmitValueWrite(arrayField.Element, element, cursor, elementBody);
+                restore();
+
+                body.Add(new NumericForStatement(loop, One, count, null, new Chunk(elementBody)));
                 return;
             }
 
@@ -588,7 +657,7 @@ internal sealed partial class SerializationEmitter
     {
         var call = BufferCall(
             "writebits",
-            [new Identifier(BufferLocal), new NumberLiteral(cursor.BitOffset), new NumberLiteral(bitCount), value]
+            [new Identifier(BufferLocal), cursor.BitPosition, new NumberLiteral(bitCount), value]
         );
 
         cursor.BitOffset += bitCount;

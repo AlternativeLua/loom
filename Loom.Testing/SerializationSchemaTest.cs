@@ -359,14 +359,22 @@ public class SerializationSchemaTest
     [Fact]
     public void ArrayOfUnmeasurableElements_IsGuarded()
     {
-        // A bool lives in header bits, which sit at fixed positions in a header sized once for the whole
-        // schema - every element would write over the same bits.
-        var bits = Utility.GetGeneratorDiagnostics("[serializable] interface Flags { values: bool[] }", true);
-        Assert.NotNull(bits.Find(d => d.Code == InternalCodes.NotImplemented));
-
-        // A nested array has no width the enclosing measure can state either.
+        // A nested array has no width the enclosing measure can state as one expression.
         var nested = Utility.GetGeneratorDiagnostics("[serializable] interface Grid { values: string[][] }", true);
         Assert.NotNull(nested.Find(d => d.Code == InternalCodes.NotImplemented));
+    }
+
+    [Theory]
+    [InlineData("values: bool[]")]
+    [InlineData("value: bool[]?")]
+    public void ArrayOfBitFields_PacksIntoASharedBlock(string property)
+    {
+        var luau = Utility.GetLuauAST($"[serializable] interface Probe {{ {property} }}", true).Render();
+
+        // Entries share a block reserved after the length prefix, so the bodies stay byte-aligned and
+        // eight bools cost one byte rather than eight.
+        Assert.Contains("_bits = offset * 8", luau);
+        Assert.Contains("+ 7) // 8", luau);
     }
 
     [Fact]
@@ -558,7 +566,7 @@ public class SerializationSchemaTest
             """
             interface IShape<Kind: string> { kind: Kind }
             [serializable] interface Dot: IShape<"Dot">;
-            [serializable] interface Sketch: IShape<"Sketch"> { points: bool[] }
+            [serializable] interface Sketch: IShape<"Sketch"> { points: string[][] }
             [serializable] interface Drawing { shape: Dot | Sketch }
             """,
             true
@@ -582,9 +590,7 @@ public class SerializationSchemaTest
     }
 
     [Theory]
-    [InlineData("values: bool[]")]
     [InlineData("values: string[][]")]
-    [InlineData("value: bool[]?")]
     public void UnmeasurableField_IsGuarded(string property)
     {
         var diagnostics = Utility.GetGeneratorDiagnostics($"[serializable] interface Probe {{ {property} }}", true);

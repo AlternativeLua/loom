@@ -198,10 +198,9 @@ public sealed partial class LuauGenerator
             StringField => true,
             // Sentinelled: either the components in full or nothing, and which is known before allocating.
             DatatypeField or CFrameField => true,
-            // A loop body can only add an expression, so the element's own width has to be one - and
-            // header bits sit at fixed positions in a header sized once for the whole schema, so every
-            // element would otherwise write over the same bits.
-            ArrayField arrayField => IsInlineMeasurable(arrayField.Element) && arrayField.Element.HeaderBits == 0,
+            // A loop body can only add an expression, so the element's own width has to be one. Header
+            // bits are fine: entries share a block reserved after the length prefix.
+            ArrayField arrayField => IsInlineMeasurable(arrayField.Element),
             OptionalField optionalField => IsMeasurable(optionalField.Inner),
             // A flattened nested struct, or a real tuple: measurable exactly when its parts are.
             TupleField tupleField => tupleField.Elements.All(IsMeasurable),

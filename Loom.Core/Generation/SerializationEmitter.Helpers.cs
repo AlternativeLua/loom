@@ -27,6 +27,16 @@ internal sealed partial class SerializationEmitter
 
         public LuauExpression Position => IsDynamic ? new Identifier(OffsetLocal) : new NumberLiteral(ByteOffset);
 
+        /// <summary>
+        ///     Runtime origin for bit positions, set while emitting one entry of a collection. Header bits
+        ///     normally sit at compile-time positions, but a collection's entries each need their own slice
+        ///     of a block whose location is only known once the length has been read.
+        /// </summary>
+        public LuauExpression? BitBase;
+
+        public LuauExpression BitPosition =>
+            BitBase == null ? new NumberLiteral(BitOffset) : Add(BitBase, new NumberLiteral(BitOffset));
+
         public void Advance(List<LuauStatement> body, int bytes)
         {
             if (!IsDynamic)

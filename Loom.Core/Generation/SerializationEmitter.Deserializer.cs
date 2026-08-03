@@ -283,15 +283,22 @@ internal sealed partial class SerializationEmitter
                 )
             );
 
+        // Claimed before the bodies, exactly as the writer laid it out.
+        var bitBase = ReserveElementBits(arrayField.Element.HeaderBits, leaf, new Identifier(countLocal), cursor, statements);
+
         statements.Add(new ConstVariable(leaf, null, Table.Empty));
 
+        var loop = ReserveLocal(LoopLocal);
         var elementBody = new List<LuauStatement>();
+        var restore = EnterElement(cursor, bitBase, arrayField.Element.HeaderBits, loop);
         var element = EmitValueRead(arrayField.Element, cursor, elementBody);
+        restore();
+
         elementBody.Add(
-            new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), new Identifier(LoopLocal)), "=", element))
+            new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), new Identifier(loop)), "=", element))
         );
 
-        statements.Add(new NumericForStatement(LoopLocal, One, new Identifier(countLocal), null, new Chunk(elementBody)));
+        statements.Add(new NumericForStatement(loop, One, new Identifier(countLocal), null, new Chunk(elementBody)));
         return new Identifier(leaf);
     }
 
@@ -546,7 +553,7 @@ internal sealed partial class SerializationEmitter
 
     private LuauExpression ReadBits(Cursor cursor, int bitCount)
     {
-        var call = BufferCall("readbits", [new Identifier(BufferLocal), new NumberLiteral(cursor.BitOffset), new NumberLiteral(bitCount)]);
+        var call = BufferCall("readbits", [new Identifier(BufferLocal), cursor.BitPosition, new NumberLiteral(bitCount)]);
         cursor.BitOffset += bitCount;
         return call;
     }
