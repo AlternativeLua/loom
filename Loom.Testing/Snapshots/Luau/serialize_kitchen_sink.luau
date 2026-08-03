@@ -156,13 +156,13 @@ const function KitchenSink_deserialize_binary(serialized: Loom.Serialized): Loom
   if label_present then
     const read_0 = buffer_readu32(b, offset)
     offset += 4
-    const label_length = read_0
-    if buffer_len(b) < offset + label_length then
+    const label_2_length = read_0
+    if buffer_len(b) < offset + label_2_length then
       return { ok = false, error = { kind = "invalid_length", field = "label" } }
     end
-    const label = buffer_readstring(b, offset, label_length)
-    offset += label_length
-    label = label
+    const label_2 = buffer_readstring(b, offset, label_2_length)
+    offset += label_2_length
+    label = label_2
   end
   const read_1 = buffer_readu32(b, offset)
   offset += 4
@@ -221,13 +221,12 @@ const function KitchenSink_deserialize_binary(serialized: Loom.Serialized): Loom
   offset += 4
   return { ok = true, value = {
     tag = "sink",
-    flag = buffer_readbits(b, 0, 1) == 1,
-    code = buffer_readu8(b, 2),
     label = label,
     points = points,
     payload = payload,
     owner = owner_blob,
     frame = CFrame.new(read_6, read_7, read_8, read_9, read_10, read_11, read_12),
+    inner = { flag = buffer_readbits(b, 0, 1) == 1, code = buffer_readu8(b, 2) },
   } }
 end
 const KitchenSink_serializer: Loom.Serializer<KitchenSink> = { serialize = KitchenSink_serialize_binary, deserialize = KitchenSink_deserialize_binary }

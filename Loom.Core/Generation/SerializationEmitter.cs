@@ -311,14 +311,20 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// <summary>Accumulates a field's width into the size local, for shapes that need control flow.</summary>
     private void EmitMeasure(SerializationField serializationField, LuauExpression value, List<LuauStatement> statements)
     {
+        // A flattened nested struct contributes each of its parts.
+        if (serializationField is TupleField tupleField)
+        {
+            foreach (var element in tupleField.Elements)
+                MeasureField(element, Access(new Identifier(ValueParameter), element.Path), statements);
+
+            return;
+        }
+
         // A payload that is only sometimes written is only sometimes counted.
         if (serializationField is OptionalField optionalField)
         {
             var innerStatements = new List<LuauStatement>();
-            if (InlineContribution(optionalField.Inner, value) is { } innerSize)
-                innerStatements.Add(AddToSize(innerSize));
-            else
-                EmitMeasure(optionalField.Inner, value, innerStatements);
+            MeasureField(optionalField.Inner, value, innerStatements);
 
             if (innerStatements.Count > 0)
                 statements.Add(new IfStatement(IsPresent(value), new Chunk(innerStatements), [], null));
@@ -360,6 +366,26 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         statements.Add(new NumericForStatement(LoopLocal, One, Length(value), null, new Chunk([AddToSize(elementSize)])));
     }
 
+    /// <summary>Adds one field's width, inline when it can be stated as an expression.</summary>
+    private void MeasureField(SerializationField serializationField, LuauExpression value, List<LuauStatement> statements)
+    {
+        if (InlineContribution(serializationField, value) is { } contribution)
+        {
+            statements.Add(AddToSize(contribution));
+            return;
+        }
+
+        if (serializationField.BodyBytes is { } fixedBytes)
+        {
+            if (fixedBytes > 0)
+                statements.Add(AddToSize(new NumberLiteral(fixedBytes)));
+
+            return;
+        }
+
+        EmitMeasure(serializationField, value, statements);
+    }
+
     private static LuauStatement AddToSize(LuauExpression amount) =>
         new ExpressionStatement(new BinaryOperator(new Identifier(SizeLocal), "+=", amount));
 
@@ -375,6 +401,52 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 + (cframeField.Encoding == CFrameEncoding.Compressed ? sizeof(uint) : 0),
             _ => 0
         };
+
+    /// <summary>
+    ///     Rebuilds the nesting that flattening removed. A nested serializable interface contributes its
+    ///     properties to the parent's field list under dotted paths, so reading them back into a flat
+    ///     table would hand the caller the wrong shape entirely.
+    /// </summary>
+    private static List<TableInitializer> NestByPath(List<TableInitializer> initializers, string prefix)
+    {
+        var nested = new List<TableInitializer>();
+        var groups = new Dictionary<string, List<TableInitializer>>();
+        var order = new List<string>();
+
+        foreach (var initializer in initializers)
+        {
+            if (initializer is not PropertyTableInitializer property)
+            {
+                nested.Add(initializer);
+                continue;
+            }
+
+            var relative = property.PropertyName.StartsWith(prefix, StringComparison.Ordinal)
+                ? property.PropertyName[prefix.Length..]
+                : property.PropertyName;
+
+            var dot = relative.IndexOf('.');
+            if (dot < 0)
+            {
+                nested.Add(new PropertyTableInitializer(relative, property.Value));
+                continue;
+            }
+
+            var head = relative[..dot];
+            if (!groups.TryGetValue(head, out var group))
+            {
+                groups[head] = group = [];
+                order.Add(head);
+            }
+
+            group.Add(new PropertyTableInitializer(relative, property.Value));
+        }
+
+        foreach (var head in order)
+            nested.Add(new PropertyTableInitializer(head, new Table(NestByPath(groups[head], head + "."))));
+
+        return nested;
+    }
 
     private static LuauExpression Length(LuauExpression value) => new UnaryOperator("#", value);
 
@@ -631,6 +703,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             initializers.AddRange(EmitRead(serializationField, readCursor, reads));
 
         body.AddRange(reads);
+        initializers = NestByPath(initializers, "");
         body.Add(
             new Return(
                 new Table(
@@ -711,7 +784,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// </summary>
     private List<TableInitializer> EmitRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
     {
-        var name = LeafName(serializationField.Path);
+        var name = serializationField.Path;
         switch (serializationField)
         {
             case ConstantField constant:
@@ -780,7 +853,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private LuauExpression EmitBlobRead(BlobField blobField, List<LuauStatement> statements)
     {
         var slot = new ElementAccess(new Identifier(BlobsLocal), new Identifier(BlobIndexLocal));
-        var local = LeafName(blobField.Path) + "_blob";
+        var local = ReserveLocal(LeafName(blobField.Path) + "_blob");
         statements.Add(new ConstVariable(local, null, slot));
         statements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(BlobIndexLocal), "+=", One)));
 
@@ -839,8 +912,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
     private LuauExpression EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)
     {
-        var leaf = LeafName(arrayField.Path);
-        var countLocal = leaf + "_count";
+        var leaf = ReserveLocal(LeafName(arrayField.Path));
+        var countLocal = ReserveLocal(leaf + "_count");
         statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, arrayField.LengthType, statements)));
         cursor.GoDynamic(statements);
 
@@ -900,8 +973,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// </summary>
     private LuauExpression EmitUnionRead(UnionField unionField, Cursor cursor, List<LuauStatement> statements)
     {
-        var leaf = LeafName(unionField.Path);
-        var tagLocal = leaf + "_tag";
+        var leaf = ReserveLocal(LeafName(unionField.Path));
+        var tagLocal = ReserveLocal(leaf + "_tag");
         statements.Add(new ConstVariable(tagLocal, null, ReadBits(cursor, unionField.TagBits)));
         statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
         cursor.GoDynamic(statements);
@@ -955,9 +1028,11 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             new PropertyTableInitializer(unionField.DiscriminantName!, ToLiteral(variant.Discriminant))
         };
 
+        var variantInitializers = new List<TableInitializer>();
         foreach (var variantField in variant.Fields)
-            initializers.AddRange(EmitRead(variantField, cursor, body));
+            variantInitializers.AddRange(EmitRead(variantField, cursor, body));
 
+        initializers.AddRange(NestByPath(variantInitializers, unionField.Path + "."));
         return new Table(initializers);
     }
 
@@ -968,8 +1043,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private LuauExpression EmitSentinelRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
     {
         var sentinels = SentinelNamesOf(serializationField)!;
-        var leaf = LeafName(serializationField.Path);
-        var indexLocal = leaf + "_sentinel";
+        var leaf = ReserveLocal(LeafName(serializationField.Path));
+        var indexLocal = ReserveLocal(leaf + "_sentinel");
 
         statements.Add(new ConstVariable(indexLocal, null, ReadBits(cursor, BitWidth.ForStateCount(sentinels.Count + 1))));
         statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
@@ -1014,8 +1089,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// </summary>
     private LuauExpression EmitOptionalRead(OptionalField optionalField, Cursor cursor, List<LuauStatement> statements)
     {
-        var leaf = LeafName(optionalField.Path);
-        var presentLocal = leaf + "_present";
+        var leaf = ReserveLocal(LeafName(optionalField.Path));
+        var presentLocal = ReserveLocal(leaf + "_present");
         statements.Add(new ConstVariable(presentLocal, null, new BinaryOperator(ReadBits(cursor, 1), "==", One)));
         statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
         cursor.GoDynamic(statements);
@@ -1037,8 +1112,8 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// </summary>
     private LuauExpression EmitStringRead(StringField stringField, Cursor cursor, List<LuauStatement> statements)
     {
-        var leaf = LeafName(stringField.Path);
-        var lengthLocal = leaf + "_length";
+        var leaf = ReserveLocal(LeafName(stringField.Path));
+        var lengthLocal = ReserveLocal(leaf + "_length");
         statements.Add(new ConstVariable(lengthLocal, null, ReadNumber(cursor, stringField.LengthType, statements)));
         cursor.GoDynamic(statements);
 
@@ -1098,8 +1173,24 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     }
 
     private int _temporaries;
+    private readonly HashSet<string> _locals = [];
 
     private string ReserveTemporary() => $"read_{_temporaries++}";
+
+    /// <summary>
+    ///     Claims a local name, suffixing until it is free. Several constructs name locals after the same
+    ///     path leaf - a union's accumulator and the string read filling it, for instance - and the inner
+    ///     binding would otherwise shadow the outer, leaving the assignment writing to itself.
+    /// </summary>
+    private string ReserveLocal(string preferred)
+    {
+        if (_locals.Add(preferred))
+            return preferred;
+
+        for (var suffix = 2;; suffix++)
+            if (_locals.Add($"{preferred}_{suffix}"))
+                return $"{preferred}_{suffix}";
+    }
 
     private LuauExpression ReadBits(Cursor cursor, int bitCount)
     {

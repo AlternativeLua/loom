@@ -633,6 +633,55 @@ public class SerializationSchemaTest
         Assert.Contains("tag = \"sink\"", luau);
         Assert.Contains("table.insert(blobs, value.owner)", luau);
     }
+    [Fact]
+    public void NestedStruct_IsRebuiltNested()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Inner {
+                    flag: bool;
+                    [number_type(NumberType.U8)]
+                    code: number;
+                }
+
+                [serializable] interface Outer { inner: Inner }
+                """,
+                true
+            )
+            .Render();
+
+        // Flattening puts the nested properties under dotted paths; reading them back into a flat table
+        // would hand the caller the wrong shape entirely. Inner's own serializer is still flat, so the
+        // nesting has to be asserted on Outer's return specifically.
+        Assert.Contains("value = { inner = { flag = ", luau);
+    }
+
+    [Fact]
+    public void InnerRead_DoesNotShadowItsAccumulator()
+    {
+        var luau = Utility.GetLuauAST("[serializable] interface Probe { nickname: string? }", true).Render();
+
+        // The optional's accumulator and the string read filling it both want the leaf name; if the
+        // inner binding shadows the outer, the assignment writes to itself and the value stays nil.
+        Assert.Contains("local nickname = nil", luau);
+        Assert.Contains("nickname_2 = buffer_readstring", luau);
+        Assert.Contains("nickname = nickname_2", luau);
+    }
+
+    [Fact]
+    public void NestedStructWithVariableField_IsMeasured()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Profile { nickname: string? }
+                [serializable] interface Account { profile: Profile }
+                """,
+                true
+            )
+            .Render();
+
+        Assert.Contains("size += 4 + #value.profile.nickname", luau);
+    }
     #endregion Measurability
 
     #endregion Calls

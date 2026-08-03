@@ -56,13 +56,13 @@ const function Cell_deserialize_binary(serialized: Loom.Serialized): Loom.Result
   elseif content_tag == 1 then
     const read_1 = buffer_readu32(b, offset)
     offset += 4
-    const content_length = read_1
-    if buffer_len(b) < offset + content_length then
+    const content_2_length = read_1
+    if buffer_len(b) < offset + content_2_length then
       return { ok = false, error = { kind = "invalid_length", field = "content" } }
     end
-    const content = buffer_readstring(b, offset, content_length)
-    offset += content_length
-    content = content
+    const content_2 = buffer_readstring(b, offset, content_2_length)
+    offset += content_2_length
+    content = content_2
   else
     return { ok = false, error = { kind = "invalid_tag", field = "content" } }
   end

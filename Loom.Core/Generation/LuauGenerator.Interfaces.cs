@@ -203,6 +203,8 @@ public sealed partial class LuauGenerator
             // element would otherwise write over the same bits.
             ArrayField arrayField => IsInlineMeasurable(arrayField.Element) && arrayField.Element.HeaderBits == 0,
             OptionalField optionalField => IsMeasurable(optionalField.Inner),
+            // A flattened nested struct, or a real tuple: measurable exactly when its parts are.
+            TupleField tupleField => tupleField.Elements.All(IsMeasurable),
             UnionField unionField => unionField.Variants.All(v => v.Fields.All(IsMeasurable)),
             _ => false
         };

@@ -1,0 +1,12 @@
+[serializable]
+interface Profile {
+    [number_type(NumberType.U8)]
+    level: number;
+    nickname: string?;
+}
+
+[serializable]
+interface Account {
+    profile: Profile;
+    tag: string?;
+}
