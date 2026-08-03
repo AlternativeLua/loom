@@ -508,9 +508,11 @@ internal sealed partial class SerializationEmitter
                 return;
             }
 
+            // Resolved against the value handed in, not the parameter: inside an array the base is the
+            // bound element, whose path segment ('leaves[]') is not a property that could be indexed.
             case TupleField tupleField:
                 foreach (var element in tupleField.Elements)
-                    EmitWrite(element, new Identifier(ValueParameter), cursor, body);
+                    EmitValueWrite(element, Access(value, RelativePath(element.Path, tupleField.Path)), cursor, body);
 
                 return;
 

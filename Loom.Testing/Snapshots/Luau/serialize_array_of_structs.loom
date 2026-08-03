@@ -1,0 +1,15 @@
+[serializable]
+interface Bag {
+    owners: Part[];
+}
+
+[serializable]
+interface Leaf {
+    [number_type(NumberType.U8)]
+    v: number;
+}
+
+[serializable]
+interface Branch {
+    leaves: Leaf[];
+}

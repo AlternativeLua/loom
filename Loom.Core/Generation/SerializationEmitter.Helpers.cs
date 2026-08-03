@@ -66,6 +66,10 @@ internal sealed partial class SerializationEmitter
         return new Identifier(local);
     }
 
+    /// <summary>Strips an enclosing path, leaving the segments to index from the value that path names.</summary>
+    private static string RelativePath(string path, string enclosing) =>
+        path.StartsWith(enclosing + ".", StringComparison.Ordinal) ? path[(enclosing.Length + 1)..] : path;
+
     private static LuauExpression Access(LuauExpression source, string path) => new PropertyAccess(source, [..path.Split('.')]);
 
     /// <summary>

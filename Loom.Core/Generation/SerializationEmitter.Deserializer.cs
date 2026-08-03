@@ -249,9 +249,17 @@ internal sealed partial class SerializationEmitter
     ///     Reads one value of a field's shape, returning the expression that reconstructs it. Unlike the
     ///     property walk this produces no table initializer, so an array element can bind it by index.
     /// </summary>
-    private LuauExpression EmitValueRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements) =>
-        EmitRead(serializationField, cursor, statements).OfType<PropertyTableInitializer>().FirstOrDefault()?.Value
-        ?? new NilLiteral();
+    private LuauExpression EmitValueRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var initializers = EmitRead(serializationField, cursor, statements);
+
+        // A flattened struct contributes one initializer per property, which have to be reassembled
+        // rather than collapsed to the first.
+        if (serializationField is TupleField)
+            return new Table(NestByPath(initializers, serializationField.Path + "."));
+
+        return initializers.OfType<PropertyTableInitializer>().FirstOrDefault()?.Value ?? new NilLiteral();
+    }
 
     private LuauExpression EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)
     {
