@@ -49,8 +49,8 @@ public sealed record NumberField(string Path, Type ValueType, NumberType NumberT
 public sealed record RangedNumberField(string Path, Type ValueType, double Minimum, double Maximum, double Step)
     : SerializationField(Path, ValueType)
 {
-    public long StateCount => (long)Math.Floor((Maximum - Minimum) / Step) + 1;
-    public override int HeaderBits => BitWidth.ForStateCount((int)Math.Min(StateCount, int.MaxValue));
+    public double StateCount => Math.Floor((Maximum - Minimum) / Step) + 1;
+    public override int HeaderBits => BitWidth.ForStateCount(StateCount);
 }
 
 /// <summary>

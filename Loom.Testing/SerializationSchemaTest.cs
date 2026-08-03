@@ -683,6 +683,58 @@ public class SerializationSchemaTest
 
         Assert.Contains("size += 4 + #value.profile.nickname", luau);
     }
+    [Fact]
+    public void ThrowsFor_RangeWiderThanWritebitsCarries()
+    {
+        // Anything past 32 bits would clamp, silently dropping the top of every value.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface Counter {
+                [number_range(0, 4294967296)]
+                total: number;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidSerializationRange,
+            "'total' needs more than 32 bits for range [0, 4294967296] with a step of 1.",
+            "narrow the range, widen the step, or use 'number_type' for a byte-aligned width."
+        );
+    }
+
+    [Fact]
+    public void Allows_RangeSpanningExactlyThirtyTwoBits()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Counter {
+                    [number_range(0, 4294967295)]
+                    total: number;
+                }
+                """,
+                true
+            )
+            .Render();
+
+        Assert.Contains("buffer_writebits(b, 0, 32,", luau);
+    }
+
+    [Fact]
+    public void ThrowsFor_IndexerOnSerializableInterface()
+    {
+        // An indexer's contents are not named properties, so a schema has nowhere to put them - the map
+        // was silently serializing to nothing at all.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("[serializable] interface Lookup { [string]: number }");
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NotSerializable,
+            "Serializable interface 'Lookup' has an indexer, whose contents have no place in a fixed schema.",
+            "a schema is built from named properties; an arbitrary key-value map is not yet encodable."
+        );
+    }
     #endregion Measurability
 
     #endregion Calls

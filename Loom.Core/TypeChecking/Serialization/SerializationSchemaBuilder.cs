@@ -75,6 +75,18 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         try
         {
             var succeeded = true;
+            if (interfaceType?.Indexer != null)
+            {
+                diagnostics.Error(
+                    interfaceSymbol.Declaration,
+                    InternalCodes.NotSerializable,
+                    $"Serializable interface '{interfaceSymbol.Name}' has an indexer, whose contents have no place in a fixed schema.",
+                    "a schema is built from named properties; an arbitrary key-value map is not yet encodable."
+                );
+
+                return false;
+            }
+
             foreach (var property in interfaceSymbol.FullProperties)
             {
                 if (property.HasIntrinsicAttribute("ignore_serialization"))
@@ -172,6 +184,21 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
                 reportNode,
                 InternalCodes.InvalidSerializationRange,
                 $"'{path}' has an empty number range [{range.Minimum}, {range.Maximum}]."
+            );
+
+            return null;
+        }
+
+        // writebits tops out at 32, and the grid index is what goes through it. A wider range would
+        // otherwise clamp and silently truncate every value past the cut.
+        var bits = BitWidth.ForStateCount(Math.Floor((range.Maximum - range.Minimum) / step) + 1);
+        if (bits > BitWidth.MaximumBits)
+        {
+            diagnostics.Error(
+                reportNode,
+                InternalCodes.InvalidSerializationRange,
+                $"'{path}' needs more than {BitWidth.MaximumBits} bits for range [{range.Minimum}, {range.Maximum}] with a step of {step}.",
+                "narrow the range, widen the step, or use 'number_type' for a byte-aligned width."
             );
 
             return null;
