@@ -2231,49 +2231,6 @@ public class ResolverTest
     }
     #endregion ReservedLuauKeywords
 
-    #region DebugDiagnostics
-    [Fact]
-    public void Debug_False_ProducesNoDebugDiagnostics()
-    {
-        var model = Utility.GetSemanticModel("let x = 1;", debug: false);
-        Assert.Null(model.Diagnostics.Find(d => d.Severity == DiagnosticSeverity.Debug));
-    }
-
-    [Fact]
-    public void Debug_True_ProducesConsolidatedDeclarationDiagnostic()
-    {
-        var model = Utility.GetSemanticModel("let x = 1;", debug: true);
-        var diag = model.Diagnostics.Find(d => d.Severity == DiagnosticSeverity.Debug && d.Message.Contains("'x'"));
-
-        Assert.NotNull(diag);
-        Assert.Equal("Declared 'x' (Variable)", diag.Message);
-    }
-
-    [Fact]
-    public void Debug_True_AppliesGlobalFlag_InDeclarationFile()
-    {
-        var model = Utility.GetSemanticModel("interface Foo;", true, debug: true);
-        var diag = model.Diagnostics.Find(d => d.Severity == DiagnosticSeverity.Debug && d.Message.Contains("'Foo'") && d.Message.Contains("Interface"));
-
-        Assert.NotNull(diag);
-        Assert.Equal("Declared 'Foo' (Interface) [global]", diag.Message);
-    }
-
-    [Fact]
-    public void Debug_True_SetsEmitDebugDiagnosticsOnSemanticModel()
-    {
-        var model = Utility.GetSemanticModel("let x = 1;", debug: true);
-        Assert.True(model.EmitDebugDiagnostics);
-    }
-
-    [Fact]
-    public void Debug_False_ClearsEmitDebugDiagnosticsOnSemanticModel()
-    {
-        var model = Utility.GetSemanticModel("let x = 1;", debug: false);
-        Assert.False(model.EmitDebugDiagnostics);
-    }
-    #endregion DebugDiagnostics
-
     #region Destructuring
     [Fact]
     public void Resolves_ArrayDestructuring_DeclaresAllBindings() =>

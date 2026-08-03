@@ -151,6 +151,9 @@ public sealed partial class TypeChecker
                 CheckAttributeUsage(attribute, AttributeTargetsFlag.Interface);
             }
 
+        if (_resolvingHoisted.Count == 0)
+            _interfaceDeclarations.Add(interfaceDeclaration);
+
         if (publishedType is GenericType generic)
             publishedType = VarianceInferrer.ApplyInferredVariance(generic);
 

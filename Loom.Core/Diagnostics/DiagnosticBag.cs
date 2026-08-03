@@ -18,10 +18,6 @@ public sealed class DiagnosticBag(HashSet<Diagnostic>? diagnostics = null, Diagn
     public static DiagnosticBag Concat(List<DiagnosticBag> bags, DiagnosticOptions? options = null) =>
         new(bags.SelectMany(bag => bag.Set).ToHashSet(), options ?? bags.FirstOrDefault()?.Options);
 
-    public void Debug(Node node, string message) => Debug(node.LocationSpan, message);
-    public void Debug(LocationSpan span, string message) => Report(span, DiagnosticSeverity.Debug, null, message, null);
-    public void Debug(Node node, string code, string message) => Debug(node.LocationSpan, code, message);
-    public void Debug(LocationSpan span, string code, string message) => Report(span, DiagnosticSeverity.Debug, code, message, null);
     public void Info(Node node, string message) => Info(node.LocationSpan, message);
     public void Info(LocationSpan span, string message) => Report(span, DiagnosticSeverity.Info, null, message, null);
     public void Info(Node node, string code, string message) => Info(node.LocationSpan, code, message);

@@ -30,7 +30,10 @@ public sealed partial class LuauGenerator
         "Event",
         "ConsumerEvent",
         "CreatableInstance",
-        "ServiceInstance"
+        "ServiceInstance",
+        "Serialized",
+        "DeserializeError",
+        "DeserializeErrorKind"
     ];
 
     public override LuauNode VisitTypeName(TypeName typeName)

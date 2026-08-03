@@ -17,10 +17,39 @@ enum AttributeTargets {
     Event = 1 << 3,
 }
 
+enum NumberType {
+    I8,
+    U8,
+    I16,
+    U16,
+    I32,
+    U32,
+    F32,
+    F64,
+}
+
+enum CFrameType {
+    Compressed,
+    Precise,
+}
+
 declare fn attribute_usage(targets: AttributeTargets): void;
 declare fn luau_name(name: string): void;
 declare fn luau_method: void;
 declare fn override: void;
+
+## Serialization attributes. See TypeChecker.Serialization.cs for the co-requirement rules
+## these carry: 'packed' requires 'serializable', every property attribute requires its
+## containing interface to be 'serializable', 'number_step' requires 'number_range', and
+## 'number_type' and 'number_range' are mutually exclusive.
+[attribute_usage(AttributeTargets.Interface)] declare fn serializable: void;
+[attribute_usage(AttributeTargets.Interface)] declare fn packed: void;
+[attribute_usage(AttributeTargets.Property)] declare fn ignore_serialization: void;
+[attribute_usage(AttributeTargets.Property)] declare fn number_type(ty: NumberType): void;
+[attribute_usage(AttributeTargets.Property)] declare fn number_range(min: number, max: number): void;
+[attribute_usage(AttributeTargets.Property)] declare fn number_step(step: number): void;
+[attribute_usage(AttributeTargets.Property)] declare fn length_type(ty: NumberType): void;
+[attribute_usage(AttributeTargets.Property)] declare fn cframe_type(ty: CFrameType): void;
 
 declare fn print(..data: unknown[]): void;
 declare fn string(value: unknown): string;

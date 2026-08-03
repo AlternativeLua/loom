@@ -1,0 +1,554 @@
+using Loom.Core.Diagnostics;
+using Loom.Core.Resolving.Symbols;
+using Loom.Core.TypeChecking.Serialization;
+
+namespace Loom.Testing;
+
+[Collection("Assembly")]
+public class SerializationSchemaTest
+{
+    private static SerializationSchema GetSchema(string source, string interfaceName = "MyData")
+    {
+        var (_, semanticModel, flowAnalyzer) = Utility.FlowAnalyze(source);
+        var result = new Core.TypeChecking.TypeChecker(semanticModel, flowAnalyzer).Check();
+        Utility.AssertNoErrors(result.Diagnostics);
+
+        var schema = semanticModel.SerializationSchemas
+            .FirstOrDefault(pair => pair.Key.Name == interfaceName)
+            .Value;
+
+        Assert.NotNull(schema);
+        return schema;
+    }
+
+    #region AttributeMatrix
+    [Fact]
+    public void ThrowsFor_Packed_WithoutSerializable()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("[packed] interface MyData { id: number }");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.MissingRequiredAttribute,
+            "'packed' requires interface 'MyData' to also have the 'serializable' attribute.",
+            "'packed' only changes how a serializable type is encoded."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_PropertyAttribute_OnNonSerializableInterface()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface MyData {
+                [number_type(NumberType.U8)]
+                id: number;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.MissingRequiredAttribute,
+            "'number_type' requires interface 'MyData' to have the 'serializable' attribute.",
+            "add 'serializable' to 'MyData', or remove the attribute from 'id'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_NumberType_AndNumberRange_Together()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8), number_range(0, 100)]
+                health: number;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ConflictingAttributes,
+            "'health' has both 'number_type' and 'number_range', which each set its width.",
+            "use 'number_range' for a bounded value, or 'number_type' for a fixed width."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_Quantize_WithoutNumberRange()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_step(0.01)]
+                opacity: number;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.MissingRequiredAttribute,
+            "'number_step' on 'opacity' requires 'number_range'.",
+            "without bounds there is no bit width to derive from a step."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_IgnoreSerialization_OnRequiredProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [ignore_serialization]
+                cached: string;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'ignore_serialization' requires 'cached' to be optional, since there is no default value to restore.",
+            "declare it as 'cached: string?'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_IgnoreSerialization_WithEncodingAttribute()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [ignore_serialization, number_type(NumberType.U8)]
+                cached: number?;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ConflictingAttributes,
+            "'cached' is both ignored and annotated with 'number_type'.",
+            "an ignored property is not encoded, so it cannot carry encoding attributes."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_LengthType_WithSignedNumberType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [length_type(NumberType.I16)]
+                name: string;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'length_type' on 'name' must be an unsigned number type, but is 'I16'.",
+            "lengths are never negative; use U8, U16, or U32."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_LengthType_OnNonLengthPrefixedProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [length_type(NumberType.U16)]
+                id: number;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'length_type' requires 'id' to be a string or array, but it is 'number'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_NumberType_OnNonNumericProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                name: string;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'number_type' requires 'name' to have numeric components, but it is 'string'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_CFrameType_OnNonCFrameProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [cframe_type(CFrameType.Precise)]
+                position: Vector3;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'cframe_type' requires 'position' to be a CFrame, but it is 'Vector3'."
+        );
+    }
+
+    [Fact]
+    public void Allows_NumberType_OnRobloxDatatype()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.I16)]
+                position: Vector3;
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+    #endregion AttributeMatrix
+
+    #region Encodability
+    [Fact]
+    public void ThrowsFor_NestedNonSerializableInterface()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Inner { value: number }
+            [serializable] interface MyData { inner: Inner }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NotSerializable,
+            "'inner' has type 'Inner', which is not serializable.",
+            "add the 'serializable' attribute to interface 'Inner'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_RecursiveSerializableType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("[serializable] interface Node { next: Node }");
+        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.RecursiveSerializableType));
+    }
+
+    [Fact]
+    public void ThrowsFor_AmbiguousUnion()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface Circle { radius: number }
+            [serializable] interface Square { side: number }
+            [serializable] interface MyData { shape: Circle | Square }
+            """
+        );
+
+        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.AmbiguousSerializableUnion));
+    }
+    #endregion Encodability
+
+    #region Layout
+    [Fact]
+    public void FixedSizeSchema_HasConstantByteCount()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                id: number;
+                [number_type(NumberType.I16)]
+                position: Vector3;
+            }
+            """
+        );
+
+        Assert.True(schema.IsFixedSize);
+        Assert.Equal(0, schema.HeaderBits);
+        Assert.Equal(7, schema.FixedByteCount);
+        Assert.False(schema.HasBlobs);
+    }
+
+    [Fact]
+    public void Packed_TradesFixedSizeForSentinelBits()
+    {
+        var schema = GetSchema(
+            """
+            [serializable, packed] interface MyData {
+                [number_type(NumberType.U8)]
+                id: number;
+                [number_type(NumberType.I16)]
+                position: Vector3;
+            }
+            """
+        );
+
+        // Five Vector3 sentinels plus the reserved "components follow" state need three bits, and the
+        // components become conditional - so the type stops being fixed-size.
+        Assert.Equal(3, schema.HeaderBits);
+        Assert.False(schema.IsFixedSize);
+    }
+
+    [Fact]
+    public void LiteralTypedProperty_CostsNothing()
+    {
+        var schema = GetSchema("[serializable] interface MyData { kind: \"spawn\" }");
+
+        Assert.Equal(0, schema.HeaderBits);
+        Assert.Equal(0, schema.FixedByteCount);
+        Assert.True(schema.IsEmpty);
+    }
+
+    [Fact]
+    public void BoolsPackIntoHeaderBits()
+    {
+        var schema = GetSchema("[serializable] interface MyData { a: bool; b: bool; c: bool }");
+
+        Assert.Equal(3, schema.HeaderBits);
+        Assert.Equal(1, schema.HeaderBytes);
+        Assert.Equal(1, schema.FixedByteCount);
+    }
+
+    [Fact]
+    public void OptionalAddsPresenceBit()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                id: number?;
+            }
+            """
+        );
+
+        Assert.Equal(1, schema.HeaderBits);
+        Assert.False(schema.IsFixedSize);
+    }
+
+    [Fact]
+    public void NumberDefaultsToF32()
+    {
+        var schema = GetSchema("[serializable] interface MyData { value: number }");
+
+        var numberField = Assert.IsType<NumberField>(Assert.Single(schema.Fields));
+        Assert.Equal(NumberType.F32, numberField.NumberType);
+        Assert.Equal(4, schema.FixedByteCount);
+    }
+
+    [Fact]
+    public void RangedNumberUsesExactBitWidth()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_range(0, 100)]
+                health: number;
+            }
+            """
+        );
+
+        // 101 states fit in 7 bits, versus the 32 an unannotated f32 would spend.
+        Assert.Equal(7, schema.HeaderBits);
+        Assert.Equal(1, schema.FixedByteCount);
+    }
+
+    [Fact]
+    public void QuantizeSetsGridSpacing()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_range(0, 1), number_step(0.01)]
+                opacity: number;
+            }
+            """
+        );
+
+        Assert.Equal(7, schema.HeaderBits);
+    }
+
+    [Fact]
+    public void BlobCostsNoBufferBytes()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                kind: "spawn";
+                target: Instance;
+            }
+            """
+        );
+
+        Assert.True(schema.HasBlobs);
+        Assert.True(schema.IsEmpty);
+    }
+
+    [Fact]
+    public void BlobCarriesInstanceClassForChecking()
+    {
+        var schema = GetSchema("[serializable] interface MyData { part: Part }");
+
+        var blob = Assert.IsType<BlobField>(Assert.Single(schema.Fields));
+        Assert.Equal("Instance", blob.TypeofCheck);
+        Assert.Equal("Part", blob.InstanceClass);
+    }
+
+    [Fact]
+    public void IgnoredPropertyIsAbsentFromSchema()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                id: number;
+                [ignore_serialization]
+                cached: string?;
+            }
+            """
+        );
+
+        Assert.Equal("id", Assert.Single(schema.Fields).Path);
+    }
+
+    [Fact]
+    public void NestedSerializableIsFlattenedIntoParentHeader()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface Inner { a: bool; b: bool }
+            [serializable] interface MyData { flag: bool; inner: Inner }
+            """
+        );
+
+        // One shared header rather than a partial byte per nesting level.
+        Assert.Equal(3, schema.HeaderBits);
+        Assert.Equal(1, schema.FixedByteCount);
+    }
+
+    [Fact]
+    public void LiteralUnionEncodesAsTagWithNoPayload()
+    {
+        var schema = GetSchema("[serializable] interface MyData { color: \"red\" | \"green\" | \"blue\" }");
+
+        var union = Assert.IsType<UnionField>(Assert.Single(schema.Fields));
+        Assert.Equal(UnionDiscrimination.LiteralValue, union.Discrimination);
+        Assert.Equal(2, union.TagBits);
+        Assert.Equal(0, schema.BodyBytes);
+    }
+
+    [Fact]
+    public void DiscriminatedUnionDropsTheDiscriminantField()
+    {
+        var schema = GetSchema(
+            """
+            interface IAction<Kind: string> { kind: Kind }
+            [serializable] interface LogOutAction: IAction<"LogOut">;
+            [serializable] interface ClickAction: IAction<"Click"> {
+                [number_type(NumberType.U8)]
+                x: number;
+            }
+
+            [serializable] interface MyData { action: LogOutAction | ClickAction }
+            """
+        );
+
+        var union = Assert.IsType<UnionField>(Assert.Single(schema.Fields));
+        Assert.Equal(UnionDiscrimination.Discriminant, union.Discrimination);
+        Assert.Equal("kind", union.DiscriminantName);
+        Assert.Equal(1, union.TagBits);
+
+        // The tag carries 'kind', so no variant re-encodes it.
+        Assert.Empty(union.Variants[0].Fields);
+        Assert.Equal("action.x", Assert.Single(union.Variants[1].Fields).Path);
+    }
+
+    [Fact]
+    public void TupleWritesNoLengthPrefix()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                pair: (number, number);
+            }
+            """
+        );
+
+        Assert.True(schema.IsFixedSize);
+        Assert.Equal(2, schema.FixedByteCount);
+    }
+
+    [Fact]
+    public void ArrayIsVariableSized()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                ids: number[];
+            }
+            """
+        );
+
+        Assert.False(schema.IsFixedSize);
+        var array = Assert.IsType<ArrayField>(Assert.Single(schema.Fields));
+        Assert.Equal(NumberType.U32, array.LengthType);
+    }
+
+    [Fact]
+    public void CFrameDefaultsToCompressed()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.F32)]
+                frame: CFrame;
+            }
+            """
+        );
+
+        var frame = Assert.IsType<CFrameField>(Assert.Single(schema.Fields));
+        Assert.Equal(CFrameEncoding.Compressed, frame.Encoding);
+
+        // 32 bits of rotation plus a 12-byte position.
+        Assert.Equal(32, schema.HeaderBits);
+        Assert.Equal(16, schema.FixedByteCount);
+    }
+
+    [Fact]
+    public void PreciseCFrameSpendsFourComponentsOnRotation()
+    {
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.F32), cframe_type(CFrameType.Precise)]
+                frame: CFrame;
+            }
+            """
+        );
+
+        Assert.Equal(128, schema.HeaderBits);
+        Assert.Equal(28, schema.FixedByteCount);
+    }
+    #endregion Layout
+}

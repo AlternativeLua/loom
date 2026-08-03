@@ -25,3 +25,29 @@ declare interface ResultStatic {
 }
 
 declare let Result: ResultStatic;
+
+## String-valued so the emitted kind is readable in a payload dump, and so the generated
+## type alias stays a literal union instead of collapsing to 'number' like a numeric enum.
+enum DeserializeErrorKind: string {
+    Truncated = "truncated",
+    InvalidTag = "invalid_tag",
+    InvalidLength = "invalid_length",
+    MissingBlob = "missing_blob",
+    InvalidBlob = "invalid_blob",
+}
+
+## 'buffer' is absent when every field of the type encodes to zero bytes, 'blobs' when the
+## value carries none — both are elided rather than sent as an empty buffer or table.
+interface Serialized {
+    buffer: buffer?;
+    blobs: unknown[]?;
+}
+
+interface DeserializeError {
+    kind: DeserializeErrorKind;
+    field: string?;
+    offset: number?;
+}
+
+declare fn serialize_binary<T>(value: T): Serialized;
+declare fn deserialize_binary<T>(serialized: Serialized): Result<T, DeserializeError>;

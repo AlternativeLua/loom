@@ -52,6 +52,7 @@ public sealed partial class TypeChecker
         var tree = _semanticModel.Tree;
         var type = BindType(tree, VisitTree(tree));
         _semanticModel.TypeSolver.SolveConstraints();
+        CheckSerializableInterfaces();
 
         var diagnostics = DiagnosticBag.Concat([_semanticModel.TypeSolver.Diagnostics, _diagnostics]);
         return new TypeCheckerResult(type, diagnostics);
@@ -279,12 +280,6 @@ public sealed partial class TypeChecker
         where T : Type
     {
         _semanticModel.TypeSolver.SetType(node, type);
-        if (!_semanticModel.EmitDebugDiagnostics || node is Tree or ExpressionStatement)
-            return type;
-
-        var simplified = TypeSimplifier.Simplify(type);
-        _diagnostics.Debug(node, $"Solved type '{(simplified is InterfaceType i ? $"{i.ObjectType} ({i.Name})" : simplified)}' for {node.GetType().Name}");
-
         return type;
     }
 }

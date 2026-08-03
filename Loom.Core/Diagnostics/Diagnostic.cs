@@ -12,7 +12,6 @@ public sealed record Diagnostic(LocationSpan Span, DiagnosticSeverity Severity, 
         DiagnosticSeverity.Error => new DiagnosticSeverityStyle(Colors.Red, Colors.Magenta, "error"),
         DiagnosticSeverity.Warn => new DiagnosticSeverityStyle(Colors.Yellow, Colors.Yellow, "warning"),
         DiagnosticSeverity.Info => new DiagnosticSeverityStyle(Colors.Blue, Colors.Cyan, "info"),
-        DiagnosticSeverity.Debug => new DiagnosticSeverityStyle(Colors.Magenta, Colors.Magenta, "debug"),
         _ => new DiagnosticSeverityStyle(Colors.White, Colors.Gray, "unknown")
     };
     private int StartLine => Span.Start.Line;
@@ -63,14 +62,7 @@ public sealed record Diagnostic(LocationSpan Span, DiagnosticSeverity Severity, 
             : $"expected operand of type '{suggestion.OperandType}', not '{operand}'";
     }
 
-    public override string ToString() =>
-        Severity == DiagnosticSeverity.Debug
-            ? FormatCompact()
-            : FormatFrame();
-
-    private string FormatCompact() =>
-        $"{_severityStyle.PrimaryColor}{Colors.Bold}{_severityStyle.Label}{Colors.Reset} "
-        + $"{Colors.Dim}[{Span}]{Colors.Reset} {Colors.Gray}{Message}{Colors.Reset}";
+    public override string ToString() => FormatFrame();
 
     private string FormatFrame()
     {

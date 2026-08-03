@@ -117,6 +117,13 @@ public static class InternalCodes
     public const string InvalidMetadataAttributeReference = "L392";
     public const string AttributeTargetNotAllowed = "L393";
     public const string AttributeUsageNotOnFunction = "L394";
+    public const string MissingRequiredAttribute = "L395";
+    public const string ConflictingAttributes = "L396";
+    public const string InvalidAttributeTargetType = "L397";
+    public const string NotSerializable = "L398";
+    public const string RecursiveSerializableType = "L399";
+    public const string AmbiguousSerializableUnion = "L39A";
+    public const string InvalidSerializationRange = "L39B";
 
     public const string SimplifiableCode = "L400";
 }
