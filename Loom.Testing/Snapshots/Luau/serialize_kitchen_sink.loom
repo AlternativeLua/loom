@@ -1,0 +1,31 @@
+interface IEvent<Kind: string> { kind: Kind }
+
+[serializable]
+interface Ping: IEvent<"Ping">;
+
+[serializable]
+interface Chat: IEvent<"Chat"> {
+    message: string;
+    [number_range(0, 100)]
+    volume: number;
+}
+
+[serializable]
+interface Inner {
+    flag: bool;
+    [number_type(NumberType.U8)]
+    code: number;
+}
+
+[serializable]
+interface KitchenSink {
+    tag: "sink";
+    inner: Inner;
+    label: string?;
+    [number_type(NumberType.I16)]
+    points: Vector3[];
+    payload: Ping | Chat;
+    owner: Part;
+    [cframe_type(CFrameType.Precise), number_type(NumberType.F32)]
+    frame: CFrame;
+}

@@ -176,18 +176,7 @@ public sealed partial class LuauGenerator
     {
         foreach (var serializationField in fields)
         {
-            // An element whose width is neither fixed nor a length-prefixed string cannot be measured,
-            // so the allocation would be wrong before a single byte was written. Header bits are worse:
-            // they sit at fixed positions in a header sized once for the whole schema, so every element
-            // would write over the same bits.
-            // A variant field with no measurable width would leave the allocation short before the
-            // variant's own writes began.
-            if (serializationField is UnionField union
-                && union.Variants.Any(v => v.Fields.Any(f => f.BodyBytes == null && f is not StringField)))
-                return serializationField;
-
-            if (serializationField is ArrayField { Element: var element }
-                && (element is { BodyBytes: null } and not StringField || element.HeaderBits > 0))
+            if (!IsMeasurable(serializationField))
                 return serializationField;
 
             if (FindUnsupportedField(serializationField.Children) is { } nested)
@@ -196,6 +185,31 @@ public sealed partial class LuauGenerator
 
         return null;
     }
+
+    /// <summary>
+    ///     Whether the generator can compute a field's width. Everything is allocated before a byte is
+    ///     written, so a field whose width cannot be stated - inline or by walking the value - would leave
+    ///     the buffer short and the writes running off the end.
+    /// </summary>
+    private static bool IsMeasurable(SerializationField serializationField) =>
+        serializationField switch
+        {
+            _ when serializationField.BodyBytes != null => true,
+            StringField => true,
+            // Sentinelled: either the components in full or nothing, and which is known before allocating.
+            DatatypeField or CFrameField => true,
+            // A loop body can only add an expression, so the element's own width has to be one - and
+            // header bits sit at fixed positions in a header sized once for the whole schema, so every
+            // element would otherwise write over the same bits.
+            ArrayField arrayField => IsInlineMeasurable(arrayField.Element) && arrayField.Element.HeaderBits == 0,
+            OptionalField optionalField => IsMeasurable(optionalField.Inner),
+            UnionField unionField => unionField.Variants.All(v => v.Fields.All(IsMeasurable)),
+            _ => false
+        };
+
+    /// <summary>Whether a width can be stated as a single expression, which is all a loop body can add.</summary>
+    private static bool IsInlineMeasurable(SerializationField serializationField) =>
+        serializationField.BodyBytes != null || serializationField is StringField;
 
     // Mirrors TypeChecker.Interfaces.cs's MergeOverloadedProperties: same-named function-typed table properties become one field typed as their intersection.
     private static List<TableTypeProperty> MergeOverloadedPropertyTypes(List<TableTypeProperty> properties)

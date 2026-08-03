@@ -311,6 +311,21 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     /// <summary>Accumulates a field's width into the size local, for shapes that need control flow.</summary>
     private void EmitMeasure(SerializationField serializationField, LuauExpression value, List<LuauStatement> statements)
     {
+        // A payload that is only sometimes written is only sometimes counted.
+        if (serializationField is OptionalField optionalField)
+        {
+            var innerStatements = new List<LuauStatement>();
+            if (InlineContribution(optionalField.Inner, value) is { } innerSize)
+                innerStatements.Add(AddToSize(innerSize));
+            else
+                EmitMeasure(optionalField.Inner, value, innerStatements);
+
+            if (innerStatements.Count > 0)
+                statements.Add(new IfStatement(IsPresent(value), new Chunk(innerStatements), [], null));
+
+            return;
+        }
+
         if (serializationField is UnionField unionField)
         {
             var tag = new Identifier(UnionTagLocal(unionField.Path));

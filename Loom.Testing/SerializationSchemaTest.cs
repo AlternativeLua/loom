@@ -567,6 +567,74 @@ public class SerializationSchemaTest
     }
     #endregion Unions
 
+    #region Measurability
+    [Theory]
+    [InlineData("name: string?", "size += 4 + #value.name")]
+    [InlineData("values: string[]", "size += 4 + #value.values[i]")]
+    [InlineData("values: number[]", "#value.values * 4")]
+    public void VariableWidthField_IsMeasuredBeforeAllocating(string property, string expected)
+    {
+        // Everything is allocated before a byte is written, so a width left out of the measure leaves
+        // the buffer short and the writes running off the end.
+        var luau = Utility.GetLuauAST($"[serializable] interface Probe {{ {property} }}", true).Render();
+        Assert.Contains(expected, luau);
+    }
+
+    [Theory]
+    [InlineData("values: bool[]")]
+    [InlineData("values: string[][]")]
+    [InlineData("value: bool[]?")]
+    public void UnmeasurableField_IsGuarded(string property)
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics($"[serializable] interface Probe {{ {property} }}", true);
+        Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.NotImplemented));
+    }
+
+    [Fact]
+    public void CombinedFieldKinds_ComposeIntoOneSchema()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                interface IEvent<Kind: string> { kind: Kind }
+                [serializable] interface Ping: IEvent<"Ping">;
+                [serializable] interface Chat: IEvent<"Chat"> {
+                    message: string;
+                    [number_range(0, 100)]
+                    volume: number;
+                }
+
+                [serializable] interface Inner {
+                    flag: bool;
+                    [number_type(NumberType.U8)]
+                    code: number;
+                }
+
+                [serializable] interface KitchenSink {
+                    tag: "sink";
+                    inner: Inner;
+                    label: string?;
+                    [number_type(NumberType.I16)]
+                    points: Vector3[];
+                    payload: Ping | Chat;
+                    owner: Part;
+                }
+                """,
+                true
+            )
+            .Render();
+
+        // Bits from the nested struct, the optional's presence, the union tag, and the selected
+        // variant's ranged number all share one header; every variable part is measured separately.
+        Assert.Contains("size += 4 + #value.label", luau);
+        Assert.Contains("size += 4 + #value.payload.message", luau);
+        Assert.Contains("#value.points * 6", luau);
+
+        // The literal-typed tag and the blob both stay off the wire.
+        Assert.Contains("tag = \"sink\"", luau);
+        Assert.Contains("table.insert(blobs, value.owner)", luau);
+    }
+    #endregion Measurability
+
     #endregion Calls
 
     #region Layout
