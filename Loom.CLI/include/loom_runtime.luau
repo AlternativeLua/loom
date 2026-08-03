@@ -85,12 +85,13 @@ const function start(): ()
 	end
 
 	heartbeatConn = game:GetService("RunService").Heartbeat:Connect(function(dt)
-		const count = #tasks
+		local count = #tasks
 		local i = 1
 		while i <= count do
 			local task = tasks[i]
 			if task.condition and not task.condition() then
 				remove(tasks, i)
+				count -= 1
 				continue
 			end
 
@@ -165,10 +166,6 @@ end
 -- kept components are then each at most 1/sqrt(2), so scaling by sqrt(2) uses the full range.
 const QUATERNION_SCALE = 2 ^ 0.5
 const QUATERNION_STEPS = 1023
-
-const function quantize_component(value: number): number
-	return
-end
 
 const function dequantize_component(value: number): number
 	return (value / QUATERNION_STEPS * 2 - 1) / QUATERNION_SCALE
