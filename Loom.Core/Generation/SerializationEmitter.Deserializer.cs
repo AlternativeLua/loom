@@ -268,7 +268,8 @@ internal sealed partial class SerializationEmitter
         statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, arrayField.LengthType, statements)));
         cursor.GoDynamic(statements);
 
-        if (arrayField.Element.BodyBytes is { } elementBytes)
+        // Zero-width elements consume no buffer, so there is nothing for a bounds check to prove.
+        if (arrayField.Element.BodyBytes is > 0 and { } elementBytes)
             statements.Add(
                 new IfStatement(
                     new BinaryOperator(

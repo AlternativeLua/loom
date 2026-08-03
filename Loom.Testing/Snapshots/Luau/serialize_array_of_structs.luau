@@ -10,7 +10,7 @@ type Bag = {
 }
 const function Bag_serialize_binary(value: Bag): Loom.Serialized
   const blobs = {}
-  const b = buffer_create(4 + #value.owners * 0)
+  const b = buffer_create(4)
   buffer_writeu32(b, 0, #value.owners)
   local offset = 4
   for i = 1, #value.owners do
@@ -31,9 +31,6 @@ const function Bag_deserialize_binary(serialized: Loom.Serialized): Loom.Result<
   local blob_index = 1
   const owners_count = buffer_readu32(b, 0)
   local offset = 4
-  if buffer_len(b) < offset + owners_count * 0 then
-    return { ok = false, error = { kind = "invalid_length", field = "owners" } }
-  end
   const owners = {}
   for i = 1, owners_count do
     const owners_element_blob = blobs[blob_index]
@@ -69,7 +66,7 @@ type Branch = {
   read leaves: { Leaf },
 }
 const function Branch_serialize_binary(value: Branch): Loom.Serialized
-  const b = buffer_create(4 + #value.leaves * 1)
+  const b = buffer_create(4 + #value.leaves)
   buffer_writeu32(b, 0, #value.leaves)
   local offset = 4
   for i = 1, #value.leaves do
@@ -86,7 +83,7 @@ const function Branch_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
   end
   const leaves_count = buffer_readu32(b, 0)
   local offset = 4
-  if buffer_len(b) < offset + leaves_count * 1 then
+  if buffer_len(b) < offset + leaves_count then
     return { ok = false, error = { kind = "invalid_length", field = "leaves" } }
   end
   const leaves = {}

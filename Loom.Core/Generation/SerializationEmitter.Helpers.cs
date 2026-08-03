@@ -99,8 +99,16 @@ internal sealed partial class SerializationEmitter
             _ => new NilLiteral()
         };
 
-    private static LuauExpression Add(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "+", right);
+    // Folded here rather than at each site: a zero-width element makes 'count * 0' fall out of the
+    // generic size and bounds expressions, and adding it would cost a multiply on every payload.
+    private static LuauExpression Add(LuauExpression left, LuauExpression right) =>
+        IsNumber(left, 0) ? right : IsNumber(right, 0) ? left : new BinaryOperator(left, "+", right);
     private static LuauExpression Subtract(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "-", right);
-    private static LuauExpression Multiply(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "*", right);
+    private static LuauExpression Multiply(LuauExpression left, LuauExpression right) =>
+        IsNumber(left, 0) || IsNumber(right, 0)
+            ? Zero
+            : IsNumber(left, 1) ? right : IsNumber(right, 1) ? left : new BinaryOperator(left, "*", right);
+
+    private static bool IsNumber(LuauExpression expression, double value) => expression is NumberLiteral literal && literal.Value == value;
     private static LuauExpression Divide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "/", right);
 }

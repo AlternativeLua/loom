@@ -388,7 +388,8 @@ public class SerializationSchemaTest
         Assert.Contains("offset += 1", luau);
 
         // The count is bounds-checked before the loop rather than running off the end element by element.
-        Assert.Contains("if buffer_len(b) < offset + values_count * 1 then", luau);
+        // A one-byte element folds away the scale, so the bound is just the count.
+        Assert.Contains("if buffer_len(b) < offset + values_count then", luau);
     }
     [Fact]
     public void PackedSentinel_SkipsComponentsOnMatch()

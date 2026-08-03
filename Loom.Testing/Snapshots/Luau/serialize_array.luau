@@ -9,7 +9,7 @@ type Scores = {
   read values: { number },
 }
 const function Scores_serialize_binary(value: Scores): Loom.Serialized
-  const b = buffer_create(4 + #value.values * 1)
+  const b = buffer_create(4 + #value.values)
   buffer_writeu32(b, 0, #value.values)
   local offset = 4
   for i = 1, #value.values do
@@ -26,7 +26,7 @@ const function Scores_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
   end
   const values_count = buffer_readu32(b, 0)
   local offset = 4
-  if buffer_len(b) < offset + values_count * 1 then
+  if buffer_len(b) < offset + values_count then
     return { ok = false, error = { kind = "invalid_length", field = "values" } }
   end
   const values = {}
