@@ -223,6 +223,7 @@ internal sealed partial class SerializationEmitter
                     Add(new NumberLiteral(arrayField.LengthType.ByteCount()), Multiply(Length(value), new NumberLiteral(elementBytes))),
                     ElementBitBlockSize(arrayField.Element.HeaderBits, Length(value))
                 ),
+            OptionalField { Inner.BodyBytes: 0 } => Zero,
             OptionalField { Inner.BodyBytes: { } innerBytes } optional =>
                 new IfExpression(IsPresent(value), new NumberLiteral(innerBytes), [], Zero),
             _ => null
@@ -540,7 +541,7 @@ internal sealed partial class SerializationEmitter
                 cursor.GoDynamic(body);
 
                 var present = new List<LuauStatement>();
-                EmitWrite(optionalField.Inner, new Identifier(ValueParameter), cursor, present);
+                EmitValueWrite(optionalField.Inner, value, cursor, present);
                 body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
 
                 return;

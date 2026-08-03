@@ -16,7 +16,7 @@ const function Waypoint_serialize_binary(value: Waypoint): Loom.Serialized
   if frame_value == CFrame.identity then
     frame_sentinel = 1
   end
-  const b = buffer_create(1 + if frame_sentinel == 0 then 16 else 0)
+  const b = buffer_create(1 + (if frame_sentinel == 0 then 16 else 0))
   buffer_writebits(b, 0, 1, frame_sentinel)
   local offset = 1
   if frame_sentinel == 0 then

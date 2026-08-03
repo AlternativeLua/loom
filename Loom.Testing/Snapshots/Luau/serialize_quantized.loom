@@ -1,0 +1,9 @@
+[serializable]
+interface Dials {
+    [number_range(0, 1), number_step(0.01)]
+    opacity: number;
+    [number_range(-100, 100), number_step(0.5)]
+    offset: number;
+    [number_range(0, 100)]
+    health: number;
+}

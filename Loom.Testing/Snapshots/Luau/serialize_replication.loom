@@ -1,0 +1,44 @@
+## Server-to-client replication for one player, sent every tick.
+
+enum Team { Neutral, Red, Blue }
+
+interface IEvent<Kind: string> { kind: Kind }
+
+[serializable]
+interface Damaged: IEvent<"Damaged"> {
+    [number_range(0, 1000)]
+    amount: number;
+    attacker: Player?;
+}
+
+[serializable]
+interface Respawned: IEvent<"Respawned"> {
+    [number_type(NumberType.I16)]
+    at: Vector3;
+}
+
+[serializable]
+interface Loadout {
+    [number_type(NumberType.U8)]
+    primary: number;
+    [number_type(NumberType.U8)]
+    secondary: number;
+}
+
+[serializable, packed]
+interface PlayerSnapshot {
+    [number_type(NumberType.U16)]
+    user_id: number;
+    display_name: string;
+    [number_range(0, 100)]
+    health: number;
+    alive: bool;
+    team: Team;
+    [number_type(NumberType.I16)]
+    velocity: Vector3;
+    [cframe_type(CFrameType.Compressed), number_type(NumberType.F32)]
+    aim: CFrame;
+    loadout: Loadout;
+    recent: (Damaged | Respawned)[];
+    character: Model?;
+}

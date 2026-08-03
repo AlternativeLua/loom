@@ -1,0 +1,7 @@
+[serializable]
+interface Payload {
+    origin: Part;
+    handler: fn(n: number): void;
+    extra: unknown;
+    target: Instance;
+}

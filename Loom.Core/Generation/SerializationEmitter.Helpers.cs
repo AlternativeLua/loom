@@ -139,7 +139,14 @@ internal sealed partial class SerializationEmitter
     // Folded here rather than at each site: a zero-width element makes 'count * 0' fall out of the
     // generic size and bounds expressions, and adding it would cost a multiply on every payload.
     private static LuauExpression Add(LuauExpression left, LuauExpression right) =>
-        IsNumber(left, 0) ? right : IsNumber(right, 0) ? left : new BinaryOperator(left, "+", right);
+        IsNumber(left, 0) ? right : IsNumber(right, 0) ? left : new BinaryOperator(Operand(left), "+", Operand(right));
+
+    /// <summary>
+    ///     Parenthesises an if-expression used as an operand. Luau binds it loosely enough that the else
+    ///     branch swallows whatever follows, so a sum of several would nest instead of adding up.
+    /// </summary>
+    private static LuauExpression Operand(LuauExpression expression) =>
+        expression is IfExpression ? new Parenthesized(expression) : expression;
     private static LuauExpression Subtract(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "-", right);
     private static LuauExpression Multiply(LuauExpression left, LuauExpression right) =>
         IsNumber(left, 0) || IsNumber(right, 0)

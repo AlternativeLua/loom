@@ -407,7 +407,7 @@ public class SerializationSchemaTest
 
         // The sentinel resolves before the allocation, because a match writes no components at all.
         Assert.Contains("if position_value == Vector3.zero then", luau);
-        Assert.Contains("buffer_create(1 + if position_sentinel == 0 then 6 else 0)", luau);
+        Assert.Contains("buffer_create(1 + (if position_sentinel == 0 then 6 else 0))", luau);
         Assert.Contains("if position_sentinel == 0 then", luau);
 
         // Reserved tags decode to nothing the type allows, so they report instead.
@@ -430,7 +430,7 @@ public class SerializationSchemaTest
 
         // Header bits are paid for unconditionally, so a sentinelled rotation moves to the body where it
         // rides behind the same conditional as the position - identity costs one byte, not five.
-        Assert.Contains("buffer_create(1 + if frame_sentinel == 0 then 16 else 0)", luau);
+        Assert.Contains("buffer_create(1 + (if frame_sentinel == 0 then 16 else 0))", luau);
         Assert.Contains("buffer_writeu32(b, offset, Loom.pack_quaternion(", luau);
     }
 
@@ -740,6 +740,47 @@ public class SerializationSchemaTest
         // Pairs go out and come back keyed, not positional.
         Assert.Contains("for entries_k_out, entries_v_out in value.entries do", luau);
         Assert.Contains("entries[entries_k] = ", luau);
+    }
+    [Fact]
+    public void ChainedConditionalSizes_AreParenthesised()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable, packed] interface Snapshot {
+                    name: string;
+                    [number_type(NumberType.I16)]
+                    velocity: Vector3;
+                    [cframe_type(CFrameType.Compressed), number_type(NumberType.F32)]
+                    aim: CFrame;
+                }
+                """,
+                true
+            )
+            .Render();
+
+        // Luau binds an if-expression loosely enough that its else branch swallows whatever follows, so
+        // a sum of several would nest rather than add up and the buffer would come out short.
+        Assert.Contains("+ (if velocity_sentinel == 0 then 6 else 0)", luau);
+        Assert.Contains("+ (if aim_sentinel == 0 then 16 else 0)", luau);
+    }
+
+    [Fact]
+    public void OptionalInsideVariantInsideArray_ReadsFromTheEntry()
+    {
+        var luau = Utility.GetLuauAST(
+                """
+                interface IEvent<Kind: string> { kind: Kind }
+                [serializable] interface Hit: IEvent<"Hit"> { attacker: Player? }
+                [serializable] interface Log { events: Hit[] }
+                """,
+                true
+            )
+            .Render();
+
+        // The optional's payload has to come from the loop entry; through the value parameter it would
+        // index a property literally named 'events[]'.
+        Assert.Contains("table.insert(blobs, events_item.attacker)", luau);
+        Assert.DoesNotContain("value[\"events[]\"]", luau);
     }
     #endregion Measurability
 

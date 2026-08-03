@@ -12,7 +12,7 @@ type Entity = {
   read target: number?,
 }
 const function Entity_serialize_binary(value: Entity): Loom.Serialized
-  const b = buffer_create(2 + if value.target ~= nil then 2 else 0)
+  const b = buffer_create(2 + (if value.target ~= nil then 2 else 0))
   buffer_writeu8(b, 1, value.id)
   buffer_writebits(b, 0, 1, if value.target ~= nil then 1 else 0)
   local offset = 2

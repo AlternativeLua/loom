@@ -1,0 +1,11 @@
+[serializable]
+interface Limits {
+    [number_type(NumberType.I8)] i8: number;
+    [number_type(NumberType.U8)] u8: number;
+    [number_type(NumberType.I16)] i16: number;
+    [number_type(NumberType.U16)] u16: number;
+    [number_type(NumberType.I32)] i32: number;
+    [number_type(NumberType.U32)] u32: number;
+    [number_type(NumberType.F32)] f32: number;
+    [number_type(NumberType.F64)] f64: number;
+}
