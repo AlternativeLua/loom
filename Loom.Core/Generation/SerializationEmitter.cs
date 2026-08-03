@@ -22,6 +22,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private const string BufferLocal = "b";
     private const string BlobsLocal = "blobs";
     private const string BlobIndexLocal = "blob_index";
+    private const string OffsetLocal = "offset";
 
     public static string SerializeName(string interfaceName) => $"{interfaceName}_serialize_binary";
     public static string DeserializeName(string interfaceName) => $"{interfaceName}_deserialize_binary";
@@ -97,7 +98,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             body.Add(new ConstVariable(BlobsLocal, null, Table.Empty));
 
         if (!schema.IsEmpty)
-            body.Add(new ConstVariable(BufferLocal, null, BufferCall("create", [new NumberLiteral(schema.FixedByteCount!.Value)])));
+            body.Add(new ConstVariable(BufferLocal, null, BufferCall("create", [SizeExpression()])));
 
         // Walked even for a zero-byte schema: blob fields still have to be appended, and a schema is
         // only empty when nothing writes bytes or bits, so the absent buffer local is never referenced.
@@ -114,6 +115,25 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             new Chunk(body)
         );
     }
+
+    /// <summary>
+    ///     Total width. A fixed schema folds to a literal; variable-width fields add their runtime
+    ///     contribution, so no separate measuring traversal is needed for widths expressible inline.
+    /// </summary>
+    private LuauExpression SizeExpression()
+    {
+        if (schema.FixedByteCount is { } fixedByteCount)
+            return new NumberLiteral(fixedByteCount);
+
+        var constant = schema.HeaderBytes + schema.Fields.Sum(f => f.BodyBytes ?? 0);
+        LuauExpression size = new NumberLiteral(constant);
+        foreach (var stringField in schema.Fields.OfType<StringField>())
+            size = Add(size, Add(new NumberLiteral(stringField.LengthType.ByteCount()), Length(Access(new Identifier(ValueParameter), stringField.Path))));
+
+        return size;
+    }
+
+    private static LuauExpression Length(LuauExpression value) => new UnaryOperator("#", value);
 
     /// <summary>
     ///     An all-zero-width type sends no buffer, and a type with no blob fields sends no blobs array.
@@ -145,7 +165,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 return;
 
             case NumberField numberField:
-                body.Add(new ExpressionStatement(WriteNumber(cursor, numberField.NumberType, value)));
+                body.Add(new ExpressionStatement(WriteNumber(cursor, numberField.NumberType, value, body)));
                 return;
 
             case RangedNumberField ranged:
@@ -170,9 +190,18 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 body.Add(new ExpressionStatement(LuauFactory.TableCall("insert", [new Identifier(BlobsLocal), value])));
                 return;
 
+            case StringField stringField:
+            {
+                var length = Length(value);
+                body.Add(new ExpressionStatement(WriteNumber(cursor, stringField.LengthType, length, body)));
+                body.Add(new ExpressionStatement(BufferCall("writestring", [new Identifier(BufferLocal), cursor.Position, value])));
+                cursor.AdvanceBy(body, length);
+                return;
+            }
+
             case DatatypeField datatypeField:
                 foreach (var component in datatypeField.Datatype.Components)
-                    body.Add(new ExpressionStatement(WriteNumber(cursor, datatypeField.NumberType, Access(value, component))));
+                    body.Add(new ExpressionStatement(WriteNumber(cursor, datatypeField.NumberType, Access(value, component), body)));
 
                 return;
 
@@ -191,7 +220,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private void EmitCFrameWrite(CFrameField cframeField, LuauExpression value, Cursor cursor, List<LuauStatement> body)
     {
         foreach (var component in CFramePositionComponents)
-            body.Add(new ExpressionStatement(WriteNumber(cursor, cframeField.NumberType, Access(value, component))));
+            body.Add(new ExpressionStatement(WriteNumber(cursor, cframeField.NumberType, Access(value, component), body)));
 
         var quaternion = LuauFactory.RuntimeLibraryCall(["cframe_to_quaternion"], [value]);
         if (cframeField.Encoding == CFrameEncoding.Compressed)
@@ -202,19 +231,15 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
         body.Add(new MultiConstVariable(QuaternionLocals, quaternion));
         foreach (var local in QuaternionLocals)
-            body.Add(new ExpressionStatement(WriteNumber(cursor, cframeField.NumberType, new Identifier(local))));
+            body.Add(new ExpressionStatement(WriteNumber(cursor, cframeField.NumberType, new Identifier(local), body)));
     }
 
     private static LuauExpression PackQuaternion(LuauExpression quaternion) => LuauFactory.RuntimeLibraryCall(["pack_quaternion"], [quaternion]);
 
-    private LuauExpression WriteNumber(Cursor cursor, NumberType numberType, LuauExpression value)
+    private LuauExpression WriteNumber(Cursor cursor, NumberType numberType, LuauExpression value, List<LuauStatement> body)
     {
-        var call = BufferCall(
-            "write" + numberType.BufferSuffix(),
-            [new Identifier(BufferLocal), new NumberLiteral(cursor.ByteOffset), value]
-        );
-
-        cursor.ByteOffset += numberType.ByteCount();
+        var call = BufferCall("write" + numberType.BufferSuffix(), [new Identifier(BufferLocal), cursor.Position, value]);
+        cursor.Advance(body, numberType.ByteCount());
         return call;
     }
 
@@ -294,7 +319,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private IfStatement EmitTruncationGuard()
     {
         var missing = new BinaryOperator(new Identifier(BufferLocal), "==", new NilLiteral());
-        var tooShort = new BinaryOperator(BufferCall("len", [new Identifier(BufferLocal)]), "<", new NumberLiteral(schema.FixedByteCount!.Value));
+        var tooShort = new BinaryOperator(BufferCall("len", [new Identifier(BufferLocal)]), "<", new NumberLiteral(MinimumByteCount()));
         return new IfStatement(
             new BinaryOperator(missing, "or", tooShort),
             new Chunk([new Return(BuildErrorTable("truncated", null, 0))]),
@@ -302,6 +327,16 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             null
         );
     }
+
+    /// <summary>
+    ///     Smallest buffer a valid payload can occupy - every fixed field at full width plus, for a
+    ///     variable field, its unavoidable part. A string contributes its length prefix, since an empty
+    ///     string still writes one. Enough to cover every read up to the first variable segment, which
+    ///     then bounds-checks itself.
+    /// </summary>
+    private int MinimumByteCount() =>
+        schema.HeaderBytes
+        + schema.Fields.Sum(f => f.BodyBytes ?? (f is StringField stringField ? stringField.LengthType.ByteCount() : 0));
 
     private static Table BuildErrorTable(string kind, string? fieldPath, int? offset)
     {
@@ -336,7 +371,7 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                 return [new PropertyTableInitializer(name, new BinaryOperator(ReadBits(cursor, 1), "==", One))];
 
             case NumberField numberField:
-                return [new PropertyTableInitializer(name, ReadNumber(cursor, numberField.NumberType))];
+                return [new PropertyTableInitializer(name, ReadNumber(cursor, numberField.NumberType, statements))];
 
             case RangedNumberField ranged:
                 return
@@ -350,6 +385,9 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
             case BlobField blobField:
                 return [new PropertyTableInitializer(name, EmitBlobRead(blobField, statements))];
 
+            case StringField stringField:
+                return [new PropertyTableInitializer(name, EmitStringRead(stringField, cursor, statements))];
+
             case DatatypeField datatypeField:
                 return
                 [
@@ -357,13 +395,13 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
                         name,
                         new Call(
                             new Identifier(datatypeField.Datatype.Constructor),
-                            datatypeField.Datatype.Components.Select(_ => ReadNumber(cursor, datatypeField.NumberType)).ToList()
+                            datatypeField.Datatype.Components.Select(_ => ReadNumber(cursor, datatypeField.NumberType, statements)).ToList()
                         )
                     )
                 ];
 
             case CFrameField cframeField:
-                return [new PropertyTableInitializer(name, EmitCFrameRead(cframeField, cursor))];
+                return [new PropertyTableInitializer(name, EmitCFrameRead(cframeField, cursor, statements))];
 
             case TupleField tupleField:
                 return tupleField.Elements.SelectMany(element => EmitRead(element, cursor, statements)).ToList();
@@ -425,9 +463,40 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         return new Identifier(local);
     }
 
-    private LuauExpression EmitCFrameRead(CFrameField cframeField, Cursor cursor)
+    /// <summary>
+    ///     Reads a length-prefixed string, checking the prefix against what the buffer actually holds so a
+    ///     hostile length reports rather than throwing out of the read.
+    /// </summary>
+    private LuauExpression EmitStringRead(StringField stringField, Cursor cursor, List<LuauStatement> statements)
     {
-        var arguments = CFramePositionComponents.ConvertAll(_ => ReadNumber(cursor, cframeField.NumberType));
+        var leaf = LeafName(stringField.Path);
+        var lengthLocal = leaf + "_length";
+        statements.Add(new ConstVariable(lengthLocal, null, ReadNumber(cursor, stringField.LengthType, statements)));
+        cursor.GoDynamic(statements);
+
+        statements.Add(
+            new IfStatement(
+                new BinaryOperator(
+                    BufferCall("len", [new Identifier(BufferLocal)]),
+                    "<",
+                    Add(new Identifier(OffsetLocal), new Identifier(lengthLocal))
+                ),
+                new Chunk([new Return(BuildErrorTable("invalid_length", stringField.Path, null))]),
+                [],
+                null
+            )
+        );
+
+        var read = BufferCall("readstring", [new Identifier(BufferLocal), cursor.Position, new Identifier(lengthLocal)]);
+        statements.Add(new ConstVariable(leaf, null, read));
+        cursor.AdvanceBy(statements, new Identifier(lengthLocal));
+
+        return new Identifier(leaf);
+    }
+
+    private LuauExpression EmitCFrameRead(CFrameField cframeField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var arguments = CFramePositionComponents.ConvertAll(_ => ReadNumber(cursor, cframeField.NumberType, statements));
         if (cframeField.Encoding == CFrameEncoding.Compressed)
         {
             arguments.Add(LuauFactory.RuntimeLibraryCall(["unpack_quaternion"], [ReadBits(cursor, CFrameEncodingExtensions.CompressedRotationBits)]));
@@ -435,15 +504,15 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
         }
 
         for (var index = 0; index < 4; index++)
-            arguments.Add(ReadNumber(cursor, cframeField.NumberType));
+            arguments.Add(ReadNumber(cursor, cframeField.NumberType, statements));
 
         return new Call(new Identifier("CFrame.new"), arguments);
     }
 
-    private LuauExpression ReadNumber(Cursor cursor, NumberType numberType)
+    private LuauExpression ReadNumber(Cursor cursor, NumberType numberType, List<LuauStatement> statements)
     {
-        var call = BufferCall("read" + numberType.BufferSuffix(), [new Identifier(BufferLocal), new NumberLiteral(cursor.ByteOffset)]);
-        cursor.ByteOffset += numberType.ByteCount();
+        var call = BufferCall("read" + numberType.BufferSuffix(), [new Identifier(BufferLocal), cursor.Position]);
+        cursor.Advance(statements, numberType.ByteCount());
         return call;
     }
 
@@ -462,10 +531,44 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     private static readonly NumberLiteral One = new(1);
 
     /// <summary>Running header-bit and body-byte positions, both compile-time constants.</summary>
+    /// <summary>
+    ///     Tracks where the next write lands. Offsets stay compile-time constants until a value-dependent
+    ///     field is reached; from there a runtime local carries the position, seeded with the constant
+    ///     the cursor had already accumulated. A fully fixed schema never leaves the constant path.
+    /// </summary>
     private sealed class Cursor(int startingByteOffset)
     {
         public int BitOffset;
         public int ByteOffset = startingByteOffset;
+        public bool IsDynamic;
+
+        public LuauExpression Position => IsDynamic ? new Identifier(OffsetLocal) : new NumberLiteral(ByteOffset);
+
+        public void Advance(List<LuauStatement> body, int bytes)
+        {
+            if (!IsDynamic)
+            {
+                ByteOffset += bytes;
+                return;
+            }
+
+            body.Add(new ExpressionStatement(new BinaryOperator(new Identifier(OffsetLocal), "+=", new NumberLiteral(bytes))));
+        }
+
+        public void AdvanceBy(List<LuauStatement> body, LuauExpression bytes)
+        {
+            GoDynamic(body);
+            body.Add(new ExpressionStatement(new BinaryOperator(new Identifier(OffsetLocal), "+=", bytes)));
+        }
+
+        public void GoDynamic(List<LuauStatement> body)
+        {
+            if (IsDynamic)
+                return;
+
+            body.Add(new LocalVariable(OffsetLocal, null, new NumberLiteral(ByteOffset)));
+            IsDynamic = true;
+        }
     }
 
     private static LuauExpression Access(LuauExpression source, string path) => new PropertyAccess(source, [..path.Split('.')]);
