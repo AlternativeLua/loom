@@ -21,7 +21,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
 
     public bool IsInvocationOnlyMember(string memberName) =>
         memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute"
-            or "serialize_binary" or "deserialize_binary" or "serializer";
+            or "serialize_binary" or "deserialize_binary" or "serializer" or "serializer_of";
 
     public bool TryInvocation(
         MacroContext context,
@@ -73,6 +73,24 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
             {
                 var matchedAttribute = FindMatchedAttribute(context, typeArguments, name, out var hadError);
                 expression = new BooleanLiteral(!hadError && matchedAttribute != null);
+                return true;
+            }
+            case "serializer_of":
+            {
+                // The whole table, not one codec: inside a generic wrapper the key is a runtime value,
+                // so the choice cannot be made statically the way serializer::<T>() does.
+                if (typeArguments?.ArgumentsList.FirstOrDefault() is not { } mapArgument
+                    || context.SemanticModel.GetType(mapArgument) is not Loom.Core.TypeChecking.Types.InterfaceType mapType)
+                {
+                    context.Diagnostics.Error(context.Node, InternalCodes.InvalidTypeArguments, "'serializer_of' requires a mapping interface as its first type argument.");
+                    expression = new NilLiteral();
+                    return true;
+                }
+
+                if (!context.SemanticModel.SerializerMaps.Contains(mapType))
+                    context.SemanticModel.SerializerMaps.Add(mapType);
+
+                expression = new Luau.AST.ElementAccess(new Identifier(SerializationEmitter.SerializerMapName(mapType.Name)), call.Arguments[0]);
                 return true;
             }
             case "serialize_binary":

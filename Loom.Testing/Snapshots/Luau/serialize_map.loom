@@ -1,0 +1,14 @@
+enum Message { ShootGun }
+
+[serializable]
+interface ShootGunPacket {
+    [number_type(NumberType.U8)]
+    velocity: number;
+}
+
+declare interface MessageData {
+    [Message["ShootGun"]]: ShootGunPacket;
+}
+
+fn create_message_serializer<K: Message>(message: K): Serializer<MessageData[K]>
+    -> serializer_of::<MessageData, K>(message)

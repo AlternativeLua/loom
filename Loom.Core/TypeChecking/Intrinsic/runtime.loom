@@ -59,3 +59,8 @@ interface Serializer<T> {
 declare fn serialize_binary<T>(value: T): Serialized;
 declare fn deserialize_binary<T>(serialized: Serialized): Result<T, DeserializeError>;
 declare fn serializer<T>(): Serializer<T>;
+
+## Picks a codec out of a key-to-type mapping interface using a runtime key. This is the generic
+## case serializer::<T>() cannot express, since inside a wrapper's body the type is not known - only
+## the key value is. The result stays exactly typed as Serializer<T[K]>, so no cast is needed.
+declare fn serializer_of<T, K>(key: K): Serializer<T[K]>;

@@ -58,8 +58,12 @@ public sealed partial class LuauGenerator
         var moduleImports = _moduleGenerator.GenerateImports();
         var luauTree = VisitTree(_semanticModel.Tree);
 
-        // Hoisted after the walk, because which buffer members a file needs is only known once every
-        // serializer in it has been emitted.
+        // Both are hoisted after the walk, because what a file needs is only known once every
+        // serializer and serializer_map call in it has been expanded.
+        foreach (var mapType in _semanticModel.SerializerMaps)
+            if (SerializationEmitter.EmitSerializerMap(mapType, ResolveSerializerName) is { } map)
+                luauTree.Statements.Insert(0, map);
+
         if (_bufferMembers.Count > 0)
             luauTree.Statements.InsertRange(0, SerializationEmitter.DeclareBufferConstants(_bufferMembers));
 

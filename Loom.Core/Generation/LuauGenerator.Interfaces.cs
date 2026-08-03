@@ -166,6 +166,13 @@ public sealed partial class LuauGenerator
         return false;
     }
 
+    /// <summary>Name of the codec emitted for <paramref name="interfaceType" />, or null when it has none.</summary>
+    private string? ResolveSerializerName(Loom.Core.TypeChecking.Types.InterfaceType interfaceType)
+    {
+        var symbol = _semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
+        return symbol == null ? null : SerializationEmitter.SerializerName(symbol.Name);
+    }
+
     private static SerializationField? FindUnsupportedField(IEnumerable<SerializationField> fields)
     {
         foreach (var serializationField in fields)

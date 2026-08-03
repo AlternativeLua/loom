@@ -23,6 +23,12 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     /// </summary>
     public Dictionary<InterfaceSymbol, SerializationSchema> SerializationSchemas { get; } = [];
 
+    /// <summary>
+    ///     Mapping interfaces a <c>serializer_map</c> call asked for, in first-use order. Hoisted into
+    ///     one table per interface by the generator rather than rebuilt at each call site.
+    /// </summary>
+    public List<InterfaceType> SerializerMaps { get; } = [];
+
     private Dictionary<string, List<ExportBinding>> ExportsByName { get; } = [];
 
     public List<ImportBinding> ImportBindings { get; } = [];

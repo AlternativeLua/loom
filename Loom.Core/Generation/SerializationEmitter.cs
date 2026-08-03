@@ -1,4 +1,5 @@
 using Loom.Core.TypeChecking.Serialization;
+using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
 
@@ -25,7 +26,35 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
     public static string SerializeName(string interfaceName) => $"{interfaceName}_serialize_binary";
     public static string DeserializeName(string interfaceName) => $"{interfaceName}_deserialize_binary";
     public static string SerializerName(string interfaceName) => $"{interfaceName}_serializer";
+    public static string SerializerMapName(string interfaceName) => $"{interfaceName}_serializer_map";
     public static string BufferConstantName(string member) => $"buffer_{member}";
+
+    /// <summary>
+    ///     Emits one table per mapping interface, keyed exactly as the interface is. Properties key by
+    ///     name; an indexer whose key is a literal type - the shape an enum-keyed map takes - keys by
+    ///     that literal, so <c>[Message["ShootGun"]]: ShootGunPacket</c> lands under the member's value.
+    /// </summary>
+    public static ConstVariable? EmitSerializerMap(
+        InterfaceType mapType,
+        Func<InterfaceType, string?> resolveSerializerName)
+    {
+        var initializers = new List<TableInitializer>();
+        foreach (var property in mapType.Properties)
+        {
+            if (property.ValueType is not InterfaceType valueType || resolveSerializerName(valueType) is not { } serializerName)
+                continue;
+
+            initializers.Add(new PropertyTableInitializer(property.Name, new Identifier(serializerName)));
+        }
+
+        if (mapType.Indexer is { KeyType: LiteralType key, ValueType: InterfaceType indexedValue }
+            && resolveSerializerName(indexedValue) is { } indexedSerializer)
+            initializers.Add(new ComputedPropertyTableInitializer(ToLiteral(key.Value), new Identifier(indexedSerializer)));
+
+        return initializers.Count == 0
+            ? null
+            : new ConstVariable(SerializerMapName(mapType.Name), null, new Table(initializers));
+    }
 
     /// <summary>
     ///     Bundles the pair into a value so it can be passed around, stored, or picked at runtime. The
