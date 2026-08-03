@@ -49,5 +49,13 @@ interface DeserializeError {
     offset: number?;
 }
 
+## A serializable type's codec as a value, so it can be stored, passed to a generic network
+## wrapper, or selected at runtime. Every [serializable] interface emits one.
+interface Serializer<T> {
+    serialize: fn(value: T): Serialized;
+    deserialize: fn(serialized: Serialized): Result<T, DeserializeError>;
+}
+
 declare fn serialize_binary<T>(value: T): Serialized;
 declare fn deserialize_binary<T>(serialized: Serialized): Result<T, DeserializeError>;
+declare fn serializer<T>(): Serializer<T>;

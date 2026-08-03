@@ -24,3 +24,4 @@ const function Marker_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
   end
   return { ok = true, value = { kind = "spawn", target = target_blob } }
 end
+const Marker_serializer: Loom.Serializer<Marker> = { serialize = Marker_serialize_binary, deserialize = Marker_deserialize_binary }

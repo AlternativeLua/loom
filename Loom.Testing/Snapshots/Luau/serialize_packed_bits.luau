@@ -23,3 +23,4 @@ const function Flags_deserialize_binary(serialized: Loom.Serialized): Loom.Resul
   end
   return { ok = true, value = { kind = "spawn", alive = buffer_readbits(b, 0, 1) == 1, ready = buffer_readbits(b, 1, 1) == 1, health = 0 + buffer_readbits(b, 2, 7) * 1 } }
 end
+const Flags_serializer: Loom.Serializer<Flags> = { serialize = Flags_serialize_binary, deserialize = Flags_deserialize_binary }

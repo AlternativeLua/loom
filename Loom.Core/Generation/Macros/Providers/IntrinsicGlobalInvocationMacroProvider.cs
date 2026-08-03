@@ -21,7 +21,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
 
     public bool IsInvocationOnlyMember(string memberName) =>
         memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute"
-            or "serialize_binary" or "deserialize_binary";
+            or "serialize_binary" or "deserialize_binary" or "serializer";
 
     public bool TryInvocation(
         MacroContext context,
@@ -77,6 +77,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
             }
             case "serialize_binary":
             case "deserialize_binary":
+            case "serializer":
             {
                 // serialize_binary infers its interface from the argument's static type; deserialize_binary
                 // has no value to infer from, so it takes the interface as a type argument.
@@ -89,6 +90,13 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                 if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName))
                 {
                     expression = new NilLiteral();
+                    return true;
+                }
+
+                // 'serializer' hands back the codec value itself rather than calling through it.
+                if (name == "serializer")
+                {
+                    expression = new Identifier(SerializationEmitter.SerializerName(interfaceName));
                     return true;
                 }
 

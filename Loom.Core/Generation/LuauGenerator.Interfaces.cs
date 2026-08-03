@@ -137,6 +137,7 @@ public sealed partial class LuauGenerator
         var emitter = new SerializationEmitter(schema, _bufferMembers);
         _state.Postreq(emitter.EmitSerializer());
         _state.Postreq(emitter.EmitDeserializer());
+        _state.Postreq(emitter.EmitSerializerObject());
     }
 
     /// <summary>

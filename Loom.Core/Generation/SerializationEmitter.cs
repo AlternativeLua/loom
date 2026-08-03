@@ -24,7 +24,25 @@ internal sealed class SerializationEmitter(SerializationSchema schema, List<stri
 
     public static string SerializeName(string interfaceName) => $"{interfaceName}_serialize_binary";
     public static string DeserializeName(string interfaceName) => $"{interfaceName}_deserialize_binary";
+    public static string SerializerName(string interfaceName) => $"{interfaceName}_serializer";
     public static string BufferConstantName(string member) => $"buffer_{member}";
+
+    /// <summary>
+    ///     Bundles the pair into a value so it can be passed around, stored, or picked at runtime. The
+    ///     named functions stay, so a call in the declaring file still goes direct - only crossing a
+    ///     module boundary or holding the codec as a value pays the extra index.
+    /// </summary>
+    public ConstVariable EmitSerializerObject() =>
+        new(
+            SerializerName(schema.Interface.Name),
+            LuauFactory.QualifyRuntimeType(new TypeName("Serializer", [new TypeName(schema.Interface.Name)])),
+            new Table(
+                [
+                    new PropertyTableInitializer("serialize", new Identifier(SerializeName(schema.Interface.Name))),
+                    new PropertyTableInitializer("deserialize", new Identifier(DeserializeName(schema.Interface.Name)))
+                ]
+            )
+        );
 
     /// <summary>Declares the hoisted constants for the members used across a file, in first-use order.</summary>
     public static List<LuauStatement> DeclareBufferConstants(IEnumerable<string> members) =>

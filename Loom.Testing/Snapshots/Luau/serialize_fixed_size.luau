@@ -24,3 +24,4 @@ const function MyData_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
   end
   return { ok = true, value = { id = buffer_readu8(b, 0), position = Vector3.new(buffer_readi16(b, 1), buffer_readi16(b, 3), buffer_readi16(b, 5)) } }
 end
+const MyData_serializer: Loom.Serializer<MyData> = { serialize = MyData_serialize_binary, deserialize = MyData_deserialize_binary }

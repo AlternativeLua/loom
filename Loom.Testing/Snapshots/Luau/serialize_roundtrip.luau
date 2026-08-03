@@ -18,6 +18,7 @@ const function MyData_deserialize_binary(serialized: Loom.Serialized): Loom.Resu
   end
   return { ok = true, value = { id = buffer_readu8(b, 0) } }
 end
+const MyData_serializer: Loom.Serializer<MyData> = { serialize = MyData_serialize_binary, deserialize = MyData_deserialize_binary }
 const data = { id = 3 }
 const payload = MyData_serialize_binary(data)
 const restored = MyData_deserialize_binary(payload)

@@ -33,7 +33,8 @@ public sealed partial class LuauGenerator
         "ServiceInstance",
         "Serialized",
         "DeserializeError",
-        "DeserializeErrorKind"
+        "DeserializeErrorKind",
+        "Serializer"
     ];
 
     public override LuauNode VisitTypeName(TypeName typeName)

@@ -29,6 +29,10 @@ export type Result<T, Error> = ResultOk<T> | ResultError<Error>
 export type DeserializeErrorKind = "truncated" | "invalid_tag" | "invalid_length" | "missing_blob" | "invalid_blob"
 export type Serialized = { buffer: buffer?, blobs: { unknown }? }
 export type DeserializeError = { kind: DeserializeErrorKind, field: string?, offset: number? }
+export type Serializer<T> = {
+	serialize: (value: T) -> Serialized,
+	deserialize: (serialized: Serialized) -> Result<T, DeserializeError>,
+}
 export type Event<T... = ...any> = Event.Event<T...>
 export type UserEvent<T... = ...any> = Event.UserEvent<T...>
 export type EventConnection = Event.Connection
