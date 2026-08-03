@@ -203,6 +203,7 @@ public sealed partial class LuauGenerator
             // needs walking gets a nested loop, so the only requirement left is that it be measurable.
             ArrayField arrayField => IsMeasurable(arrayField.Element),
             OptionalField optionalField => IsMeasurable(optionalField.Inner),
+            MapField mapField => IsMeasurable(mapField.Key) && IsMeasurable(mapField.Value),
             // A flattened nested struct, or a real tuple: measurable exactly when its parts are.
             TupleField tupleField => tupleField.Elements.All(IsMeasurable),
             UnionField unionField => unionField.Variants.All(v => v.Fields.All(IsMeasurable)),

@@ -80,8 +80,8 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
                 diagnostics.Error(
                     interfaceSymbol.Declaration,
                     InternalCodes.NotSerializable,
-                    $"Serializable interface '{interfaceSymbol.Name}' has an indexer, whose contents have no place in a fixed schema.",
-                    "a schema is built from named properties; an arbitrary key-value map is not yet encodable."
+                    $"Serializable interface '{interfaceSymbol.Name}' is itself an indexer, so it has no properties to serialize.",
+                    $"hold the map in a property instead - 'interface {interfaceSymbol.Name} {{ entries: Record<K, V> }}' encodes as pairs."
                 );
 
                 return false;
@@ -158,6 +158,11 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
             case Types.UnionType union:
                 return BuildUnionField(path, type, union, options, isPacked, reportNode);
 
+            // A generic instantiation carries its arguments unsubstituted; expanding gives the shape the
+            // rest of this switch can actually read - Record<K, V> is an indexer once expanded.
+            case Types.InstantiatedType instantiated:
+                return TryBuildField(path, instantiated.Expand(), options, isPacked, reportNode);
+
             case Types.InterfaceType interfaceType:
                 return BuildInterfaceField(path, interfaceType, options, isPacked, reportNode);
 
@@ -230,6 +235,11 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         if (RobloxDatatype.TryGet(interfaceType.Name, out var datatype))
             return new DatatypeField(path, interfaceType, datatype, numberType, isPacked && datatype.Sentinels.Count > 0);
 
+        // An indexer is a map: the interface has no named properties to flatten, only a key type and a
+        // value type, so it encodes as pairs rather than as a struct.
+        if (interfaceType.Indexer is { } indexer)
+            return BuildMapField(path, interfaceType, indexer, options, isPacked, reportNode);
+
         // Instances have no buffer representation, but their class is checkable on the way back.
         if (IsInstanceType(interfaceType))
             return new BlobField(path, interfaceType, "Instance", interfaceType.Name == "Instance" ? null : interfaceType.Name);
@@ -256,6 +266,25 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         // Flattened rather than nested: the whole type shares one header, so a nested struct's bools and
         // presence bits pack alongside the parent's instead of paying for a header of their own.
         return new TupleField(path, interfaceType, nestedFields);
+    }
+
+    private SerializationField? BuildMapField(
+        string path,
+        Types.InterfaceType interfaceType,
+        Types.ObjectIndexer indexer,
+        FieldOptions options,
+        bool isPacked,
+        Node reportNode)
+    {
+        // Neither half takes sentinels: those resolve once per field before the allocation, which cannot
+        // express a different choice per entry.
+        if (TryBuildField($"{path}[k]", indexer.KeyType, options, false, reportNode) is not { } key)
+            return null;
+
+        if (TryBuildField($"{path}[v]", indexer.ValueType, options, false, reportNode) is not { } value)
+            return null;
+
+        return new MapField(path, interfaceType, options.LengthType ?? DefaultLengthType, key, value);
     }
 
     private SerializationField? BuildUnionField(string path, Type type, Types.UnionType union, FieldOptions options, bool isPacked, Node reportNode)

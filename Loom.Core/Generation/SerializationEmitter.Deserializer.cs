@@ -98,6 +98,7 @@ internal sealed partial class SerializationEmitter
         {
             StringField stringField => stringField.LengthType.ByteCount(),
             ArrayField arrayField => arrayField.LengthType.ByteCount(),
+            MapField mapField => mapField.LengthType.ByteCount(),
             _ => 0
         };
 
@@ -156,6 +157,9 @@ internal sealed partial class SerializationEmitter
 
             case ArrayField arrayField:
                 return [new PropertyTableInitializer(name, EmitArrayRead(arrayField, cursor, statements))];
+
+            case MapField mapField:
+                return [new PropertyTableInitializer(name, EmitMapRead(mapField, cursor, statements))];
 
             case StringField stringField:
                 return [new PropertyTableInitializer(name, EmitStringRead(stringField, cursor, statements))];
@@ -259,6 +263,33 @@ internal sealed partial class SerializationEmitter
             return new Table(NestByPath(initializers, serializationField.Path + "."));
 
         return initializers.OfType<PropertyTableInitializer>().FirstOrDefault()?.Value ?? new NilLiteral();
+    }
+
+    /// <summary>
+    ///     Reads a count-prefixed run of pairs back into a table. Order is not preserved and does not need
+    ///     to be - a map is unordered, so any order rebuilds the same value.
+    /// </summary>
+    private LuauExpression EmitMapRead(MapField mapField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var leaf = ReserveLocal(LeafName(mapField.Path));
+        var countLocal = ReserveLocal(leaf + "_count");
+        statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, mapField.LengthType, statements)));
+        cursor.GoDynamic(statements);
+
+        var pairBits = ReserveElementBits(mapField.EntryBits, leaf, new Identifier(countLocal), cursor, statements);
+        statements.Add(new ConstVariable(leaf, null, Table.Empty));
+
+        var loop = ReserveLocal(LoopLocal);
+        var pairBody = new List<LuauStatement>();
+        var restorePair = EnterElement(cursor, pairBits, mapField.EntryBits, loop);
+        var key = EmitValueRead(mapField.Key, cursor, pairBody);
+        var value = EmitValueRead(mapField.Value, cursor, pairBody);
+        restorePair();
+
+        pairBody.Add(new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), key), "=", value)));
+        statements.Add(new NumericForStatement(loop, One, new Identifier(countLocal), null, new Chunk(pairBody)));
+
+        return new Identifier(leaf);
     }
 
     private LuauExpression EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)

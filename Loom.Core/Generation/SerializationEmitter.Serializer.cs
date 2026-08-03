@@ -236,7 +236,7 @@ internal sealed partial class SerializationEmitter
         if (serializationField is TupleField tupleField)
         {
             foreach (var element in tupleField.Elements)
-                MeasureField(element, Access(new Identifier(ValueParameter), element.Path), statements);
+                MeasureField(element, AccessRelative(value, element.Path, tupleField.Path), statements);
 
             return;
         }
@@ -275,6 +275,31 @@ internal sealed partial class SerializationEmitter
                 else
                     branches.Add(new ElseIfBranch(condition, add));
             }
+
+            return;
+        }
+
+        if (serializationField is MapField mapField)
+        {
+            AddToSize(statements, new NumberLiteral(mapField.LengthType.ByteCount()));
+
+            // Counted here rather than by a pass of its own: a map has no length operator, and the write
+            // needs the count for its prefix before the pairs go out.
+            var countLocal = MapCountLocal(mapField.Path);
+            statements.Add(new LocalVariable(countLocal, null, Zero));
+
+            var keyLocal = ReserveLocal(LeafName(mapField.Key.Path));
+            var valueLocal = ReserveLocal(LeafName(mapField.Value.Path));
+            var pairStatements = new List<LuauStatement>
+            {
+                new ExpressionStatement(new BinaryOperator(new Identifier(countLocal), "+=", One))
+            };
+
+            MeasureField(mapField.Key, new Identifier(keyLocal), pairStatements);
+            MeasureField(mapField.Value, new Identifier(valueLocal), pairStatements);
+
+            statements.Add(new ForStatement([keyLocal, valueLocal], value, new Chunk(pairStatements)));
+            AddToSize(statements, ElementBitBlockSize(mapField.EntryBits, new Identifier(countLocal)));
 
             return;
         }
@@ -430,6 +455,8 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>Whole bytes the shared bit block occupies, or zero when the entries need no bits.</summary>
+    private static string MapCountLocal(string path) => LeafName(path) + "_count";
+
     private static LuauExpression ElementBitBlockSize(int bitsPerElement, LuauExpression count) =>
         bitsPerElement == 0
             ? Zero
@@ -516,6 +543,34 @@ internal sealed partial class SerializationEmitter
                 EmitWrite(optionalField.Inner, new Identifier(ValueParameter), cursor, present);
                 body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
 
+                return;
+            }
+
+            case MapField mapField:
+            {
+                var leaf = LeafName(mapField.Path);
+                var count = new Identifier(MapCountLocal(mapField.Path));
+                WriteNumber(cursor, mapField.LengthType, count, body);
+                cursor.GoDynamic(body);
+
+                var pairBits = ReserveElementBits(mapField.EntryBits, leaf, count, cursor, body);
+                var index = ReserveLocal(leaf + "_index");
+                if (pairBits != null)
+                    body.Add(new LocalVariable(index, null, One));
+
+                var keyLocal = ReserveLocal(LeafName(mapField.Key.Path) + "_out");
+                var valueLocal = ReserveLocal(LeafName(mapField.Value.Path) + "_out");
+                var pairBody = new List<LuauStatement>();
+
+                var restorePair = EnterElement(cursor, pairBits, mapField.EntryBits, index);
+                EmitValueWrite(mapField.Key, new Identifier(keyLocal), cursor, pairBody);
+                EmitValueWrite(mapField.Value, new Identifier(valueLocal), cursor, pairBody);
+                restorePair();
+
+                if (pairBits != null)
+                    pairBody.Add(new ExpressionStatement(new BinaryOperator(new Identifier(index), "+=", One)));
+
+                body.Add(new ForStatement([keyLocal, valueLocal], value, new Chunk(pairBody)));
                 return;
             }
 

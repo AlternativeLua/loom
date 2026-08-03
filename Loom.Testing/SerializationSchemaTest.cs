@@ -713,18 +713,33 @@ public class SerializationSchemaTest
     }
 
     [Fact]
-    public void ThrowsFor_IndexerOnSerializableInterface()
+    public void ThrowsFor_InterfaceThatIsItselfAnIndexer()
     {
-        // An indexer's contents are not named properties, so a schema has nowhere to put them - the map
-        // was silently serializing to nothing at all.
+        // The map encoding lives on a property; an interface that is only an indexer has nothing for the
+        // schema to name, and used to serialize to nothing at all.
         var diagnostics = Utility.GetTypeCheckerDiagnostics("[serializable] interface Lookup { [string]: number }");
 
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.NotSerializable,
-            "Serializable interface 'Lookup' has an indexer, whose contents have no place in a fixed schema.",
-            "a schema is built from named properties; an arbitrary key-value map is not yet encodable."
+            "Serializable interface 'Lookup' is itself an indexer, so it has no properties to serialize.",
+            "hold the map in a property instead - 'interface Lookup { entries: Record<K, V> }' encodes as pairs."
         );
+    }
+
+    [Fact]
+    public void Map_EncodesAsCountPrefixedPairs()
+    {
+        var luau = Utility.GetLuauAST("[serializable] interface Scores { entries: Record<string, number> }", true).Render();
+
+        // A map has no length operator, so the count comes from the same walk that sizes it.
+        Assert.Contains("local entries_count = 0", luau);
+        Assert.Contains("entries_count += 1", luau);
+        Assert.Contains("buffer_writeu32(b, 0, entries_count)", luau);
+
+        // Pairs go out and come back keyed, not positional.
+        Assert.Contains("for entries_k_out, entries_v_out in value.entries do", luau);
+        Assert.Contains("entries[entries_k] = ", luau);
     }
     #endregion Measurability
 

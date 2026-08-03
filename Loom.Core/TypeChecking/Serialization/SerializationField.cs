@@ -78,6 +78,22 @@ public sealed record ArrayField(string Path, Type ValueType, NumberType LengthTy
     public override IEnumerable<SerializationField> Children => [Element];
 }
 
+/// <summary>
+///     A key-to-value map, written as a count-prefixed run of pairs. Unlike an array the entries have no
+///     order the wire preserves, which is fine: a map is unordered by definition, so reading the pairs
+///     back in any order rebuilds the same value.
+/// </summary>
+public sealed record MapField(string Path, Type ValueType, NumberType LengthType, SerializationField Key, SerializationField Value)
+    : SerializationField(Path, ValueType)
+{
+    public override int? BodyBytes => null;
+    public override bool ProducesBlob => Key.ProducesBlob || Value.ProducesBlob;
+    public override IEnumerable<SerializationField> Children => [Key, Value];
+
+    /// <summary>Bits one pair claims in the block the entries share.</summary>
+    public int EntryBits => Key.HeaderBits + Value.HeaderBits;
+}
+
 /// <summary>A fixed-length sequence. The length is static, so unlike <see cref="ArrayField" /> it writes no prefix.</summary>
 public sealed record TupleField(string Path, Type ValueType, IReadOnlyList<SerializationField> Elements)
     : SerializationField(Path, ValueType)

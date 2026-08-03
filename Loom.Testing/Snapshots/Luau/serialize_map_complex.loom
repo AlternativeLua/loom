@@ -1,0 +1,13 @@
+[serializable]
+interface Entry {
+    [number_type(NumberType.U8)]
+    level: number;
+    label: string;
+}
+
+[serializable]
+interface Registry {
+    flags: Record<string, bool>;
+    entries: Record<number, Entry>;
+    lists: Record<string, number[]>;
+}
