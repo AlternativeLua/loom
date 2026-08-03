@@ -60,7 +60,38 @@ public sealed partial class Parser
                 ? new ImportSpecifier(name, asKeyword, ExpectIdentifier("import alias"))
                 : new ImportSpecifier(name, null, null);
 
-    private Statement ParseExport(Token exportKeyword)
+    /// <summary>
+    ///     Routes an exported declaration to its attribute-aware parser, so <c>[serializable] export
+    ///     interface</c> attaches the attributes to the interface the same way an unexported one does.
+    ///     Kinds that carry no attributes report rather than dropping them silently.
+    /// </summary>
+    private Statement ParseExportedDeclaration(Token keyword, Attributes? attributes)
+    {
+        if (attributes == null)
+            return StatementParsers[keyword.Kind](keyword);
+
+        switch (keyword.Kind)
+        {
+            case SyntaxKind.FnKeyword:
+                return ParseFunctionDeclaration(keyword, attributes);
+            case SyntaxKind.InterfaceKeyword or SyntaxKind.SealedKeyword:
+                return ParseInterfaceDeclaration(keyword, attributes);
+            case SyntaxKind.EventKeyword:
+                return ParseEventDeclaration(keyword, attributes);
+            default:
+                _diagnostics.Error(
+                    keyword,
+                    InternalCodes.AttributesNotSupportedOnDeclaration,
+                    $"Attributes are not supported on '{keyword.Text}' declarations."
+                );
+
+                return StatementParsers[keyword.Kind](keyword);
+        }
+    }
+
+    private Statement ParseExport(Token exportKeyword) => ParseExport(exportKeyword, null);
+
+    private Statement ParseExport(Token exportKeyword, Attributes? attributes)
     {
         if (Current().Kind is SyntaxKind.LBrace || Current().Kind is SyntaxKind.TypeKeyword && PeekKind(1) is SyntaxKind.LBrace)
             return ParseExportList(exportKeyword);
@@ -69,7 +100,7 @@ public sealed partial class Parser
             return SkipExportAll(exportKeyword);
 
         if (Match(out var keyword, SyntaxFacts.IsExportableKeyword))
-            return WrapExport(exportKeyword, StatementParsers[keyword.Kind](keyword));
+            return WrapExport(exportKeyword, ParseExportedDeclaration(keyword, attributes));
 
         _diagnostics.Error(
             Current(),
