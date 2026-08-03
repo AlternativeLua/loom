@@ -128,18 +128,6 @@ end
 -- Serialization support. Emitted serializers inline everything they can; these are the pieces that
 -- are either too large to repeat per field or need real math.
 
-function Loom.assert_int_range(value: number, minimum: number, maximum: number, name: string, ty: string): ()
-	if value ~= value or value < minimum or value > maximum or value % 1 ~= 0 then
-		error(`{name}: {value} is out of range for {ty} [{minimum}, {maximum}]`, 3)
-	end
-end
-
-function Loom.assert_range(value: number, minimum: number, maximum: number, name: string): ()
-	if value ~= value or value < minimum or value > maximum then
-		error(`{name}: {value} is outside the declared range [{minimum}, {maximum}]`, 3)
-	end
-end
-
 -- Roblox exposes no CFrame:ToQuaternion, so the rotation comes out of GetComponents as a 3x3 matrix
 -- and is converted here (Shepperd's method - pivot on the largest diagonal term to keep the divisor
 -- away from zero).

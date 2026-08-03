@@ -16,7 +16,7 @@ var result = compilationUnit.Compile();
 writeIncludeFolder(config);
 var diagnosticInfo = result.Files
     .Where(f => !f.SourceFile.IsDeclaration)
-    .Select(f => (config.Debug ? f.Diagnostics : f.Diagnostics.WithoutInfo()).ToString())
+    .Select(f => f.Diagnostics.WithoutInfo().ToString())
     .Where(diagnostics => !string.IsNullOrEmpty(diagnostics));
 
 var failureInfo = result.Failures.Count == 0
