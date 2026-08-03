@@ -2,7 +2,7 @@ let collection_service = get_service::<CollectionService>();
 
 for obj : collection_service.get_tagged("Lava") {
     if obj is not BasePart continue;
-    obj.touched += fn(hit: BasePart) -> 
+    obj.touched += fn(hit) -> 
         hit.parent
             ?.find_first_child_of_class::<Humanoid>()
             ?.take_damage(100)

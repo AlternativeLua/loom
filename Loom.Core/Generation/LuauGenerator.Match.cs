@@ -393,6 +393,23 @@ public sealed partial class LuauGenerator
                 return true;
             }
 
+            // Bindings from the inner pattern are discarded - nothing is captured when a negated pattern
+            // doesn't hold, so there is nothing meaningful for the arm/condition after it to reference.
+            case NotPattern notPattern:
+            {
+                var innerConditions = new List<LuauExpression>();
+                var innerBindings = new List<LuauStatement>();
+                if (!TryCompilePattern(notPattern.Pattern, subject, innerConditions, innerBindings, out _))
+                {
+                    isIrrefutable = false;
+                    return false;
+                }
+
+                conditions.Add(NegateCondition(CombineWith(innerConditions, "and")));
+                isIrrefutable = false;
+                return true;
+            }
+
             default:
                 _diagnostics.NotImplemented(pattern, $"Pattern kind '{pattern.GetType().Name}' is not yet supported in code generation.");
                 isIrrefutable = false;
@@ -504,6 +521,18 @@ public sealed partial class LuauGenerator
         {
             0 => new BooleanLiteral(true),
             _ => conditions.Skip(1).Aggregate(conditions[0], (accumulated, next) => new BinaryOperator(accumulated, @operator, next))
+        };
+
+    // A single equality comparison flips in place (`typeof(x) == "string"` -> `typeof(x) ~= "string"`);
+    // anything else - a compound and/or condition, a bare call like `x:IsA(...)` - is wrapped in `not (...)`
+    // rather than distributed via De Morgan's, since the AST here doesn't track operator precedence.
+    private static LuauExpression NegateCondition(LuauExpression condition) =>
+        condition switch
+        {
+            BinaryOperator { Operator: "==" } binary => new BinaryOperator(binary.Left, "~=", binary.Right),
+            BinaryOperator { Operator: "~=" } binary => new BinaryOperator(binary.Left, "==", binary.Right),
+            BinaryOperator => new Luau.AST.UnaryOperator("not ", new Luau.AST.Parenthesized(condition)),
+            _ => new Luau.AST.UnaryOperator("not ", condition)
         };
 
     private static LuauExpression LiteralValueToExpression(object? value) =>

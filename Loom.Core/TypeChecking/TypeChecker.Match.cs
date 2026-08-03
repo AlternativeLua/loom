@@ -187,6 +187,9 @@ public sealed partial class TypeChecker
             case AndPattern andPattern:
                 CheckAndPattern(andPattern, inputType);
                 break;
+            case NotPattern notPattern:
+                CheckNotPattern(notPattern, inputType);
+                break;
             case NullPattern nullPattern:
                 BindType(nullPattern, PrimitiveType.Never);
                 break;
@@ -201,6 +204,12 @@ public sealed partial class TypeChecker
         _semanticModel.TypeSolver.AddConstraint(guardType, PrimitiveType.Bool, pattern.Guard);
 
         BindType(pattern, _semanticModel.GetType(pattern.Pattern));
+    }
+
+    private void CheckNotPattern(NotPattern pattern, Type inputType)
+    {
+        CheckPattern(pattern.Pattern, inputType);
+        BindType(pattern, RemoveCoveredType(inputType, _semanticModel.GetType(pattern.Pattern)));
     }
 
     private void CheckLiteralPattern(LiteralPattern pattern, Type inputType)

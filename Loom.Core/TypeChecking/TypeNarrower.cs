@@ -86,11 +86,24 @@ public sealed class TypeNarrower
         if (GetBaseExpressionType(isExpression.Expression, current) is not { } baseType)
             return new BranchStates(current, current);
 
-        var patternType = _semanticModel.GetType(isExpression.Pattern.Type);
+        var (typeExpression, negated) = isExpression.Pattern switch
+        {
+            NotPattern { Pattern: TypePattern inner } => (inner.Type, true),
+            TypePattern typePattern => (typePattern.Type, false),
+            _ => (null, false)
+        };
+
+        if (typeExpression is null)
+            return new BranchStates(current, current);
+
+        var patternType = _semanticModel.GetType(typeExpression);
+        var matchedType = patternType;
+        var unmatchedType = RemoveType(baseType, patternType);
+
         var trueBuilder = current.ToBuilder();
         var falseBuilder = current.ToBuilder();
-        trueBuilder.NarrowedTypes[address] = patternType;
-        falseBuilder.NarrowedTypes[address] = RemoveType(baseType, patternType);
+        trueBuilder.NarrowedTypes[address] = negated ? unmatchedType : matchedType;
+        falseBuilder.NarrowedTypes[address] = negated ? matchedType : unmatchedType;
 
         return new BranchStates(trueBuilder.ToImmutable(), falseBuilder.ToImmutable());
     }

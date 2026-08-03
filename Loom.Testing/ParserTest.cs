@@ -397,8 +397,9 @@ public class ParserTest
         var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
 
         Assert.Equal("value", Assert.IsType<Identifier>(isExpression.Expression).Name.Text);
-        Assert.Equal("SomeType", Assert.IsType<TypeName>(isExpression.Pattern.Type).Name.Text);
-        Assert.Null(isExpression.Pattern.ObjectPattern);
+        var typePattern = Assert.IsType<TypePattern>(isExpression.Pattern);
+        Assert.Equal("SomeType", Assert.IsType<TypeName>(typePattern.Type).Name.Text);
+        Assert.Null(typePattern.ObjectPattern);
     }
 
     [Fact]
@@ -408,8 +409,9 @@ public class ParserTest
         var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
         var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
 
-        Assert.Equal(PrimitiveTypeKind.Number, Assert.IsType<PrimitiveType>(isExpression.Pattern.Type).Kind);
-        Assert.Null(isExpression.Pattern.ObjectPattern);
+        var typePattern = Assert.IsType<TypePattern>(isExpression.Pattern);
+        Assert.Equal(PrimitiveTypeKind.Number, Assert.IsType<PrimitiveType>(typePattern.Type).Kind);
+        Assert.Null(typePattern.ObjectPattern);
     }
 
     [Fact]
@@ -419,9 +421,10 @@ public class ParserTest
         var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
         var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
 
-        Assert.Equal("SomeType", Assert.IsType<TypeName>(isExpression.Pattern.Type).Name.Text);
-        Assert.NotNull(isExpression.Pattern.ObjectPattern);
-        var field = Assert.Single(isExpression.Pattern.ObjectPattern.Fields);
+        var typePattern = Assert.IsType<TypePattern>(isExpression.Pattern);
+        Assert.Equal("SomeType", Assert.IsType<TypeName>(typePattern.Type).Name.Text);
+        Assert.NotNull(typePattern.ObjectPattern);
+        var field = Assert.Single(typePattern.ObjectPattern.Fields);
         Assert.Equal("some_field", field.Name.Text);
         var range = Assert.IsType<RangePattern>(field.Pattern);
         Assert.Equal(1L, Assert.IsType<LiteralPattern>(range.Minimum).Value);
@@ -435,7 +438,8 @@ public class ParserTest
         var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
         var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
 
-        var field = Assert.Single(isExpression.Pattern.ObjectPattern!.Fields);
+        var typePattern = Assert.IsType<TypePattern>(isExpression.Pattern);
+        var field = Assert.Single(typePattern.ObjectPattern!.Fields);
         Assert.Equal("x", Assert.IsType<IdentifierPattern>(field.Pattern).Name.Text);
     }
 
@@ -446,7 +450,7 @@ public class ParserTest
         var @if = Assert.IsType<If>(Assert.Single(tree.Statements));
         var isExpression = Assert.IsType<Is>(@if.Condition);
 
-        Assert.Null(isExpression.Pattern.ObjectPattern);
+        Assert.Null(Assert.IsType<TypePattern>(isExpression.Pattern).ObjectPattern);
         var block = Assert.IsType<Block>(@if.ThenBranch);
         Assert.Single(block.Statements);
     }
@@ -458,9 +462,47 @@ public class ParserTest
         var @if = Assert.IsType<If>(Assert.Single(tree.Statements));
         var isExpression = Assert.IsType<Is>(@if.Condition);
 
-        Assert.NotNull(isExpression.Pattern.ObjectPattern);
+        Assert.NotNull(Assert.IsType<TypePattern>(isExpression.Pattern).ObjectPattern);
         var block = Assert.IsType<Block>(@if.ThenBranch);
         Assert.Single(block.Statements);
+    }
+
+    [Fact]
+    public void Parses_IsNotExpression_BareType()
+    {
+        var tree = Utility.GetAST("value is not SomeType");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        var notPattern = Assert.IsType<NotPattern>(isExpression.Pattern);
+        var typePattern = Assert.IsType<TypePattern>(notPattern.Pattern);
+        Assert.Equal("SomeType", Assert.IsType<TypeName>(typePattern.Type).Name.Text);
+        Assert.Null(typePattern.ObjectPattern);
+    }
+
+    [Fact]
+    public void Parses_IsNotExpression_PrimitiveType()
+    {
+        var tree = Utility.GetAST("value is not string");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        var notPattern = Assert.IsType<NotPattern>(isExpression.Pattern);
+        Assert.Equal(PrimitiveTypeKind.String, Assert.IsType<PrimitiveType>(Assert.IsType<TypePattern>(notPattern.Pattern).Type).Kind);
+    }
+
+    [Fact]
+    public void Parses_IsNotExpression_WithObjectPattern()
+    {
+        var tree = Utility.GetAST("value is not SomeType { some_field: 1..10 }");
+        var expressionStatement = Assert.IsType<ExpressionStatement>(Assert.Single(tree.Statements));
+        var isExpression = Assert.IsType<Is>(expressionStatement.Expression);
+
+        var notPattern = Assert.IsType<NotPattern>(isExpression.Pattern);
+        var typePattern = Assert.IsType<TypePattern>(notPattern.Pattern);
+        Assert.NotNull(typePattern.ObjectPattern);
+        var field = Assert.Single(typePattern.ObjectPattern.Fields);
+        Assert.Equal("some_field", field.Name.Text);
     }
 
     [Fact]

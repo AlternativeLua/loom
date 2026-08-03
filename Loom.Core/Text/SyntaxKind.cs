@@ -100,6 +100,7 @@ public enum SyntaxKind : ushort
     MatchKeyword,
     WhenKeyword,
     IsKeyword,
+    NotKeyword,
     Identifier,
     Eof
 }

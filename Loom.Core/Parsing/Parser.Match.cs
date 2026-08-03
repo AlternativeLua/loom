@@ -255,7 +255,15 @@ public sealed partial class Parser
             : new ObjectPatternField(name, colon, ParsePattern());
     }
 
-    private TypePattern ParseIsPattern()
+    private Pattern ParseIsPattern()
+    {
+        if (Match(out var notKeyword, SyntaxKind.NotKeyword))
+            return new NotPattern(notKeyword, ParseIsTypePattern());
+
+        return ParseIsTypePattern();
+    }
+
+    private TypePattern ParseIsTypePattern()
     {
         var identifier = ExpectIdentifier("type name");
         var typeArguments = ParseTypeArguments();
