@@ -20,7 +20,8 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
         expression is Parsing.AST.Identifier && semanticModel.GetSymbol(expression) is { IsIntrinsic: true };
 
     public bool IsInvocationOnlyMember(string memberName) =>
-        memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute";
+        memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute"
+            or "serialize_binary" or "deserialize_binary";
 
     public bool TryInvocation(
         MacroContext context,
@@ -74,10 +75,73 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                 expression = new BooleanLiteral(!hadError && matchedAttribute != null);
                 return true;
             }
+            case "serialize_binary":
+            case "deserialize_binary":
+            {
+                // serialize_binary infers its interface from the argument's static type; deserialize_binary
+                // has no value to infer from, so it takes the interface as a type argument.
+                var isSerialize = name == "serialize_binary";
+                var invocation = (Invocation)context.Node;
+                Node? subject = isSerialize
+                    ? invocation.Arguments.ArgumentList.FirstOrDefault()
+                    : typeArguments?.ArgumentsList.FirstOrDefault();
+
+                if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName))
+                {
+                    expression = new NilLiteral();
+                    return true;
+                }
+
+                expression = new Call(
+                    new Identifier(isSerialize ? SerializationEmitter.SerializeName(interfaceName) : SerializationEmitter.DeserializeName(interfaceName)),
+                    call.Arguments
+                );
+
+                return true;
+            }
         }
 
         expression = null;
         return false;
+    }
+
+    /// <summary>
+    ///     Resolves the interface a serialization call targets and confirms the type checker built a
+    ///     schema for it. Nothing in the signature constrains T to a serializable type, so an unmarked
+    ///     interface has to be caught here rather than silently emitting a call to a function that was
+    ///     never generated.
+    /// </summary>
+    private static bool TryGetSerializableName(MacroContext context, Node subject, string name, out string interfaceName)
+    {
+        interfaceName = "";
+        var semanticModel = context.SemanticModel;
+        var subjectType = semanticModel.GetType(subject);
+        if (subjectType is not Loom.Core.TypeChecking.Types.InterfaceType interfaceType)
+        {
+            context.Diagnostics.Error(
+                context.Node,
+                InternalCodes.NotSerializable,
+                $"'{name}' requires a serializable interface, but was given '{subjectType}'."
+            );
+
+            return false;
+        }
+
+        var schemaEntry = semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
+        if (schemaEntry == null)
+        {
+            context.Diagnostics.Error(
+                context.Node,
+                InternalCodes.NotSerializable,
+                $"Interface '{interfaceType.Name}' is not serializable.",
+                $"add the 'serializable' attribute to '{interfaceType.Name}'."
+            );
+
+            return false;
+        }
+
+        interfaceName = interfaceType.Name;
+        return true;
     }
 
     private static Attribute? FindMatchedAttribute(MacroContext context, TypeArguments? typeArguments, string name, out bool hadError)

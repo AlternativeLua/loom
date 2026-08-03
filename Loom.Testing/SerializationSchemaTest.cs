@@ -268,6 +268,43 @@ public class SerializationSchemaTest
     }
     #endregion Encodability
 
+    #region Calls
+    [Fact]
+    public void ThrowsFor_SerializeBinary_OnNonSerializableInterface()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface Plain { id: number }
+            let value = new Plain { id: 1 };
+            let payload = serialize_binary(value);
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NotSerializable,
+            "Interface 'Plain' is not serializable.",
+            "add the 'serializable' attribute to 'Plain'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_DeserializeBinary_OnNonSerializableInterface()
+    {
+        var diagnostics = Utility.GetGeneratorDiagnostics(
+            """
+            interface Plain { id: number }
+            let payload = none as never as Serialized;
+            let restored = deserialize_binary::<Plain>(payload);
+            """,
+            true
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.NotSerializable, "Interface 'Plain' is not serializable.");
+    }
+    #endregion Calls
+
     #region Layout
     [Fact]
     public void FixedSizeSchema_HasConstantByteCount()
