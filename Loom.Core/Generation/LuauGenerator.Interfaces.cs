@@ -1,6 +1,7 @@
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
+using Loom.Core.TypeChecking.Serialization;
 using Loom.Luau;
 using Loom.Luau.AST;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
@@ -126,6 +127,9 @@ public sealed partial class LuauGenerator
         if (!_semanticModel.SerializationSchemas.TryGetValue(interfaceSymbol, out var schema))
             return;
 
+        if (!CheckSchemaIsEmittable(interfaceSymbol, schema))
+            return;
+
         // The emitted signatures name Loom.Serialized and Loom.Result even when the source never
         // mentions a runtime type, so the import has to be requested explicitly.
         _semanticModel.RuntimeReferences += 1;
@@ -133,6 +137,46 @@ public sealed partial class LuauGenerator
         var emitter = new SerializationEmitter(schema, _bufferMembers);
         _state.Postreq(emitter.EmitSerializer());
         _state.Postreq(emitter.EmitDeserializer());
+    }
+
+    /// <summary>
+    ///     Refuses to emit a schema the generator does not fully cover yet. The schema builder understands
+    ///     more of the type matrix than the emitter does, and a field the emitter skipped would go missing
+    ///     from the payload silently rather than loudly - so the gap is reported instead of generated.
+    /// </summary>
+    private bool CheckSchemaIsEmittable(InterfaceSymbol interfaceSymbol, SerializationSchema schema)
+    {
+        var declaration = interfaceSymbol.Declaration;
+        if (schema.IsPacked)
+        {
+            _diagnostics.NotImplemented(declaration, $"Sentinel bitpacking for 'packed' interface '{interfaceSymbol.Name}' is not yet generated.");
+            return false;
+        }
+
+        if (FindUnsupportedField(schema.Fields) is not { } unsupported)
+            return true;
+
+        _diagnostics.NotImplemented(
+            declaration,
+            $"Serializing '{unsupported.Path}' of type '{unsupported.ValueType}' is not yet generated.",
+            "variable-length and union fields are described by the schema but not yet emitted."
+        );
+
+        return false;
+    }
+
+    private static SerializationField? FindUnsupportedField(IEnumerable<SerializationField> fields)
+    {
+        foreach (var serializationField in fields)
+        {
+            if (serializationField is StringField or ArrayField or OptionalField or UnionField)
+                return serializationField;
+
+            if (FindUnsupportedField(serializationField.Children) is { } nested)
+                return nested;
+        }
+
+        return null;
     }
 
     // Mirrors TypeChecker.Interfaces.cs's MergeOverloadedProperties: same-named function-typed table properties become one field typed as their intersection.
