@@ -22,7 +22,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
 
     public bool IsInvocationOnlyMember(string memberName) =>
         memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute"
-            or "serialize_binary" or "deserialize_binary" or "serializer" or "serializer_of";
+            or "serialize_binary" or "deserialize_binary" or "serializer" or "serializer_of" or "diff_binary" or "apply_diff_binary";
 
     public bool TryInvocation(
         MacroContext context,
@@ -129,6 +129,32 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                         [isSerialize ? "serialize" : "deserialize"]
                     )
                     : new Identifier(isSerialize ? SerializationEmitter.SerializeName(interfaceName) : SerializationEmitter.DeserializeName(interfaceName));
+
+                expression = new Call(callee, call.Arguments);
+                return true;
+            }
+            case "diff_binary":
+            case "apply_diff_binary":
+            {
+                // Both take the baseline as their first argument, so - unlike deserialize_binary - the
+                // interface is always inferable from a value and neither needs a type argument.
+                var isDiff = name == "diff_binary";
+                var invocation = (Invocation)context.Node;
+                var subject = invocation.Arguments.ArgumentList.FirstOrDefault();
+
+                if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName, out var declaringFile))
+                {
+                    expression = new NilLiteral();
+                    return true;
+                }
+
+                var isImported = declaringFile != context.SemanticModel.Tree.File.AbsolutePath;
+                LuauExpression callee = isImported
+                    ? new Luau.AST.PropertyAccess(
+                        new Identifier(SerializationEmitter.SerializerName(interfaceName)),
+                        [isDiff ? "diff" : "applyDiff"]
+                    )
+                    : new Identifier(isDiff ? SerializationEmitter.DiffName(interfaceName) : SerializationEmitter.ApplyDiffName(interfaceName));
 
                 expression = new Call(callee, call.Arguments);
                 return true;
