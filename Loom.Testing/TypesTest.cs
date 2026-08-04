@@ -1,4 +1,5 @@
 using Loom.Core.TypeChecking;
+using Loom.Core.TypeChecking.Serialization;
 using Loom.Core.TypeChecking.Types;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
 using IntersectionType = Loom.Core.TypeChecking.Types.IntersectionType;
@@ -926,6 +927,44 @@ public class TypesTest
         Assert.False(widenedInteger.IsAssignableTo(number));
         Assert.False(widenedNumber.IsAssignableTo(integer));
         Assert.False(widenedNumber.IsAssignableTo(number));
+    }
+
+    [Fact]
+    public void SizedNumberType_Assignability()
+    {
+        var u8 = new SizedNumberType(NumberType.U8);
+        var u16 = new SizedNumberType(NumberType.U16);
+
+        // Deliberately no width safety: a sized number stays freely, bidirectionally assignable to
+        // and from plain number and every other sized number, exactly like the number_type attribute
+        // it replaces never enforced bounds either - the width only matters to the serializer.
+        Assert.True(u8.IsAssignableTo(Number));
+        Assert.True(Number.IsAssignableTo(u8));
+        Assert.True(u8.IsAssignableTo(u16));
+        Assert.True(u16.IsAssignableTo(u8));
+
+        var literal = new LiteralType(5);
+        Assert.True(literal.IsAssignableTo(u8));
+    }
+
+    [Fact]
+    public void SizedNumberType_Equality()
+    {
+        var u8 = new SizedNumberType(NumberType.U8);
+        var otherU8 = new SizedNumberType(NumberType.U8);
+        var u16 = new SizedNumberType(NumberType.U16);
+
+        Assert.Equal(u8, otherU8);
+        Assert.NotEqual<Type>(u8, u16);
+        Assert.NotEqual<Type>(u8, Number);
+        Assert.NotEqual<Type>(Number, u8);
+    }
+
+    [Fact]
+    public void SizedNumberType_ToString()
+    {
+        Assert.Equal("u8", new SizedNumberType(NumberType.U8).ToString());
+        Assert.Equal("f64", new SizedNumberType(NumberType.F64).ToString());
     }
 
     [Fact]

@@ -2,6 +2,7 @@ using Loom.Core.Debug;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Text;
+using Loom.Core.TypeChecking.Serialization;
 using PrimitiveTypeKind = Loom.Core.TypeChecking.Types.PrimitiveTypeKind;
 
 namespace Loom.Testing;
@@ -1182,6 +1183,25 @@ public class ParserTest
         Assert.Equal(2, tupleType.Types.Count);
         Assert.IsType<PrimitiveType>(tupleType.Types[0]);
         Assert.IsType<PrimitiveType>(tupleType.Types[1]);
+    }
+
+    [Theory]
+    [InlineData("u8", NumberType.U8)]
+    [InlineData("u16", NumberType.U16)]
+    [InlineData("u32", NumberType.U32)]
+    [InlineData("i8", NumberType.I8)]
+    [InlineData("i16", NumberType.I16)]
+    [InlineData("i32", NumberType.I32)]
+    [InlineData("f32", NumberType.F32)]
+    [InlineData("f64", NumberType.F64)]
+    public void Parses_SizedNumberType(string typeName, NumberType expected)
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse($"let x: {typeName} = 1;"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var primitiveType = Assert.IsType<PrimitiveType>(variableDeclaration.ColonTypeClause!.Type);
+
+        Assert.Equal(PrimitiveTypeKind.Number, primitiveType.Kind);
+        Assert.Equal(expected, primitiveType.Width);
     }
 
     [Fact]
