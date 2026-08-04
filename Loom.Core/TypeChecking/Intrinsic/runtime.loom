@@ -54,11 +54,23 @@ interface DeserializeError {
 interface Serializer<T> {
     serialize: fn(value: T): Serialized;
     deserialize: fn(serialized: Serialized): Result<T, DeserializeError>;
+    diff: fn(baseline: T, value: T): Serialized;
+    applyDiff: fn(baseline: T, diff: Serialized): Result<T, DeserializeError>;
 }
 
 declare fn serialize_binary<T>(value: T): Serialized;
 declare fn deserialize_binary<T>(serialized: Serialized): Result<T, DeserializeError>;
 declare fn serializer<T>(): Serializer<T>;
+
+## Encodes only what changed between 'baseline' and 'value', diffing into structs, unions,
+## optionals, array elements and map entries rather than resending a field wholesale - an
+## unchanged field costs one bit. 'T' is inferred from 'baseline', so no type argument is needed.
+declare fn diff_binary<T>(baseline: T, value: T): Serialized;
+
+## Reconstructs the value a 'diff_binary' payload was taken against, given the same baseline the
+## sender diffed from. A stale or mismatched baseline produces a wrong value rather than an error -
+## the payload carries no baseline identity of its own to check it against.
+declare fn apply_diff_binary<T>(baseline: T, diff: Serialized): Result<T, DeserializeError>;
 
 ## Picks a codec out of a key-to-type mapping interface using a runtime key. This is the generic
 ## case serializer::<T>() cannot express, since inside a wrapper's body the type is not known - only
