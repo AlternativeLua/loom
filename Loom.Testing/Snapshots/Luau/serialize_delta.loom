@@ -1,0 +1,29 @@
+## Exercises every branch of the delta write/read: a leaf, a flattened struct, a packed sentinelled
+## datatype, an optional wrapping a union, an array of unions and a map whose values are structs.
+
+[serializable]
+interface Loadout {
+    [number_type(NumberType.U8)]
+    primary: number;
+    [number_type(NumberType.U8)]
+    secondary: number;
+}
+
+[serializable]
+interface Hit { kind: "Hit"; amount: number; }
+
+[serializable]
+interface Miss { kind: "Miss"; }
+
+[serializable, packed]
+interface PlayerState {
+    [number_type(NumberType.U16)]
+    health: number;
+    name: string;
+    loadout: Loadout;
+    [number_type(NumberType.I16)]
+    position: Vector3;
+    last_event: (Hit | Miss)?;
+    recent: (Hit | Miss)[];
+    scores: Record<string, Loadout>;
+}
