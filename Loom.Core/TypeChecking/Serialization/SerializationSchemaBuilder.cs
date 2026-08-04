@@ -22,10 +22,8 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
     /// <summary>Attribute-supplied overrides for one property, resolved once and threaded through nested types.</summary>
     private readonly record struct FieldOptions(
-        NumberType? NumberType,
         (double Minimum, double Maximum)? Range,
         double? Step,
-        NumberType? LengthType,
         CFrameEncoding? CFrameEncoding
     );
 
@@ -241,13 +239,13 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
     private SerializationField? BuildNumberField(string path, Type type, FieldOptions options, Node reportNode)
     {
-        // The type checker refuses 'number_type'/'number_range' on a sized type outright, so reaching
-        // here with one means the width comes from the type itself, not from FieldOptions.
+        // The type checker refuses 'number_range' on a sized type outright, so reaching here with one
+        // means the width comes from the type itself, not from FieldOptions.
         if (type is Types.SizedNumberType sized)
             return new NumberField(path, type, sized.NumberType);
 
         if (options.Range is not { } range)
-            return new NumberField(path, type, options.NumberType ?? DefaultNumberType);
+            return new NumberField(path, type, DefaultNumberType);
 
         var step = options.Step ?? 1;
         if (step <= 0)
@@ -308,9 +306,8 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
     /// </summary>
     private SerializationField? BuildInterfaceField(string path, Types.InterfaceType interfaceType, FieldOptions options, bool isPacked, Node reportNode)
     {
-        var numberType = options.NumberType ?? DefaultNumberType;
         if (RobloxDatatype.TryGet(interfaceType.Name, out var datatype))
-            return new DatatypeField(path, interfaceType, datatype, numberType, isPacked && datatype.Sentinels.Count > 0);
+            return new DatatypeField(path, interfaceType, datatype, DefaultNumberType, isPacked && datatype.Sentinels.Count > 0);
 
         // An indexer is a map: the interface has no named properties to flatten, only a key type and a
         // value type, so it encodes as pairs rather than as a struct.
@@ -361,7 +358,9 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         if (TryBuildField($"{path}[v]", indexer.ValueType, options, false, reportNode) is not { } value)
             return null;
 
-        return new MapField(path, interfaceType, options.LengthType ?? DefaultLengthType, key, value);
+        // 'length_type' is a hard error at check time wherever it appears (see TypeChecker.Serialization.cs),
+        // so a map's length prefix has no attribute-supplied override to read here, unlike a plain array.
+        return new MapField(path, interfaceType, DefaultLengthType, key, value);
     }
 
     private SerializationField? BuildUnionField(string path, Type type, Types.UnionType union, FieldOptions options, bool isPacked, Node reportNode)
@@ -515,10 +514,8 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
     private FieldOptions ReadFieldOptions(PropertySymbol property) =>
         new(
-            ReadEnumArgument<NumberType>(property, "number_type", 0),
             ReadRangeArgument(property),
             ReadNumberArgument(property, "number_step", 0),
-            ReadEnumArgument<NumberType>(property, "length_type", 0),
             ReadEnumArgument<CFrameEncoding>(property, "cframe_type", 0)
         );
 

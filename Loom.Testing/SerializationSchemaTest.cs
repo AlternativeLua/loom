@@ -40,7 +40,7 @@ public class SerializationSchemaTest
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
             interface MyData {
-                [number_type(NumberType.U8)]
+                [number_range(0, 100)]
                 id: number;
             }
             """
@@ -49,28 +49,8 @@ public class SerializationSchemaTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.MissingRequiredAttribute,
-            "'number_type' requires interface 'MyData' to have the 'serializable' attribute.",
+            "'number_range' requires interface 'MyData' to have the 'serializable' attribute.",
             "add 'serializable' to 'MyData', or remove the attribute from 'id'."
-        );
-    }
-
-    [Fact]
-    public void ThrowsFor_NumberType_AndNumberRange_Together()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [number_type(NumberType.U8), number_range(0, 100)]
-                health: number;
-            }
-            """
-        );
-
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.ConflictingAttributes,
-            "'health' has both 'number_type' and 'number_range', which each set its width.",
-            "use 'number_range' for a bounded value, or 'number_type' for a fixed width."
         );
     }
 
@@ -91,46 +71,6 @@ public class SerializationSchemaTest
             InternalCodes.ConflictingAttributes,
             "'health' is already 'u8', so 'number_range' has nothing left to set.",
             "remove 'number_range', or declare 'health: number' to use a bounded range instead."
-        );
-    }
-
-    [Fact]
-    public void ThrowsFor_NumberType_OnSizedType()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [number_type(NumberType.U16)]
-                health: u8;
-            }
-            """
-        );
-
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.ConflictingAttributes,
-            "'health' is already 'u8', so 'number_type' has nothing left to set.",
-            "remove 'number_type', or declare 'health: number' to pick a width with the attribute instead."
-        );
-    }
-
-    [Fact]
-    public void ThrowsFor_NumberType_OnPlainNumber()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                id: number;
-            }
-            """
-        );
-
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.InvalidAttributeTargetType,
-            "'number_type' no longer applies to a plain 'number' - 'id' should be a sized type instead.",
-            "use one of u8/u16/u32/i8/i16/i32/f32/f64, e.g. 'id: u8'."
         );
     }
 
@@ -180,7 +120,7 @@ public class SerializationSchemaTest
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
             [serializable] interface MyData {
-                [ignore_serialization, number_type(NumberType.U8)]
+                [ignore_serialization, number_range(0, 100)]
                 cached: number?;
             }
             """
@@ -189,7 +129,7 @@ public class SerializationSchemaTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.ConflictingAttributes,
-            "'cached' is both ignored and annotated with 'number_type'.",
+            "'cached' is both ignored and annotated with 'number_range'.",
             "an ignored property is not encoded, so it cannot carry encoding attributes."
         );
     }
@@ -235,25 +175,6 @@ public class SerializationSchemaTest
     }
 
     [Fact]
-    public void ThrowsFor_NumberType_OnNonNumericProperty()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                name: string;
-            }
-            """
-        );
-
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.InvalidAttributeTargetType,
-            "'number_type' requires 'name' to have numeric components, but it is 'string'."
-        );
-    }
-
-    [Fact]
     public void ThrowsFor_CFrameType_OnNonCFrameProperty()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
@@ -273,57 +194,22 @@ public class SerializationSchemaTest
     }
 
     [Fact]
-    public void ThrowsFor_NumberType_OnVector3()
+    public void ThrowsFor_NumberType_NoLongerExists()
     {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+        // number_type isn't merely invalid on any particular target anymore - it isn't declared at all,
+        // now that every property it used to configure has a type-level replacement (a sized type,
+        // Vector3/Vector2/CFrame's own <T>) or, for the other 7 Roblox datatypes and an all-numeric
+        // tuple, no replacement, just a fixed f32 default.
+        var diagnostics = Utility.GetSemanticModel(
             """
             [serializable] interface MyData {
                 [number_type(NumberType.I16)]
                 position: Vector3;
             }
             """
-        );
+        ).Diagnostics;
 
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.InvalidAttributeTargetType,
-            "'number_type' no longer applies to 'position' - use 'Vector3<i16>' instead of the attribute.",
-            "declare it as 'position: Vector3<i16>', or drop the argument to keep the f32 default."
-        );
-    }
-
-    [Fact]
-    public void ThrowsFor_NumberType_OnOtherRobloxDatatype()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [number_type(NumberType.I16)]
-                color: Color3;
-            }
-            """
-        );
-
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.InvalidAttributeTargetType,
-            "'number_type' on 'color' is no longer configurable - 'Color3' always serializes its components as f32."
-        );
-    }
-
-    [Fact]
-    public void Allows_NumberType_OnNumericTuple()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                pair: (number, number);
-            }
-            """
-        );
-
-        Utility.AssertNoErrors(diagnostics);
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'number_type'.");
     }
     #endregion AttributeMatrix
 
@@ -1103,8 +989,7 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                pair: (number, number);
+                pair: (u8, u8);
             }
             """
         );
@@ -1114,13 +999,13 @@ public class SerializationSchemaTest
     }
 
     [Fact]
-    public void SizedTupleElement_OverridesTheSharedAttribute()
+    public void MixedSizedTupleElement_DefaultsUnsizedSiblingToF32()
     {
-        // A sized element picks its own width; an unsized sibling still falls back to the shared attribute.
+        // A sized element picks its own width; an unsized sibling has no shared attribute to fall back
+        // to anymore, so it always takes the f32 default.
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.F32)]
                 pair: (u8, number);
             }
             """

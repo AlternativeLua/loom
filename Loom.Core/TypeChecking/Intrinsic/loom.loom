@@ -44,12 +44,10 @@ declare fn override: void;
 
 ## Serialization attributes. See TypeChecker.Serialization.cs for the co-requirement rules
 ## these carry: 'packed' requires 'serializable', every property attribute requires its
-## containing interface to be 'serializable', 'number_step' requires 'number_range', and
-## 'number_type' and 'number_range' are mutually exclusive.
+## containing interface to be 'serializable', and 'number_step' requires 'number_range'.
 [attribute_usage(AttributeTargets.Interface)] declare fn serializable: void;
 [attribute_usage(AttributeTargets.Interface)] declare fn packed: void;
 [attribute_usage(AttributeTargets.Property)] declare fn ignore_serialization: void;
-[attribute_usage(AttributeTargets.Property)] declare fn number_type(ty: NumberType): void;
 [attribute_usage(AttributeTargets.Property)] declare fn number_range(min: number, max: number): void;
 [attribute_usage(AttributeTargets.Property)] declare fn number_step(step: number): void;
 [attribute_usage(AttributeTargets.Property)] declare fn length_type(ty: NumberType): void;

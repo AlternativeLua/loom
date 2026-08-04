@@ -2,7 +2,7 @@ namespace Loom.Core.TypeChecking.Serialization;
 
 /// <summary>
 ///     Mirrors the intrinsic <c>NumberType</c> enum declared in <c>Intrinsic/loom.loom</c>. Member order
-///     is load-bearing: <c>[number_type(...)]</c> arguments arrive as the enum member's ordinal, so these
+///     is load-bearing: <c>[length_type(...)]</c> arguments arrive as the enum member's ordinal, so these
 ///     must stay in the same order as the Loom declaration.
 /// </summary>
 public enum NumberType : byte

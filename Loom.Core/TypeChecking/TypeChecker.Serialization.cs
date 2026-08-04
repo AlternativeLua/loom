@@ -12,7 +12,7 @@ public sealed partial class TypeChecker
 {
     /// <summary>Property-level serialization attributes, in the order they are reported.</summary>
     private static readonly string[] _serializationPropertyAttributes =
-        ["number_type", "number_range", "number_step", "length_type", "cframe_type"];
+        ["number_range", "number_step", "length_type", "cframe_type"];
 
     /// <summary>
     ///     Interfaces are checked after <c>SolveConstraints</c> rather than inline, so a serializable type
@@ -149,26 +149,12 @@ public sealed partial class TypeChecker
             return valid;
         }
 
-        var hasNumberType = present.Contains("number_type");
         var hasNumberRange = present.Contains("number_range");
         var unwrapped = Unwrap(propertyType);
         var isSizedNumber = unwrapped is Types.SizedNumberType;
 
-        // A sized type already pins the width itself, so neither attribute has anything left to set -
-        // this is what replaces 'number_type' for a plain number, and is the one place 'number_range'
-        // is refused outright rather than just requiring a plain 'number'.
-        if (isSizedNumber && hasNumberType)
-        {
-            _diagnostics.Error(
-                property,
-                InternalCodes.ConflictingAttributes,
-                $"'{propertyName}' is already '{unwrapped}', so 'number_type' has nothing left to set.",
-                $"remove 'number_type', or declare '{propertyName}: number' to pick a width with the attribute instead."
-            );
-
-            valid = false;
-        }
-
+        // A sized type already pins the width itself, so the attribute has nothing left to set - this is
+        // the one place 'number_range' is refused outright rather than just requiring a plain 'number'.
         if (isSizedNumber && hasNumberRange)
         {
             _diagnostics.Error(
@@ -176,70 +162,6 @@ public sealed partial class TypeChecker
                 InternalCodes.ConflictingAttributes,
                 $"'{propertyName}' is already '{unwrapped}', so 'number_range' has nothing left to set.",
                 $"remove 'number_range', or declare '{propertyName}: number' to use a bounded range instead."
-            );
-
-            valid = false;
-        }
-
-        // 'number_type' now has exactly one valid target left: an all-numeric tuple, where there is no
-        // type-level way to set every element's width at once. Every other former target has either a
-        // type-level replacement (a plain number's sized type, Vector3/Vector2/CFrame's own <T>) or, for
-        // the other 7 Roblox datatypes, no replacement at all - their per-component width simply isn't
-        // configurable anymore. Skipped when 'number_range' is also present: the conflict check below
-        // already covers that combination with a more specific message.
-        if (hasNumberType && !isSizedNumber && !hasNumberRange)
-        {
-            if (unwrapped is Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.Number })
-            {
-                _diagnostics.Error(
-                    property,
-                    InternalCodes.InvalidAttributeTargetType,
-                    $"'number_type' no longer applies to a plain 'number' - '{propertyName}' should be a sized type instead.",
-                    $"use one of u8/u16/u32/i8/i16/i32/f32/f64, e.g. '{propertyName}: u8'."
-                );
-
-                valid = false;
-            }
-            else if (unwrapped is Types.InterfaceType { Name: "Vector3" or "Vector2" or "CFrame" } sizedComponentType)
-            {
-                _diagnostics.Error(
-                    property,
-                    InternalCodes.InvalidAttributeTargetType,
-                    $"'number_type' no longer applies to '{propertyName}' - use '{sizedComponentType.Name}<i16>' instead of the attribute.",
-                    $"declare it as '{propertyName}: {sizedComponentType.Name}<i16>', or drop the argument to keep the f32 default."
-                );
-
-                valid = false;
-            }
-            else if (unwrapped is Types.InterfaceType otherDatatype && RobloxDatatype.TryGet(otherDatatype.Name, out _))
-            {
-                _diagnostics.Error(
-                    property,
-                    InternalCodes.InvalidAttributeTargetType,
-                    $"'number_type' on '{propertyName}' is no longer configurable - '{otherDatatype.Name}' always serializes its components as f32."
-                );
-
-                valid = false;
-            }
-            else if (!HasNumericComponents(propertyType))
-            {
-                _diagnostics.Error(
-                    property,
-                    InternalCodes.InvalidAttributeTargetType,
-                    $"'number_type' requires '{propertyName}' to have numeric components, but it is '{propertyType}'."
-                );
-
-                valid = false;
-            }
-        }
-
-        if (!isSizedNumber && hasNumberType && hasNumberRange)
-        {
-            _diagnostics.Error(
-                property,
-                InternalCodes.ConflictingAttributes,
-                $"'{propertyName}' has both 'number_type' and 'number_range', which each set its width.",
-                "use 'number_range' for a bounded value, or 'number_type' for a fixed width."
             );
 
             valid = false;
@@ -257,16 +179,12 @@ public sealed partial class TypeChecker
             valid = false;
         }
 
-        // 'number_type''s own non-numeric case is fully handled above; this only still needs to catch
-        // 'number_range' (alone, or paired with 'number_type' - the conflict check above already flags
-        // that combination, but a non-numeric target is a second, independent problem worth its own
-        // message too).
         if (hasNumberRange && !isSizedNumber && !HasNumericComponents(propertyType))
         {
             _diagnostics.Error(
                 property,
                 InternalCodes.InvalidAttributeTargetType,
-                $"'{(hasNumberType ? "number_type" : "number_range")}' requires '{propertyName}' to have numeric components, but it is '{propertyType}'."
+                $"'number_range' requires '{propertyName}' to have numeric components, but it is '{propertyType}'."
             );
 
             valid = false;
@@ -299,10 +217,8 @@ public sealed partial class TypeChecker
     }
 
     /// <summary>
-    ///     Whether <c>[number_type]</c> or <c>[number_range]</c> has anything to apply to. Vector3/Vector2/
-    ///     CFrame and the other Roblox datatypes are deliberately absent - the former three source their
-    ///     width from a type argument now, and the rest lost per-component configuration outright, so
-    ///     neither attribute has a valid interface-shaped target left. Only an all-numeric tuple remains.
+    ///     Whether <c>[number_range]</c> has anything to apply to: a plain number, or a tuple whose
+    ///     elements all do (the attribute distributes to every element that isn't already sized).
     /// </summary>
     private static bool HasNumericComponents(Type type) =>
         Unwrap(type) switch
