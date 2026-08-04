@@ -22,6 +22,7 @@ ExpressionStatement(
     Pattern: TypePattern(
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
       ObjectPattern: null
     )

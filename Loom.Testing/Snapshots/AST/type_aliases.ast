@@ -3,6 +3,7 @@
     EqualsToken: Token(Equals, "=")
     Type: PrimitiveType(
       Kind: Number
+      Width: null
     )
   )
   TypeParameters: null
@@ -13,6 +14,7 @@ TypeAlias(
     EqualsToken: Token(Equals, "=")
     Type: PrimitiveType(
       Kind: String
+      Width: null
     )
   )
   TypeParameters: null
@@ -116,6 +118,7 @@ TypeAlias(
           EqualsToken: Token(Equals, "=")
           Type: PrimitiveType(
             Kind: Number
+            Width: null
           )
         )
         Name: Token(Identifier, "T")
@@ -198,6 +201,7 @@ TypeAlias(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
                 Kind: Number
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -209,6 +213,7 @@ TypeAlias(
         ColonToken: Token(Colon, ":")
         Type: PrimitiveType(
           Kind: Void
+          Width: null
         )
       )
     )
@@ -373,12 +378,15 @@ TypeAlias(
       Types: [
         PrimitiveType(
           Kind: Number
+          Width: null
         )
         PrimitiveType(
           Kind: String
+          Width: null
         )
         PrimitiveType(
           Kind: Bool
+          Width: null
         )
       ]
     )

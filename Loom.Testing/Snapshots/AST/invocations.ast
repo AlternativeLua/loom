@@ -73,6 +73,7 @@ ExpressionStatement(
       ArgumentsList: [
         PrimitiveType(
           Kind: Number
+          Width: null
         )
       ]
     )
@@ -106,6 +107,7 @@ ExpressionStatement(
             ArgumentsList: [
               PrimitiveType(
                 Kind: Number
+                Width: null
               )
             ]
           )
@@ -252,6 +254,7 @@ ExpressionStatement(
                   ArgumentsList: [
                     PrimitiveType(
                       Kind: Number
+                      Width: null
                     )
                   ]
                 )
@@ -309,9 +312,11 @@ ExpressionStatement(
       ArgumentsList: [
         PrimitiveType(
           Kind: Number
+          Width: null
         )
         PrimitiveType(
           Kind: String
+          Width: null
         )
       ]
     )

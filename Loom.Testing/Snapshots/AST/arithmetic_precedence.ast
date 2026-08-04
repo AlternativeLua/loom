@@ -292,6 +292,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
   )
@@ -457,6 +458,7 @@ ExpressionStatement(
         )
         Type: PrimitiveType(
           Kind: Number
+          Width: null
         )
       )
     )
@@ -467,6 +469,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: String
+        Width: null
       )
     )
   )

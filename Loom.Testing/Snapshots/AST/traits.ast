@@ -9,6 +9,7 @@
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Void
+            Width: null
           )
         )
         Attributes: null
@@ -99,6 +100,7 @@ TraitDeclaration(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Number
+            Width: null
           )
         )
         EqualsTypeClause: null
@@ -124,6 +126,7 @@ TraitDeclaration(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Void
+            Width: null
           )
         )
         Attributes: null
@@ -136,6 +139,7 @@ TraitDeclaration(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Void
+            Width: null
           )
         )
         Attributes: null
@@ -148,6 +152,7 @@ TraitDeclaration(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Void
+            Width: null
           )
         )
         Attributes: null

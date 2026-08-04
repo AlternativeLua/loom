@@ -55,6 +55,7 @@ ExportDeclaration(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
               Kind: String
+              Width: null
             )
           )
           EqualsValueClause: null

@@ -110,7 +110,15 @@ public static class SyntaxFacts
         "never",
         "unknown",
         "none",
-        "void"
+        "void",
+        "u8",
+        "u16",
+        "u32",
+        "i8",
+        "i16",
+        "i32",
+        "f32",
+        "f64"
     ];
     private static readonly HashSet<SyntaxKind> _triviaSyntaxes = [SyntaxKind.Whitespace, SyntaxKind.Comment, SyntaxKind.BlockComment];
     private static readonly HashSet<SyntaxKind> _literalSyntaxes =

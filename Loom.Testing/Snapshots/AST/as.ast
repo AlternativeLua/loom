@@ -12,6 +12,7 @@
       )
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
   )
@@ -30,6 +31,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: String
+        Width: null
       )
     )
   )
@@ -48,6 +50,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
   )
@@ -62,6 +65,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
     Right: Identifier(
@@ -80,6 +84,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Bool
+        Width: null
       )
     )
     Right: As(
@@ -89,6 +94,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Bool
+        Width: null
       )
     )
   )
@@ -104,10 +110,12 @@ ExpressionStatement(
         )
         Type: PrimitiveType(
           Kind: Unknown
+          Width: null
         )
       )
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
     Right: Literal(
@@ -132,9 +140,11 @@ ExpressionStatement(
       Types: [
         PrimitiveType(
           Kind: Number
+          Width: null
         )
         PrimitiveType(
           Kind: Bool
+          Width: null
         )
       ]
     )
@@ -156,9 +166,11 @@ ExpressionStatement(
       Types: [
         PrimitiveType(
           Kind: String
+          Width: null
         )
         PrimitiveType(
           Kind: Number
+          Width: null
         )
       ]
     )
@@ -177,6 +189,7 @@ ExpressionStatement(
         )
         Type: PrimitiveType(
           Kind: Number
+          Width: null
         )
       )
     )
@@ -197,6 +210,7 @@ ExpressionStatement(
       NonNullableType: ArrayType(
         ElementType: PrimitiveType(
           Kind: Number
+          Width: null
         )
         LeftBracket: Token(LBracket, "[")
         MutKeyword: null
@@ -215,14 +229,17 @@ ExpressionStatement(
         )
         Type: PrimitiveType(
           Kind: Unknown
+          Width: null
         )
       )
       Type: PrimitiveType(
         Kind: Bool
+        Width: null
       )
     )
     Type: PrimitiveType(
       Kind: String
+      Width: null
     )
   )
 )
@@ -240,6 +257,7 @@ ExpressionStatement(
         ArgumentsList: [
           PrimitiveType(
             Kind: Number
+            Width: null
           )
         ]
       )
@@ -255,10 +273,12 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Unknown
+        Width: null
       )
     )
     Type: PrimitiveType(
       Kind: Number
+      Width: null
     )
   )
 )
@@ -270,6 +290,7 @@ ExpressionStatement(
     )
     Type: PrimitiveType(
       Kind: Number
+      Width: null
     )
   )
 )

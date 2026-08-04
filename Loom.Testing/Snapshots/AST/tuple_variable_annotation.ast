@@ -36,9 +36,11 @@
       Types: [
         PrimitiveType(
           Kind: String
+          Width: null
         )
         PrimitiveType(
           Kind: Number
+          Width: null
         )
       ]
     )

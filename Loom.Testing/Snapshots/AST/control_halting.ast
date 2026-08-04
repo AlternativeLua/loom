@@ -38,6 +38,7 @@ Declare(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
         Kind: Void
+        Width: null
       )
     )
     Attributes: null

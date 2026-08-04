@@ -166,6 +166,7 @@ ExpressionStatement(
       )
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
   )

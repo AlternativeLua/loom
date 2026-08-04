@@ -89,6 +89,7 @@ EnumDeclaration(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
       Kind: String
+      Width: null
     )
   )
   Members: [
@@ -139,6 +140,7 @@ EnumDeclaration(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
       Kind: Number
+      Width: null
     )
   )
   Members: [

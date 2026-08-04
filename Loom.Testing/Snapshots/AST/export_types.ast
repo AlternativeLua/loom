@@ -5,6 +5,7 @@
       EqualsToken: Token(Equals, "=")
       Type: PrimitiveType(
         Kind: Number
+        Width: null
       )
     )
     TypeParameters: null
@@ -26,6 +27,7 @@ ExportDeclaration(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
               Kind: Number
+              Width: null
             )
           )
           Attributes: null
@@ -37,6 +39,7 @@ ExportDeclaration(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
               Kind: Number
+              Width: null
             )
           )
           Attributes: null
@@ -92,6 +95,7 @@ ExportDeclaration(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
               Kind: Void
+              Width: null
             )
           )
           Attributes: null

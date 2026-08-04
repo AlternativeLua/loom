@@ -11,6 +11,7 @@
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Number
+            Width: null
           )
         )
         Attributes(

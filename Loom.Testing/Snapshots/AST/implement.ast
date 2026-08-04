@@ -97,6 +97,7 @@ Implement(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Void
+            Width: null
           )
         )
         Body: Block(
@@ -114,6 +115,7 @@ Implement(
                 ColonToken: Token(Colon, ":")
                 Type: PrimitiveType(
                   Kind: Number
+                  Width: null
                 )
               )
               EqualsValueClause: null

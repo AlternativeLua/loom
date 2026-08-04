@@ -11,6 +11,7 @@
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: String
+            Width: null
           )
         )
         Attributes: null
@@ -22,6 +23,7 @@
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
             Kind: Number
+            Width: null
           )
         )
         Attributes: null
