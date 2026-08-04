@@ -130,8 +130,9 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
             case Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.Number }:
                 return BuildNumberField(path, type, options, reportNode);
 
+            // length_type is gone - a sized string carries its own length width; anything else defaults.
             case Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.String }:
-                return new StringField(path, type, options.LengthType ?? DefaultLengthType);
+                return new StringField(path, type, type is Types.SizedStringType sized ? sized.LengthType : DefaultLengthType);
 
             // 'unknown' is the deliberate escape hatch: nothing can be checked about it, so it rides along
             // in the blobs array with only a count check on the way back.
@@ -141,11 +142,13 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
             case Types.FunctionType:
                 return new BlobField(path, type, "function", null);
 
-            // Elements do not take sentinels: those resolve once per field before the allocation, which
-            // cannot express a different choice for every entry.
+            // Bracket syntax always means the default length now - a non-default width only ever
+            // reaches here through Array<T, L>, handled in TryBuildInstantiatedField below. Elements do
+            // not take sentinels: those resolve once per field before the allocation, which cannot
+            // express a different choice for every entry.
             case Types.ArrayType array:
                 return TryBuildField(path + "[]", array.ElementType, options, false, reportNode) is { } element
-                    ? new ArrayField(path, type, options.LengthType ?? DefaultLengthType, element)
+                    ? new ArrayField(path, type, DefaultLengthType, element)
                     : null;
 
             // Tuple length is static, so unlike an array it writes no length prefix at all.
@@ -155,10 +158,8 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
             case Types.UnionType union:
                 return BuildUnionField(path, type, union, options, isPacked, reportNode);
 
-            // A generic instantiation carries its arguments unsubstituted; expanding gives the shape the
-            // rest of this switch can actually read - Record<K, V> is an indexer once expanded.
             case Types.InstantiatedType instantiated:
-                return TryBuildField(path, instantiated.Expand(), options, isPacked, reportNode);
+                return TryBuildInstantiatedField(path, instantiated, options, isPacked, reportNode);
 
             case Types.InterfaceType interfaceType:
                 return BuildInterfaceField(path, interfaceType, options, isPacked, reportNode);
@@ -167,6 +168,76 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
                 return ReportNotSerializable(path, type, reportNode);
         }
     }
+
+    /// <summary>
+    ///     Vector3/Vector2/CFrame's width and Array's length width are both phantom generic parameters
+    ///     meaningful only here - <c>Expand()</c>ing first (as every other generic instantiation needs,
+    ///     since it's the only way to see e.g. Record's indexer) would substitute the argument into
+    ///     nothing, since none of these three interfaces' own members reference their type parameter, and
+    ///     throw away the one piece of information this method exists to keep. Everything else - including
+    ///     the other 7 Roblox datatypes, which aren't generic at all - still falls through to the ordinary
+    ///     expand-then-read path below.
+    /// </summary>
+    private SerializationField? TryBuildInstantiatedField(string path, Types.InstantiatedType instantiated, FieldOptions options, bool isPacked, Node reportNode)
+    {
+        var declarationName = instantiated.GenericType.Declaration.Name.Text;
+        if (declarationName is "Vector3" or "Vector2" or "CFrame")
+        {
+            if (ResolveSizedTypeArgument(instantiated, 0, path, "component", reportNode) is not { } width)
+                return null;
+
+            if (declarationName == "CFrame")
+                return new CFrameField(path, instantiated, options.CFrameEncoding ?? CFrameEncoding.Compressed, width, isPacked);
+
+            if (!RobloxDatatype.TryGet(declarationName, out var datatype))
+                return ReportNotSerializable(path, instantiated, reportNode);
+
+            return new DatatypeField(path, instantiated, datatype, width, isPacked && datatype.Sentinels.Count > 0);
+        }
+
+        if (declarationName == "Array")
+        {
+            if (ResolveSizedTypeArgument(instantiated, 1, path, "length", reportNode, requireUnsigned: true) is not { } lengthType)
+                return null;
+
+            var elementType = ArgumentOrDefault(instantiated, 0);
+            return TryBuildField(path + "[]", elementType, options, false, reportNode) is { } element
+                ? new ArrayField(path, instantiated, lengthType, element)
+                : null;
+        }
+
+        // A generic instantiation carries its arguments unsubstituted; expanding gives the shape the
+        // rest of this switch can actually read - Record<K, V> is an indexer once expanded.
+        return TryBuildField(path, instantiated.Expand(), options, isPacked, reportNode);
+    }
+
+    private NumberType? ResolveSizedTypeArgument(Types.InstantiatedType instantiated, int index, string path, string what, Node reportNode, bool requireUnsigned = false)
+    {
+        var argument = ArgumentOrDefault(instantiated, index);
+        if (argument is not Types.SizedNumberType sized)
+        {
+            diagnostics.Error(reportNode, InternalCodes.InvalidTypeArguments, $"'{path}' needs a sized type for its {what} width, but got '{argument}'.");
+            return null;
+        }
+
+        if (requireUnsigned && !sized.NumberType.IsUnsigned())
+        {
+            diagnostics.Error(
+                reportNode,
+                InternalCodes.InvalidTypeArguments,
+                $"'{path}' needs an unsigned length type, but got '{sized.NumberType}'.",
+                "lengths are never negative; use U8, U16, or U32."
+            );
+
+            return null;
+        }
+
+        return sized.NumberType;
+    }
+
+    /// <summary>Argument N, or its parameter's default if omitted - mirrors <see cref="Types.InstantiatedType.Expand" />'s own fallback.</summary>
+    private static Type ArgumentOrDefault(Types.InstantiatedType instantiated, int index) =>
+        instantiated.Arguments.ElementAtOrDefault(index) ?? instantiated.GenericType.Parameters[index].DefaultType!;
 
     private SerializationField? BuildNumberField(string path, Type type, FieldOptions options, Node reportNode)
     {
@@ -228,12 +299,16 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         return new TupleField(path, type, elements);
     }
 
+    /// <summary>
+    ///     Reached for the 7 Roblox datatypes that never became generic (Color3, UDim, UDim2, NumberRange,
+    ///     Rect, Vector2int16, Vector3int16) - Vector3/Vector2/CFrame's own width is a type argument now,
+    ///     resolved by <see cref="TryBuildInstantiatedField" /> before this is ever reached, since a
+    ///     property referencing any of the three is always an <see cref="Types.InstantiatedType" />, never
+    ///     a plain <see cref="Types.InterfaceType" />.
+    /// </summary>
     private SerializationField? BuildInterfaceField(string path, Types.InterfaceType interfaceType, FieldOptions options, bool isPacked, Node reportNode)
     {
         var numberType = options.NumberType ?? DefaultNumberType;
-        if (interfaceType.Name == "CFrame")
-            return new CFrameField(path, interfaceType, options.CFrameEncoding ?? Serialization.CFrameEncoding.Compressed, numberType, isPacked);
-
         if (RobloxDatatype.TryGet(interfaceType.Name, out var datatype))
             return new DatatypeField(path, interfaceType, datatype, numberType, isPacked && datatype.Sentinels.Count > 0);
 
