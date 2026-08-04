@@ -195,12 +195,12 @@ public class SerializationSchemaTest
     }
 
     [Fact]
-    public void ThrowsFor_LengthType_WithSignedNumberType()
+    public void ThrowsFor_LengthType_OnString()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
             [serializable] interface MyData {
-                [length_type(NumberType.I16)]
+                [length_type(NumberType.U8)]
                 name: string;
             }
             """
@@ -209,19 +209,19 @@ public class SerializationSchemaTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.InvalidAttributeTargetType,
-            "'length_type' on 'name' must be an unsigned number type, but is 'I16'.",
-            "lengths are never negative; use U8, U16, or U32."
+            "'length_type' is no longer configurable via attribute on 'name'.",
+            "use 'string<u8>' for a string's length width, or 'Array<T, u8>' for an array's."
         );
     }
 
     [Fact]
-    public void ThrowsFor_LengthType_OnNonLengthPrefixedProperty()
+    public void ThrowsFor_LengthType_OnArray()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
             [serializable] interface MyData {
-                [length_type(NumberType.U16)]
-                id: number;
+                [length_type(NumberType.U8)]
+                ids: u8[];
             }
             """
         );
@@ -229,7 +229,8 @@ public class SerializationSchemaTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.InvalidAttributeTargetType,
-            "'length_type' requires 'id' to be a string or array, but it is 'number'."
+            "'length_type' is no longer configurable via attribute on 'ids'.",
+            "use 'string<u8>' for a string's length width, or 'Array<T, u8>' for an array's."
         );
     }
 
@@ -267,18 +268,57 @@ public class SerializationSchemaTest
         Utility.AssertDiagnostic(
             diagnostics,
             InternalCodes.InvalidAttributeTargetType,
-            "'cframe_type' requires 'position' to be a CFrame, but it is 'Vector3'."
+            "'cframe_type' requires 'position' to be a CFrame, but it is 'Vector3<f32>'."
         );
     }
 
     [Fact]
-    public void Allows_NumberType_OnRobloxDatatype()
+    public void ThrowsFor_NumberType_OnVector3()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
             """
             [serializable] interface MyData {
                 [number_type(NumberType.I16)]
                 position: Vector3;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'number_type' no longer applies to 'position' - use 'Vector3<i16>' instead of the attribute.",
+            "declare it as 'position: Vector3<i16>', or drop the argument to keep the f32 default."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_NumberType_OnOtherRobloxDatatype()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.I16)]
+                color: Color3;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'number_type' on 'color' is no longer configurable - 'Color3' always serializes its components as f32."
+        );
+    }
+
+    [Fact]
+    public void Allows_NumberType_OnNumericTuple()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                pair: (number, number);
             }
             """
         );
@@ -455,8 +495,7 @@ public class SerializationSchemaTest
         var luau = Utility.GetLuauAST(
                 """
                 [serializable, packed] interface Entity {
-                    [number_type(NumberType.I16)]
-                    position: Vector3;
+                    position: Vector3<i16>;
                 }
                 """,
                 true
@@ -478,8 +517,7 @@ public class SerializationSchemaTest
         var luau = Utility.GetLuauAST(
                 """
                 [serializable, packed] interface Waypoint {
-                    [number_type(NumberType.F32)]
-                    frame: CFrame;
+                    frame: CFrame<f32>;
                 }
                 """,
                 true
@@ -659,8 +697,7 @@ public class SerializationSchemaTest
                     tag: "sink";
                     inner: Inner;
                     label: string?;
-                    [number_type(NumberType.I16)]
-                    points: Vector3[];
+                    points: Vector3<i16>[];
                     payload: Ping | Chat;
                     owner: Part;
                 }
@@ -802,10 +839,9 @@ public class SerializationSchemaTest
                 """
                 [serializable, packed] interface Snapshot {
                     name: string;
-                    [number_type(NumberType.I16)]
-                    velocity: Vector3;
-                    [cframe_type(CFrameType.Compressed), number_type(NumberType.F32)]
-                    aim: CFrame;
+                    velocity: Vector3<i16>;
+                    [cframe_type(CFrameType.Compressed)]
+                    aim: CFrame<f32>;
                 }
                 """,
                 true
@@ -848,8 +884,7 @@ public class SerializationSchemaTest
             """
             [serializable] interface MyData {
                 id: u8;
-                [number_type(NumberType.I16)]
-                position: Vector3;
+                position: Vector3<i16>;
             }
             """
         );
@@ -867,8 +902,7 @@ public class SerializationSchemaTest
             """
             [serializable, packed] interface MyData {
                 id: u8;
-                [number_type(NumberType.I16)]
-                position: Vector3;
+                position: Vector3<i16>;
             }
             """
         );
@@ -1118,8 +1152,7 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.F32)]
-                frame: CFrame;
+                frame: CFrame<f32>;
             }
             """
         );
@@ -1138,8 +1171,8 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.F32), cframe_type(CFrameType.Precise)]
-                frame: CFrame;
+                [cframe_type(CFrameType.Precise)]
+                frame: CFrame<f32>;
             }
             """
         );

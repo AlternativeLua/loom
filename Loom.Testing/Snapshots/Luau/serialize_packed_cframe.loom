@@ -1,5 +1,4 @@
 [serializable, packed]
 interface Waypoint {
-    [number_type(NumberType.F32)]
-    frame: CFrame;
+    frame: CFrame<f32>;
 }

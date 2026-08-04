@@ -21,10 +21,9 @@ interface KitchenSink {
     tag: "sink";
     inner: Inner;
     label: string?;
-    [number_type(NumberType.I16)]
-    points: Vector3[];
+    points: Vector3<i16>[];
     payload: Ping | Chat;
     owner: Part;
-    [cframe_type(CFrameType.Precise), number_type(NumberType.F32)]
-    frame: CFrame;
+    [cframe_type(CFrameType.Precise)]
+    frame: CFrame<f32>;
 }

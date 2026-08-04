@@ -1,6 +1,5 @@
 [serializable]
 interface MyData {
     id: u8;
-    [number_type(NumberType.I16)]
-    position: Vector3;
+    position: Vector3<i16>;
 }

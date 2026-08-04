@@ -1,7 +1,7 @@
 [serializable]
 interface Anchor {
-    [cframe_type(CFrameType.Precise), number_type(NumberType.F32)]
-    exact: CFrame;
-    [cframe_type(CFrameType.Compressed), number_type(NumberType.F32)]
-    approximate: CFrame;
+    [cframe_type(CFrameType.Precise)]
+    exact: CFrame<f32>;
+    [cframe_type(CFrameType.Compressed)]
+    approximate: CFrame<f32>;
 }

@@ -18,8 +18,7 @@ interface PlayerState {
     health: u16;
     name: string;
     loadout: Loadout;
-    [number_type(NumberType.I16)]
-    position: Vector3;
+    position: Vector3<i16>;
     last_event: (Hit | Miss)?;
     recent: (Hit | Miss)[];
     scores: Record<string, Loadout>;

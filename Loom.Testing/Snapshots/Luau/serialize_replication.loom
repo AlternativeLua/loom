@@ -13,8 +13,7 @@ interface Damaged: IEvent<"Damaged"> {
 
 [serializable]
 interface Respawned: IEvent<"Respawned"> {
-    [number_type(NumberType.I16)]
-    at: Vector3;
+    at: Vector3<i16>;
 }
 
 [serializable]
@@ -31,10 +30,9 @@ interface PlayerSnapshot {
     health: number;
     alive: bool;
     team: Team;
-    [number_type(NumberType.I16)]
-    velocity: Vector3;
-    [cframe_type(CFrameType.Compressed), number_type(NumberType.F32)]
-    aim: CFrame;
+    velocity: Vector3<i16>;
+    [cframe_type(CFrameType.Compressed)]
+    aim: CFrame<f32>;
     loadout: Loadout;
     recent: (Damaged | Respawned)[];
     character: Model?;
