@@ -18,6 +18,8 @@ namespace Loom.Core.Generation;
 internal sealed partial class SerializationEmitter(SerializationSchema schema, List<string> bufferMembers)
 {
     private const string ValueParameter = "value";
+    private const string BaselineParameter = "baseline";
+    private const string DiffParameter = "diff";
     private const string SerializedParameter = "serialized";
     private const string BufferLocal = "b";
     private const string BlobsLocal = "blobs";
@@ -31,6 +33,11 @@ internal sealed partial class SerializationEmitter(SerializationSchema schema, L
     public static string SerializerName(string interfaceName) => $"{interfaceName}_serializer";
     public static string SerializerMapName(string interfaceName) => $"{interfaceName}_serializer_map";
     public static string BufferConstantName(string member) => $"buffer_{member}";
+    public static string DiffName(string interfaceName) => $"{interfaceName}_diff_binary";
+    public static string ApplyDiffName(string interfaceName) => $"{interfaceName}_apply_diff_binary";
+    private static string DiffWriteHelperName(string interfaceName) => $"{interfaceName}_diff_binary_write";
+    private static string DiffAttemptHelperName(string interfaceName) => $"{interfaceName}_diff_binary_attempt";
+    private static string DiffReadHelperName(string interfaceName) => $"{interfaceName}_apply_diff_binary_read";
 
     /// <summary>
     ///     Emits one table per mapping interface, keyed exactly as the interface is. Properties key by
@@ -71,7 +78,9 @@ internal sealed partial class SerializationEmitter(SerializationSchema schema, L
             new Table(
                 [
                     new PropertyTableInitializer("serialize", new Identifier(SerializeName(schema.Interface.Name))),
-                    new PropertyTableInitializer("deserialize", new Identifier(DeserializeName(schema.Interface.Name)))
+                    new PropertyTableInitializer("deserialize", new Identifier(DeserializeName(schema.Interface.Name))),
+                    new PropertyTableInitializer("diff", new Identifier(DiffName(schema.Interface.Name))),
+                    new PropertyTableInitializer("applyDiff", new Identifier(ApplyDiffName(schema.Interface.Name)))
                 ]
             )
         );

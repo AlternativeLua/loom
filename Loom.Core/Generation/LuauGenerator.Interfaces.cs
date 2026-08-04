@@ -142,6 +142,18 @@ public sealed partial class LuauGenerator
         var emitter = new SerializationEmitter(schema, _bufferMembers);
         _state.Postreq(emitter.EmitSerializer());
         _state.Postreq(emitter.EmitDeserializer());
+
+        // A fresh instance rather than reusing the one above: EmitSerializer already primed
+        // _prologueTags/_locals for that function's own body, and a delta write walks unions and
+        // sentinels in a different order, so it needs to resolve them itself rather than finding
+        // stale bookkeeping left over from a sibling function.
+        var deltaEmitter = new SerializationEmitter(schema, _bufferMembers);
+        _state.Postreq(deltaEmitter.EmitDeltaWriteHelper());
+        _state.Postreq(deltaEmitter.EmitDeltaAttempt());
+        _state.Postreq(deltaEmitter.EmitDeltaSerializer());
+        _state.Postreq(deltaEmitter.EmitDeltaReadHelper());
+        _state.Postreq(deltaEmitter.EmitDeltaDeserializer());
+
         _state.Postreq(emitter.EmitSerializerObject());
     }
 
