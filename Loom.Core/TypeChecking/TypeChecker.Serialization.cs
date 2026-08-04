@@ -12,7 +12,7 @@ public sealed partial class TypeChecker
 {
     /// <summary>Property-level serialization attributes, in the order they are reported.</summary>
     private static readonly string[] _serializationPropertyAttributes =
-        ["number_range", "number_step", "length_type", "cframe_type"];
+        ["number_range", "number_step", "cframe_type"];
 
     /// <summary>
     ///     Interfaces are checked after <c>SolveConstraints</c> rather than inline, so a serializable type
@@ -185,18 +185,6 @@ public sealed partial class TypeChecker
                 property,
                 InternalCodes.InvalidAttributeTargetType,
                 $"'number_range' requires '{propertyName}' to have numeric components, but it is '{propertyType}'."
-            );
-
-            valid = false;
-        }
-
-        if (present.Contains("length_type"))
-        {
-            _diagnostics.Error(
-                property,
-                InternalCodes.InvalidAttributeTargetType,
-                $"'length_type' is no longer configurable via attribute on '{propertyName}'.",
-                "use 'string<u8>' for a string's length width, or 'Array<T, u8>' for an array's."
             );
 
             valid = false;
