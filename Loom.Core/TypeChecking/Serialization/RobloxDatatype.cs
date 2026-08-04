@@ -15,16 +15,15 @@ public sealed record RobloxDatatype(
     string Name,
     IReadOnlyList<string> Components,
     string Constructor,
-    IReadOnlyList<string> Sentinels,
-    bool IsIntegral = false
+    IReadOnlyList<string> Sentinels
 )
 {
     private static readonly RobloxDatatype[] _all =
     [
         new("Vector2", ["X", "Y"], "Vector2.new", ["Vector2.zero", "Vector2.one", "Vector2.xAxis", "Vector2.yAxis"]),
         new("Vector3", ["X", "Y", "Z"], "Vector3.new", ["Vector3.zero", "Vector3.one", "Vector3.xAxis", "Vector3.yAxis", "Vector3.zAxis"]),
-        new("Vector2int16", ["X", "Y"], "Vector2int16.new", [], true),
-        new("Vector3int16", ["X", "Y", "Z"], "Vector3int16.new", [], true),
+        new("Vector2int16", ["X", "Y"], "Vector2int16.new", []),
+        new("Vector3int16", ["X", "Y", "Z"], "Vector3int16.new", []),
         new("Color3", ["R", "G", "B"], "Color3.new", []),
         new("UDim", ["Scale", "Offset"], "UDim.new", []),
         new("UDim2", ["X.Scale", "X.Offset", "Y.Scale", "Y.Offset"], "UDim2.new", []),

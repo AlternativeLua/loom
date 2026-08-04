@@ -8,6 +8,7 @@ using Loom.Luau.AST;
 using Attribute = Loom.Core.Parsing.AST.Attribute;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
 using Identifier = Loom.Luau.AST.Identifier;
+using InterfaceType = Loom.Core.TypeChecking.Types.InterfaceType;
 using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Generation.Macros.Providers;
@@ -64,7 +65,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                     ? new NilLiteral()
                     : new Table(
                         matchedAttribute.Arguments.ArgumentList
-                            .ConvertAll(argument => (TableInitializer)new TableInitializer(ToLuauConstant(context.SemanticModel.GetConstantValue(argument))))
+                            .ConvertAll(argument => new TableInitializer(ToLuauConstant(context.SemanticModel.GetConstantValue(argument))))
                     );
 
                 return true;
@@ -80,7 +81,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                 // The whole table, not one codec: inside a generic wrapper the key is a runtime value,
                 // so the choice cannot be made statically the way serializer::<T>() does.
                 if (typeArguments?.ArgumentsList.FirstOrDefault() is not { } mapArgument
-                    || context.SemanticModel.GetType(mapArgument) is not Loom.Core.TypeChecking.Types.InterfaceType mapType)
+                    || context.SemanticModel.GetType(mapArgument) is not InterfaceType mapType)
                 {
                     context.Diagnostics.Error(context.Node, InternalCodes.InvalidTypeArguments, "'serializer_of' requires a mapping interface as its first type argument.");
                     expression = new NilLiteral();
@@ -150,7 +151,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
         declaringFile = "";
         var semanticModel = context.SemanticModel;
         var subjectType = semanticModel.GetType(subject);
-        if (subjectType is not Loom.Core.TypeChecking.Types.InterfaceType interfaceType)
+        if (subjectType is not InterfaceType interfaceType)
         {
             context.Diagnostics.Error(
                 context.Node,

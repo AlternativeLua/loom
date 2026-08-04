@@ -107,7 +107,7 @@ public sealed partial class LuauGenerator
         return BuildOptionalChain(target, segments, 0, finalize ?? (expression => expression));
     }
 
-    private LuauExpression BuildOptionalChain(LuauExpression target, List<(string Name, bool IsOptional)> segments, int index, Func<LuauExpression, LuauExpression> finalize)
+    private static LuauExpression BuildOptionalChain(LuauExpression target, List<(string Name, bool IsOptional)> segments, int index, Func<LuauExpression, LuauExpression> finalize)
     {
         if (index >= segments.Count)
             return finalize(target);

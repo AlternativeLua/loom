@@ -98,7 +98,7 @@ internal sealed partial class SerializationEmitter
     ///     is the fallback rather than a reserved escape - the type guarantees some variant matches, so
     ///     the first needs no test of its own.
     /// </summary>
-    private void EmitUnionTag(UnionField unionField, LuauExpression value, List<LuauStatement> body)
+    private static void EmitUnionTag(UnionField unionField, LuauExpression value, List<LuauStatement> body)
     {
         var valueLocal = SentinelValueLocal(unionField.Path);
         var tagLocal = UnionTagLocal(unionField.Path);
@@ -118,7 +118,7 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>Test that identifies a variant, by literal value, runtime kind, or shared discriminant.</summary>
-    private static LuauExpression VariantCondition(UnionField unionField, LuauExpression value, int index)
+    private static BinaryOperator VariantCondition(UnionField unionField, LuauExpression value, int index)
     {
         var discriminant = unionField.Variants[index].Discriminant;
         return unionField.Discrimination switch
@@ -140,10 +140,10 @@ internal sealed partial class SerializationEmitter
     ///     need measuring - a string variant sized only by its fixed part would under-allocate and then
     ///     overrun the buffer it was given.
     /// </summary>
-    private LuauExpression? VariantSizeExpression(UnionField unionField, SerializationVariant variant, LuauExpression value)
+    private static LuauExpression? VariantSizeExpression(UnionField unionField, SerializationVariant variant, LuauExpression value)
     {
         var constant = 0;
-        LuauExpression? dynamic = null;
+        var measured = new List<LuauExpression>();
         foreach (var (variantField, variantValue) in ChildrenOf(unionField, variant, value))
         {
             if (variantField.BodyBytes is { } fixedBytes)
@@ -152,16 +152,15 @@ internal sealed partial class SerializationEmitter
                 continue;
             }
 
-            if (InlineContribution(variantField, variantValue) is not { } contribution)
-                continue;
-
-            dynamic = dynamic == null ? contribution : Add(dynamic, contribution);
+            if (InlineContribution(variantField, variantValue) is { } contribution)
+                measured.Add(contribution);
         }
 
-        if (dynamic == null)
+        if (measured.Count == 0)
             return constant > 0 ? new NumberLiteral(constant) : null;
 
-        return constant > 0 ? Add(new NumberLiteral(constant), dynamic) : dynamic;
+        var total = measured.Aggregate(Add);
+        return constant > 0 ? Add(new NumberLiteral(constant), total) : total;
     }
 
     /// <summary>
@@ -205,7 +204,7 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>A field's contribution as an expression, or null when it needs the traversal.</summary>
-    private LuauExpression? InlineContribution(SerializationField serializationField, LuauExpression value)
+    private static LuauExpression? InlineContribution(SerializationField serializationField, LuauExpression value)
     {
         if (SentinelNamesOf(serializationField) is { Count: > 0 })
             return new IfExpression(
@@ -371,7 +370,7 @@ internal sealed partial class SerializationEmitter
     ///     the entries need no bits at all. The block is claimed before any body so the bodies keep their
     ///     byte alignment.
     /// </summary>
-    private LuauExpression? ReserveElementBits(int bitsPerElement, string leaf, LuauExpression count, Cursor cursor, List<LuauStatement> body)
+    private Identifier? ReserveElementBits(int bitsPerElement, string leaf, LuauExpression count, Cursor cursor, List<LuauStatement> body)
     {
         if (bitsPerElement == 0)
             return null;
@@ -420,11 +419,11 @@ internal sealed partial class SerializationEmitter
                 new NumberLiteral(8)
             );
 
-    private static LuauExpression FloorDivide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "//", right);
+    private static BinaryOperator FloorDivide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "//", right);
 
-    private static LuauExpression Length(LuauExpression value) => new UnaryOperator("#", value);
+    private static UnaryOperator Length(LuauExpression value) => new UnaryOperator("#", value);
 
-    private static LuauExpression IsPresent(LuauExpression value) => new BinaryOperator(value, "~=", new NilLiteral());
+    private static BinaryOperator IsPresent(LuauExpression value) => new BinaryOperator(value, "~=", new NilLiteral());
 
     /// <summary>
     ///     An all-zero-width type sends no buffer, and a type with no blob fields sends no blobs array.
@@ -470,10 +469,10 @@ internal sealed partial class SerializationEmitter
                 // The common grid starts at zero and steps by one, where the shift and scale are both
                 // identities - emitting them would cost a subtract and a divide on every write.
                 var scaled = value;
-                if (ranged.Minimum != 0)
+                if (!ranged.Minimum.Equals(0d))
                     scaled = new Parenthesized(Subtract(scaled, new NumberLiteral(ranged.Minimum)));
 
-                if (ranged.Step != 1)
+                if (!ranged.Step.Equals(1d))
                     scaled = Divide(scaled, new NumberLiteral(ranged.Step));
 
                 body.Add(new ExpressionStatement(WriteBits(cursor, ranged.HeaderBits, LuauFactory.MathCall("round", [scaled]))));
@@ -689,7 +688,7 @@ internal sealed partial class SerializationEmitter
             WriteNumber(cursor, cframeField.NumberType, new Identifier(local), body);
     }
 
-    private static LuauExpression PackQuaternion(LuauExpression quaternion) => LuauFactory.RuntimeLibraryCall(["pack_quaternion"], [quaternion]);
+    private static Call PackQuaternion(LuauExpression quaternion) => LuauFactory.RuntimeLibraryCall(["pack_quaternion"], [quaternion]);
 
     private void WriteNumber(Cursor cursor, NumberType numberType, LuauExpression value, List<LuauStatement> body)
     {
@@ -697,7 +696,7 @@ internal sealed partial class SerializationEmitter
         cursor.Advance(body, numberType.ByteCount());
     }
 
-    private LuauExpression WriteBits(Cursor cursor, int bitCount, LuauExpression value)
+    private Call WriteBits(Cursor cursor, int bitCount, LuauExpression value)
     {
         var call = BufferCall(
             "writebits",

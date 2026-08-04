@@ -151,7 +151,7 @@ internal sealed partial class SerializationEmitter
         };
 
     /// <summary>Rebuilds a flattened struct as the table its properties belonged to.</summary>
-    private LuauExpression EmitStructRead(TupleField tupleField, Cursor cursor, List<LuauStatement> statements)
+    private Table EmitStructRead(TupleField tupleField, Cursor cursor, List<LuauStatement> statements)
     {
         var initializers = new List<TableInitializer>();
         foreach (var element in tupleField.Elements)
@@ -163,17 +163,17 @@ internal sealed partial class SerializationEmitter
     private LuauExpression EmitRangedRead(RangedNumberField ranged, Cursor cursor)
     {
         LuauExpression decoded = ReadBits(cursor, ranged.HeaderBits);
-        if (ranged.Step != 1)
+        if (!ranged.Step.Equals(1d))
             decoded = Multiply(decoded, new NumberLiteral(ranged.Step));
 
-        return ranged.Minimum != 0 ? Add(new NumberLiteral(ranged.Minimum), decoded) : decoded;
+        return ranged.Minimum.Equals(0d) ? decoded : Add(new NumberLiteral(ranged.Minimum), decoded);
     }
 
     /// <summary>
     ///     Blobs are consumed positionally. The count is checked and the value type verified where it can
     ///     be - a wrong-typed blob from a hostile client would otherwise violate the declared type.
     /// </summary>
-    private LuauExpression EmitBlobRead(BlobField blobField, List<LuauStatement> statements)
+    private Identifier EmitBlobRead(BlobField blobField, List<LuauStatement> statements)
     {
         var slot = new ElementAccess(new Identifier(BlobsLocal), new Identifier(BlobIndexLocal));
         var local = ReserveLocal(LeafName(blobField.Path) + "_blob");
@@ -226,7 +226,7 @@ internal sealed partial class SerializationEmitter
     ///     Reads a count-prefixed run of pairs back into a table. Order is not preserved and does not need
     ///     to be - a map is unordered, so any order rebuilds the same value.
     /// </summary>
-    private LuauExpression EmitMapRead(MapField mapField, Cursor cursor, List<LuauStatement> statements)
+    private Identifier EmitMapRead(MapField mapField, Cursor cursor, List<LuauStatement> statements)
     {
         var leaf = ReserveLocal(LeafName(mapField.Path));
         var countLocal = ReserveLocal(leaf + "_count");
@@ -249,7 +249,7 @@ internal sealed partial class SerializationEmitter
         return new Identifier(leaf);
     }
 
-    private LuauExpression EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)
+    private Identifier EmitArrayRead(ArrayField arrayField, Cursor cursor, List<LuauStatement> statements)
     {
         var leaf = ReserveLocal(LeafName(arrayField.Path));
         var countLocal = ReserveLocal(leaf + "_count");
@@ -318,7 +318,7 @@ internal sealed partial class SerializationEmitter
     ///     Reads a variant tag and rebuilds the selected shape. A tag outside the declared variants
     ///     reports rather than producing a value the union never admitted.
     /// </summary>
-    private LuauExpression EmitUnionRead(UnionField unionField, Cursor cursor, List<LuauStatement> statements)
+    private Identifier EmitUnionRead(UnionField unionField, Cursor cursor, List<LuauStatement> statements)
     {
         var leaf = ReserveLocal(LeafName(unionField.Path));
         var tagLocal = ReserveLocal(leaf + "_tag");
@@ -385,7 +385,7 @@ internal sealed partial class SerializationEmitter
     ///     Reads a sentinel tag, rebuilding the well-known value it names or falling through to the
     ///     components. Reserved tags report rather than producing a value the type never allowed.
     /// </summary>
-    private LuauExpression EmitSentinelRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
+    private Identifier EmitSentinelRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
     {
         var sentinels = SentinelNamesOf(serializationField)!;
         var leaf = ReserveLocal(LeafName(serializationField.Path));
@@ -432,7 +432,7 @@ internal sealed partial class SerializationEmitter
     ///     Reads a presence bit, then the payload only when it is set. The local starts nil so an absent
     ///     value needs no else branch.
     /// </summary>
-    private LuauExpression EmitOptionalRead(OptionalField optionalField, Cursor cursor, List<LuauStatement> statements)
+    private Identifier EmitOptionalRead(OptionalField optionalField, Cursor cursor, List<LuauStatement> statements)
     {
         var leaf = ReserveLocal(LeafName(optionalField.Path));
         var presentLocal = ReserveLocal(leaf + "_present");
@@ -456,7 +456,7 @@ internal sealed partial class SerializationEmitter
     ///     Reads a length-prefixed string, checking the prefix against what the buffer actually holds so a
     ///     hostile length reports rather than throwing out of the read.
     /// </summary>
-    private LuauExpression EmitStringRead(StringField stringField, Cursor cursor, List<LuauStatement> statements)
+    private Identifier EmitStringRead(StringField stringField, Cursor cursor, List<LuauStatement> statements)
     {
         var leaf = ReserveLocal(LeafName(stringField.Path));
         var lengthLocal = ReserveLocal(leaf + "_length");
@@ -483,7 +483,7 @@ internal sealed partial class SerializationEmitter
         return new Identifier(leaf);
     }
 
-    private LuauExpression EmitCFrameRead(CFrameField cframeField, Cursor cursor, List<LuauStatement> statements)
+    private Call EmitCFrameRead(CFrameField cframeField, Cursor cursor, List<LuauStatement> statements)
     {
         var arguments = CFramePositionComponents.ConvertAll(_ => ReadNumber(cursor, cframeField.NumberType, statements));
         if (cframeField.Encoding == CFrameEncoding.Compressed)
@@ -538,7 +538,7 @@ internal sealed partial class SerializationEmitter
                 return $"{preferred}_{suffix}";
     }
 
-    private LuauExpression ReadBits(Cursor cursor, int bitCount)
+    private Call ReadBits(Cursor cursor, int bitCount)
     {
         var call = BufferCall("readbits", [new Identifier(BufferLocal), cursor.BitPosition, new NumberLiteral(bitCount)]);
         cursor.BitOffset += bitCount;

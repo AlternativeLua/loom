@@ -1,7 +1,6 @@
 using System.Text;
 using Loom.Core.TypeChecking.Serialization;
 using Loom.Core.TypeChecking.Types;
-using Loom.Luau;
 using Loom.Luau.AST;
 
 namespace Loom.Core.Generation;
@@ -110,7 +109,7 @@ internal sealed partial class SerializationEmitter
     private static string RelativePath(string path, string enclosing) =>
         path.StartsWith(enclosing + ".", StringComparison.Ordinal) ? path[(enclosing.Length + 1)..] : path;
 
-    private static LuauExpression Access(LuauExpression source, string path) => new PropertyAccess(source, [..path.Split('.')]);
+    private static PropertyAccess Access(LuauExpression source, string path) => new PropertyAccess(source, [..path.Split('.')]);
 
     /// <summary>
     ///     Last segment of a path, as a usable Luau identifier. Element paths carry brackets - <c>names[]</c>,
@@ -168,12 +167,12 @@ internal sealed partial class SerializationEmitter
     /// </summary>
     private static LuauExpression Operand(LuauExpression expression) =>
         expression is IfExpression ? new Parenthesized(expression) : expression;
-    private static LuauExpression Subtract(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "-", right);
+    private static BinaryOperator Subtract(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "-", right);
     private static LuauExpression Multiply(LuauExpression left, LuauExpression right) =>
         IsNumber(left, 0) || IsNumber(right, 0)
             ? Zero
             : IsNumber(left, 1) ? right : IsNumber(right, 1) ? left : new BinaryOperator(left, "*", right);
 
-    private static bool IsNumber(LuauExpression expression, double value) => expression is NumberLiteral literal && literal.Value == value;
-    private static LuauExpression Divide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "/", right);
+    private static bool IsNumber(LuauExpression expression, double value) => expression is NumberLiteral literal && literal.Value.Equals(value);
+    private static BinaryOperator Divide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "/", right);
 }

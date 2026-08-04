@@ -27,10 +27,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         double? Step,
         NumberType? LengthType,
         CFrameEncoding? CFrameEncoding
-    )
-    {
-        public static readonly FieldOptions None = new(null, null, null, null, null);
-    }
+    );
 
     public SerializationSchema? Build(InterfaceSymbol interfaceSymbol)
     {
@@ -212,7 +209,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         return new RangedNumberField(path, type, range.Minimum, range.Maximum, step);
     }
 
-    private SerializationField? BuildTupleField(string path, Type type, Types.TupleType tuple, FieldOptions options, bool isPacked, Node reportNode)
+    private TupleField? BuildTupleField(string path, Type type, Types.TupleType tuple, FieldOptions options, bool isPacked, Node reportNode)
     {
         var elements = new List<SerializationField>();
         for (var index = 0; index < tuple.ElementTypes.Count; index++)
@@ -268,7 +265,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         return new TupleField(path, interfaceType, nestedFields);
     }
 
-    private SerializationField? BuildMapField(
+    private MapField? BuildMapField(
         string path,
         Types.InterfaceType interfaceType,
         Types.ObjectIndexer indexer,

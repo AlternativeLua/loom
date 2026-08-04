@@ -90,7 +90,7 @@ internal sealed partial class SerializationEmitter(SerializationSchema schema, L
         return new Identifier(BufferConstantName(member));
     }
 
-    private LuauExpression BufferCall(string member, List<LuauExpression> arguments) => new Call(Buffer(member), arguments);
+    private Call BufferCall(string member, List<LuauExpression> arguments) => new Call(Buffer(member), arguments);
 
     /// <summary>
     ///     Unions whose tag the prologue already resolved. A union inside a collection has one tag per
