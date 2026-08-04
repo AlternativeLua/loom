@@ -18,12 +18,16 @@ public sealed record RobloxDatatype(
     IReadOnlyList<string> Sentinels
 )
 {
+    /// <summary>
+    ///     <c>Vector2int16</c>/<c>Vector3int16</c> are deliberately absent - <c>Vector2&lt;i16&gt;</c>/
+    ///     <c>Vector3&lt;i16&gt;</c> already say the same thing with a configurable width, so
+    ///     <see cref="SerializationSchemaBuilder" /> rejects the int16 datatypes outright rather than
+    ///     registering them here.
+    /// </summary>
     private static readonly RobloxDatatype[] _all =
     [
         new("Vector2", ["X", "Y"], "Vector2.new", ["Vector2.zero", "Vector2.one", "Vector2.xAxis", "Vector2.yAxis"]),
         new("Vector3", ["X", "Y", "Z"], "Vector3.new", ["Vector3.zero", "Vector3.one", "Vector3.xAxis", "Vector3.yAxis", "Vector3.zAxis"]),
-        new("Vector2int16", ["X", "Y"], "Vector2int16.new", []),
-        new("Vector3int16", ["X", "Y", "Z"], "Vector3int16.new", []),
         new("Color3", ["R", "G", "B"], "Color3.new", []),
         new("UDim", ["Scale", "Offset"], "UDim.new", []),
         new("UDim2", ["X.Scale", "X.Offset", "Y.Scale", "Y.Offset"], "UDim2.new", []),

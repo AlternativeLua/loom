@@ -181,7 +181,10 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         var declarationName = instantiated.GenericType.Declaration.Name.Text;
         if (declarationName is "Vector3" or "Vector2" or "CFrame")
         {
-            if (ResolveSizedTypeArgument(instantiated, 0, path, "component", reportNode) is not { } width)
+            if (ArgumentByName(instantiated, "T", path, reportNode) is not { } typeArgument)
+                return null;
+
+            if (ResolveSizedTypeArgument(typeArgument, path, "component", reportNode) is not { } width)
                 return null;
 
             if (declarationName == "CFrame")
@@ -195,10 +198,13 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
         if (declarationName == "Array")
         {
-            if (ResolveSizedTypeArgument(instantiated, 1, path, "length", reportNode, requireUnsigned: true) is not { } lengthType)
+            if (ArgumentByName(instantiated, "T", path, reportNode) is not { } elementType
+                || ArgumentByName(instantiated, "L", path, reportNode) is not { } lengthArgument)
                 return null;
 
-            var elementType = ArgumentOrDefault(instantiated, 0);
+            if (ResolveSizedTypeArgument(lengthArgument, path, "length", reportNode, requireUnsigned: true) is not { } lengthType)
+                return null;
+
             return TryBuildField(path + "[]", elementType, options, false, reportNode) is { } element
                 ? new ArrayField(path, instantiated, lengthType, element)
                 : null;
@@ -209,9 +215,34 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         return TryBuildField(path, instantiated.Expand(), options, isPacked, reportNode);
     }
 
-    private NumberType? ResolveSizedTypeArgument(Types.InstantiatedType instantiated, int index, string path, string what, Node reportNode, bool requireUnsigned = false)
+    /// <summary>
+    ///     Looks up a type argument by its declared parameter's name rather than position, so a future
+    ///     reordering of Vector3/Vector2/CFrame/Array's own type parameters in <c>loom.loom</c> can't
+    ///     silently pair the wrong argument with the wrong meaning here - a positional lookup would keep
+    ///     compiling and just resolve the wrong width. A missing name means this code and the intrinsic
+    ///     declaration have drifted apart, which is a compiler bug rather than something a user wrote.
+    /// </summary>
+    private Type? ArgumentByName(Types.InstantiatedType instantiated, string parameterName, string path, Node reportNode)
     {
-        var argument = ArgumentOrDefault(instantiated, index);
+        var index = instantiated.GenericType.Parameters.FindIndex(p => p.Name == parameterName);
+        if (index < 0)
+        {
+            diagnostics.Error(
+                reportNode,
+                InternalCodes.NotSerializable,
+                $"'{path}' references '{instantiated.GenericType.Declaration.Name.Text}', which has no type parameter named '{parameterName}' - this is a compiler bug."
+            );
+
+            return null;
+        }
+
+        // The default is read the same way InstantiatedType.Expand() itself falls back when an
+        // argument was omitted, since InstantiateGenericType should already have filled it in.
+        return instantiated.Arguments.ElementAtOrDefault(index) ?? instantiated.GenericType.Parameters[index].DefaultType;
+    }
+
+    private NumberType? ResolveSizedTypeArgument(Type argument, string path, string what, Node reportNode, bool requireUnsigned = false)
+    {
         if (argument is not Types.SizedNumberType sized)
         {
             diagnostics.Error(reportNode, InternalCodes.InvalidTypeArguments, $"'{path}' needs a sized type for its {what} width, but got '{argument}'.");
@@ -232,10 +263,6 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
         return sized.NumberType;
     }
-
-    /// <summary>Argument N, or its parameter's default if omitted - mirrors <see cref="Types.InstantiatedType.Expand" />'s own fallback.</summary>
-    private static Type ArgumentOrDefault(Types.InstantiatedType instantiated, int index) =>
-        instantiated.Arguments.ElementAtOrDefault(index) ?? instantiated.GenericType.Parameters[index].DefaultType!;
 
     private SerializationField? BuildNumberField(string path, Type type, FieldOptions options, Node reportNode)
     {
@@ -298,14 +325,30 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
     }
 
     /// <summary>
-    ///     Reached for the 7 Roblox datatypes that never became generic (Color3, UDim, UDim2, NumberRange,
-    ///     Rect, Vector2int16, Vector3int16) - Vector3/Vector2/CFrame's own width is a type argument now,
-    ///     resolved by <see cref="TryBuildInstantiatedField" /> before this is ever reached, since a
-    ///     property referencing any of the three is always an <see cref="Types.InstantiatedType" />, never
-    ///     a plain <see cref="Types.InterfaceType" />.
+    ///     Reached for the 5 Roblox datatypes that never became generic (Color3, UDim, UDim2, NumberRange,
+    ///     Rect) - Vector3/Vector2/CFrame's own width is a type argument now, resolved by
+    ///     <see cref="TryBuildInstantiatedField" /> before this is ever reached, since a property
+    ///     referencing any of the three is always an <see cref="Types.InstantiatedType" />, never a plain
+    ///     <see cref="Types.InterfaceType" />. Vector2int16/Vector3int16 are rejected outright below,
+    ///     rather than serialized at a fixed width.
     /// </summary>
     private SerializationField? BuildInterfaceField(string path, Types.InterfaceType interfaceType, FieldOptions options, bool isPacked, Node reportNode)
     {
+        // Vector2<i16>/Vector3<i16> already say "two/three i16 components" with a configurable width, so
+        // there is no reason to keep the fixed-width int16 datatypes serializable alongside them.
+        if (interfaceType.Name is "Vector2int16" or "Vector3int16")
+        {
+            var replacement = interfaceType.Name == "Vector2int16" ? "Vector2" : "Vector3";
+            diagnostics.Error(
+                reportNode,
+                InternalCodes.NotSerializable,
+                $"'{path}' has type '{interfaceType.Name}', which cannot be serialized.",
+                $"use '{replacement}<i16>' instead - its components are already i16, and the width is configurable."
+            );
+
+            return null;
+        }
+
         if (RobloxDatatype.TryGet(interfaceType.Name, out var datatype))
             return new DatatypeField(path, interfaceType, datatype, DefaultNumberType, isPacked && datatype.Sentinels.Count > 0);
 
