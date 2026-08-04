@@ -1,7 +1,6 @@
 [serializable, packed]
 interface Entity {
-    [number_type(NumberType.U8)]
-    id: number;
+    id: u8;
     [number_type(NumberType.I16)]
     position: Vector3;
 }

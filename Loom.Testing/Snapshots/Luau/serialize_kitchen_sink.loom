@@ -13,8 +13,7 @@ interface Chat: IEvent<"Chat"> {
 [serializable]
 interface Inner {
     flag: bool;
-    [number_type(NumberType.U8)]
-    code: number;
+    code: u8;
 }
 
 [serializable]

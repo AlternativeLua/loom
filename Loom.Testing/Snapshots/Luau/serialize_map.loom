@@ -2,8 +2,7 @@ enum Message { ShootGun }
 
 [serializable]
 interface ShootGunPacket {
-    [number_type(NumberType.U8)]
-    velocity: number;
+    velocity: u8;
 }
 
 declare interface MessageData {

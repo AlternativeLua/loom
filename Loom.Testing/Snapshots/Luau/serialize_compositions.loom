@@ -1,7 +1,6 @@
 [serializable]
 interface Leaf {
-    [number_type(NumberType.U8)]
-    n: number;
+    n: u8;
 }
 
 [serializable]

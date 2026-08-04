@@ -1,7 +1,6 @@
 [serializable]
 interface Profile {
-    [number_type(NumberType.U8)]
-    level: number;
+    level: u8;
     nickname: string?;
 }
 

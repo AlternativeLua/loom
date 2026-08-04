@@ -5,8 +5,7 @@ interface LogOutAction: IAction<"LogOut">;
 
 [serializable]
 interface ClickAction: IAction<"Click"> {
-    [number_type(NumberType.U8)]
-    x: number;
+    x: u8;
 }
 
 [serializable]

@@ -3,10 +3,8 @@
 
 [serializable]
 interface Loadout {
-    [number_type(NumberType.U8)]
-    primary: number;
-    [number_type(NumberType.U8)]
-    secondary: number;
+    primary: u8;
+    secondary: u8;
 }
 
 [serializable]
@@ -17,8 +15,7 @@ interface Miss { kind: "Miss"; }
 
 [serializable, packed]
 interface PlayerState {
-    [number_type(NumberType.U16)]
-    health: number;
+    health: u16;
     name: string;
     loadout: Loadout;
     [number_type(NumberType.I16)]

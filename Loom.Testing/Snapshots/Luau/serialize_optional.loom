@@ -1,7 +1,5 @@
 [serializable]
 interface Entity {
-    [number_type(NumberType.U8)]
-    id: number;
-    [number_type(NumberType.I16)]
-    target: number?;
+    id: u8;
+    target: i16?;
 }

@@ -1,7 +1,6 @@
 [serializable]
 interface Entry {
-    [number_type(NumberType.U8)]
-    level: number;
+    level: u8;
     label: string;
 }
 

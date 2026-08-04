@@ -19,16 +19,13 @@ interface Respawned: IEvent<"Respawned"> {
 
 [serializable]
 interface Loadout {
-    [number_type(NumberType.U8)]
-    primary: number;
-    [number_type(NumberType.U8)]
-    secondary: number;
+    primary: u8;
+    secondary: u8;
 }
 
 [serializable, packed]
 interface PlayerSnapshot {
-    [number_type(NumberType.U16)]
-    user_id: number;
+    user_id: u16;
     display_name: string;
     [number_range(0, 100)]
     health: number;

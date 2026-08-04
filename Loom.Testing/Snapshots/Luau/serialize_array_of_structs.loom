@@ -5,8 +5,7 @@ interface Bag {
 
 [serializable]
 interface Leaf {
-    [number_type(NumberType.U8)]
-    v: number;
+    v: u8;
 }
 
 [serializable]

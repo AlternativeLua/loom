@@ -1,6 +1,5 @@
 [serializable]
 interface Player {
-    [number_type(NumberType.U8)]
-    id: number;
+    id: u8;
     name: string;
 }
