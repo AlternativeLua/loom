@@ -117,7 +117,7 @@ const function Entity_apply_diff_binary_read(baseline: Entity, diff: Loom.Serial
     target = target_2
   else
     if baseline.target ~= nil then
-      const target_changed = buffer_readbits(b, 3, 1) == 1
+      const target_changed = buffer_readbits(b, 2, 1) == 1
       local target_3 = nil
       if target_changed then
         const read_2 = buffer_readi16(b, offset)

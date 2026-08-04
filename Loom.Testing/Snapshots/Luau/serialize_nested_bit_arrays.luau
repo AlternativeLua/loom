@@ -507,7 +507,7 @@ const function Canvas_apply_diff_binary_read(baseline: Canvas, diff: Loom.Serial
         if shapes_element_tag_b == 0 then
           shapes_element_2 = { kind = "Dot" }
         elseif shapes_element_tag_b == 1 then
-          const label_changed = buffer_readbits(b, shapes_bits + (i_7 - 1) * 2 + 2, 1) == 1
+          const label_changed = buffer_readbits(b, shapes_bits + (i_7 - 1) * 2 + 1, 1) == 1
           local label_3 = nil
           if label_changed then
             const read_6 = buffer_readu32(b, offset)

@@ -141,7 +141,7 @@ const function Profile_apply_diff_binary_read(baseline: Profile, diff: Loom.Seri
     nickname = nickname_2
   else
     if baseline.nickname ~= nil then
-      const nickname_changed = buffer_readbits(b, 3, 1) == 1
+      const nickname_changed = buffer_readbits(b, 2, 1) == 1
       local nickname_4 = nil
       if nickname_changed then
         const read_2 = buffer_readu32(b, offset)
@@ -352,7 +352,7 @@ const function Account_apply_diff_binary_read(baseline: Account, diff: Loom.Seri
     nickname = nickname_2
   else
     if baseline.profile.nickname ~= nil then
-      const nickname_changed = buffer_readbits(b, 3, 1) == 1
+      const nickname_changed = buffer_readbits(b, 2, 1) == 1
       local nickname_4 = nil
       if nickname_changed then
         const read_2 = buffer_readu32(b, offset)
@@ -370,10 +370,10 @@ const function Account_apply_diff_binary_read(baseline: Account, diff: Loom.Seri
       nickname = nickname_4
     end
   end
-  const tag_presence_changed = buffer_readbits(b, 4, 1) == 1
+  const tag_presence_changed = buffer_readbits(b, 3, 1) == 1
   local tag = nil
   if tag_presence_changed then
-    const tag_2_present = buffer_readbits(b, 5, 1) == 1
+    const tag_2_present = buffer_readbits(b, 4, 1) == 1
     local tag_2 = nil
     if tag_2_present then
       const read_3 = buffer_readu32(b, offset)
@@ -389,7 +389,7 @@ const function Account_apply_diff_binary_read(baseline: Account, diff: Loom.Seri
     tag = tag_2
   else
     if baseline.tag ~= nil then
-      const tag_changed = buffer_readbits(b, 6, 1) == 1
+      const tag_changed = buffer_readbits(b, 4, 1) == 1
       local tag_4 = nil
       if tag_changed then
         const read_4 = buffer_readu32(b, offset)

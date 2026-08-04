@@ -940,7 +940,7 @@ const function Compositions_apply_diff_binary_read(baseline: Compositions, diff:
       sparse_v_3 = sparse_v_4
     else
       if baseline.sparse[sparse_changed_key] ~= nil then
-        const sparse_v_changed = buffer_readbits(b, sparse_entry_bits + (i_13 - 1) * 2 + 2, 1) == 1
+        const sparse_v_changed = buffer_readbits(b, sparse_entry_bits + (i_13 - 1) * 2 + 1, 1) == 1
         local sparse_v_6 = nil
         if sparse_v_changed then
           const read_31 = buffer_readu32(b, offset)
@@ -976,7 +976,7 @@ const function Compositions_apply_diff_binary_read(baseline: Compositions, diff:
     maybe_leaf = maybe_leaf_2
   else
     if baseline.maybe_leaf ~= nil then
-      const n_changed_2 = buffer_readbits(b, 6, 1) == 1
+      const n_changed_2 = buffer_readbits(b, 5, 1) == 1
       local n_2 = nil
       if n_changed_2 then
         const read_33 = buffer_readu8(b, offset)
@@ -988,10 +988,10 @@ const function Compositions_apply_diff_binary_read(baseline: Compositions, diff:
       maybe_leaf = { n = n_2 }
     end
   end
-  const maybe_names_presence_changed = buffer_readbits(b, 7, 1) == 1
+  const maybe_names_presence_changed = buffer_readbits(b, 6, 1) == 1
   local maybe_names = nil
   if maybe_names_presence_changed then
-    const maybe_names_2_present = buffer_readbits(b, 8, 1) == 1
+    const maybe_names_2_present = buffer_readbits(b, 7, 1) == 1
     local maybe_names_2 = nil
     if maybe_names_2_present then
       const read_34 = buffer_readu32(b, offset)
@@ -1014,7 +1014,7 @@ const function Compositions_apply_diff_binary_read(baseline: Compositions, diff:
     maybe_names = maybe_names_2
   else
     if baseline.maybe_names ~= nil then
-      const maybe_names_length_changed = buffer_readbits(b, 9, 1) == 1
+      const maybe_names_length_changed = buffer_readbits(b, 7, 1) == 1
       local maybe_names_4 = nil
       if maybe_names_length_changed then
         const read_36 = buffer_readu32(b, offset)

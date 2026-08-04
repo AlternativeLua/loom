@@ -182,7 +182,7 @@ const function Cell_apply_diff_binary_read(baseline: Cell, diff: Loom.Serialized
       content_tag_b = 1
     end
     if content_tag_b == 0 then
-      const content_changed = buffer_readbits(b, 2, 1) == 1
+      const content_changed = buffer_readbits(b, 1, 1) == 1
       local content_4 = nil
       if content_changed then
         const read_2 = buffer_readf32(b, offset)
@@ -193,7 +193,7 @@ const function Cell_apply_diff_binary_read(baseline: Cell, diff: Loom.Serialized
       end
       content = content_4
     elseif content_tag_b == 1 then
-      const content_changed_2 = buffer_readbits(b, 3, 1) == 1
+      const content_changed_2 = buffer_readbits(b, 1, 1) == 1
       local content_5 = nil
       if content_changed_2 then
         const read_3 = buffer_readu32(b, offset)

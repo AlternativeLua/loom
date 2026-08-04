@@ -606,7 +606,7 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
     label = label_2
   else
     if baseline.label ~= nil then
-      const label_changed = buffer_readbits(b, 5, 1) == 1
+      const label_changed = buffer_readbits(b, 4, 1) == 1
       local label_4 = nil
       if label_changed then
         const read_2 = buffer_readu32(b, offset)
@@ -624,7 +624,7 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
       label = label_4
     end
   end
-  const points_length_changed = buffer_readbits(b, 6, 1) == 1
+  const points_length_changed = buffer_readbits(b, 5, 1) == 1
   local points = nil
   if points_length_changed then
     const read_3 = buffer_readu32(b, offset)
@@ -666,10 +666,10 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
       points[i_2] = points_element
     end
   end
-  const payload_tag_changed = buffer_readbits(b, 7, 1) == 1
+  const payload_tag_changed = buffer_readbits(b, 6, 1) == 1
   local payload = nil
   if payload_tag_changed then
-    const payload_2_tag = buffer_readbits(b, 8, 1)
+    const payload_2_tag = buffer_readbits(b, 7, 1)
     local payload_2 = nil
     if payload_2_tag == 0 then
       payload_2 = { kind = "Ping" }
@@ -682,7 +682,7 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
       end
       const message = buffer_readstring(b, offset, message_length)
       offset += message_length
-      payload_2 = { kind = "Chat", message = message, volume = buffer_readbits(b, 9, 7) }
+      payload_2 = { kind = "Chat", message = message, volume = buffer_readbits(b, 8, 7) }
     else
       return { ok = false, error = { kind = "invalid_tag", field = "payload" } }
     end
@@ -696,7 +696,7 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
     if payload_tag_b == 0 then
       payload = { kind = "Ping" }
     elseif payload_tag_b == 1 then
-      const message_changed = buffer_readbits(b, 16, 1) == 1
+      const message_changed = buffer_readbits(b, 7, 1) == 1
       local message_2 = nil
       if message_changed then
         const read_11 = buffer_readu32(b, offset)
@@ -711,17 +711,17 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
       else
         message_2 = baseline.payload.message
       end
-      const volume_changed = buffer_readbits(b, 17, 1) == 1
+      const volume_changed = buffer_readbits(b, 8, 1) == 1
       local volume = nil
       if volume_changed then
-        volume = buffer_readbits(b, 18, 7)
+        volume = buffer_readbits(b, 9, 7)
       else
         volume = baseline.payload.volume
       end
       payload = { kind = "Chat", message = message_2, volume = volume }
     end
   end
-  const owner_changed = buffer_readbits(b, 25, 1) == 1
+  const owner_changed = buffer_readbits(b, 16, 1) == 1
   local owner = nil
   if owner_changed then
     const owner_blob = blobs[blob_index]
@@ -736,7 +736,7 @@ const function KitchenSink_apply_diff_binary_read(baseline: KitchenSink, diff: L
   else
     owner = baseline.owner
   end
-  const frame_changed = buffer_readbits(b, 26, 1) == 1
+  const frame_changed = buffer_readbits(b, 17, 1) == 1
   local frame = nil
   if frame_changed then
     const read_12 = buffer_readf32(b, offset)

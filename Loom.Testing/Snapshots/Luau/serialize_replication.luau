@@ -142,7 +142,7 @@ const function Damaged_apply_diff_binary_read(baseline: Damaged, diff: Loom.Seri
     attacker = attacker_2
   else
     if baseline.attacker ~= nil then
-      const attacker_changed = buffer_readbits(b, 13, 1) == 1
+      const attacker_changed = buffer_readbits(b, 12, 1) == 1
       local attacker_3 = nil
       if attacker_changed then
         const attacker_blob_2 = blobs[blob_index]
@@ -1105,17 +1105,17 @@ const function PlayerSnapshot_apply_diff_binary_read(baseline: PlayerSnapshot, d
           recent_element_tag_b = 1
         end
         if recent_element_tag_b == 0 then
-          const amount_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 13, 1) == 1
+          const amount_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 1, 1) == 1
           local amount = nil
           if amount_changed then
-            amount = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 14, 10)
+            amount = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 2, 10)
           else
             amount = baseline.recent[i_2].amount
           end
-          const attacker_presence_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 24, 1) == 1
+          const attacker_presence_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 12, 1) == 1
           local attacker_3 = nil
           if attacker_presence_changed then
-            const attacker_4_present = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 25, 1) == 1
+            const attacker_4_present = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 13, 1) == 1
             local attacker_4 = nil
             if attacker_4_present then
               const attacker_blob_3 = blobs[blob_index]
@@ -1131,7 +1131,7 @@ const function PlayerSnapshot_apply_diff_binary_read(baseline: PlayerSnapshot, d
             attacker_3 = attacker_4
           else
             if baseline.recent[i_2].attacker ~= nil then
-              const attacker_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 26, 1) == 1
+              const attacker_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 13, 1) == 1
               local attacker_5 = nil
               if attacker_changed then
                 const attacker_blob_4 = blobs[blob_index]
@@ -1151,7 +1151,7 @@ const function PlayerSnapshot_apply_diff_binary_read(baseline: PlayerSnapshot, d
           end
           recent_element_2 = { kind = "Damaged", amount = amount, attacker = attacker_3 }
         elseif recent_element_tag_b == 1 then
-          const at_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 27, 1) == 1
+          const at_changed = buffer_readbits(b, recent_bits + (i_2 - 1) * 14 + 1, 1) == 1
           local at = nil
           if at_changed then
             const read_18 = buffer_readi16(b, offset)
@@ -1189,7 +1189,7 @@ const function PlayerSnapshot_apply_diff_binary_read(baseline: PlayerSnapshot, d
     character = character_2
   else
     if baseline.character ~= nil then
-      const character_changed = buffer_readbits(b, 26, 1) == 1
+      const character_changed = buffer_readbits(b, 25, 1) == 1
       local character_3 = nil
       if character_changed then
         const character_blob_2 = blobs[blob_index]

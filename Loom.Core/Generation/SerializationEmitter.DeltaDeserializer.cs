@@ -211,20 +211,29 @@ internal sealed partial class SerializationEmitter
         var result = ReserveLocal(leaf);
         statements.Add(new LocalVariable(result, null, new NilLiteral()));
 
+        // Both branches start reading from the same bit - only one runs at a time - so the cursor has to
+        // be rewound between them and left at whichever consumed more, mirroring the write side exactly.
+        var startBit = cursor.BitOffset;
+        var widestBit = startBit;
+
         var resend = new List<LuauStatement>();
         var resendValue = EmitRead(optional, cursor, resend);
         resend.Add(new ExpressionStatement(new BinaryOperator(new Identifier(result), "=", resendValue)));
+        widestBit = Math.Max(widestBit, cursor.BitOffset);
 
+        cursor.BitOffset = startBit;
         var innerStatements = new List<LuauStatement>();
         var innerBaseline = AccessRelative(baselineValue, optional.Inner.Path, optional.Path);
         var innerRead = EmitFieldDiffRead(optional.Inner, innerBaseline, cursor, innerStatements);
         innerStatements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(result), "=", innerRead)));
+        widestBit = Math.Max(widestBit, cursor.BitOffset);
 
         var unchanged = new List<LuauStatement>();
         if (innerStatements.Count > 0)
             unchanged.Add(new IfStatement(IsPresent(baselineValue), new Chunk(innerStatements), [], null));
 
         statements.Add(new IfStatement(new Identifier(changed), new Chunk(resend), [], new Chunk(unchanged)));
+        cursor.BitOffset = widestBit;
         return new Identifier(result);
     }
 
@@ -236,22 +245,32 @@ internal sealed partial class SerializationEmitter
         var result = ReserveLocal(leaf);
         statements.Add(new LocalVariable(result, null, new NilLiteral()));
 
+        // Every branch below - the full resend, and each variant's recursive read - starts from the same
+        // bit, since only one of them runs at a time; the cursor is rewound before each and left at
+        // whichever consumed the most, mirroring the write side exactly.
+        var startBit = cursor.BitOffset;
+        var widestBit = startBit;
+
         var resend = new List<LuauStatement>();
         var resendValue = EmitRead(union, cursor, resend);
         resend.Add(new ExpressionStatement(new BinaryOperator(new Identifier(result), "=", resendValue)));
+        widestBit = Math.Max(widestBit, cursor.BitOffset);
 
         // The tag itself never went on the wire when unchanged, so it is re-resolved from baseline to
         // know which variant's fields to recurse into.
+        cursor.BitOffset = startBit;
         var unchanged = new List<LuauStatement>();
         var baselineTag = ResolveUnionTag(union, baselineValue, leaf + "_tag_b", unchanged);
         var branches = new List<ElseIfBranch>();
         IfStatement? head = null;
         for (var index = 0; index < union.Variants.Count; index++)
         {
+            cursor.BitOffset = startBit;
             var variant = union.Variants[index];
             var variantStatements = new List<LuauStatement>();
             var rebuilt = RebuildVariantDiff(union, variant, baselineValue, cursor, variantStatements);
             variantStatements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(result), "=", rebuilt)));
+            widestBit = Math.Max(widestBit, cursor.BitOffset);
 
             var condition = new BinaryOperator(baselineTag, "==", new NumberLiteral(index));
             if (head == null)
@@ -261,6 +280,7 @@ internal sealed partial class SerializationEmitter
         }
 
         statements.Add(new IfStatement(new Identifier(changed), new Chunk(resend), [], new Chunk(unchanged)));
+        cursor.BitOffset = widestBit;
         return new Identifier(result);
     }
 

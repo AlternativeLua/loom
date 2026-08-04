@@ -288,7 +288,7 @@ const function Envelope_apply_diff_binary_read(baseline: Envelope, diff: Loom.Se
     if action_tag_b == 0 then
       action = { kind = "LogOut" }
     elseif action_tag_b == 1 then
-      const x_changed = buffer_readbits(b, 2, 1) == 1
+      const x_changed = buffer_readbits(b, 1, 1) == 1
       local x = nil
       if x_changed then
         const read_1 = buffer_readu8(b, offset)
@@ -300,10 +300,10 @@ const function Envelope_apply_diff_binary_read(baseline: Envelope, diff: Loom.Se
       action = { kind = "Click", x = x }
     end
   end
-  const color_tag_changed = buffer_readbits(b, 3, 1) == 1
+  const color_tag_changed = buffer_readbits(b, 2, 1) == 1
   local color = nil
   if color_tag_changed then
-    const color_2_tag = buffer_readbits(b, 4, 2)
+    const color_2_tag = buffer_readbits(b, 3, 2)
     local color_2 = nil
     if color_2_tag == 0 then
       color_2 = "red"
