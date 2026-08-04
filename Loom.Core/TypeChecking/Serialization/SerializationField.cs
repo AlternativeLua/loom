@@ -16,6 +16,14 @@ public abstract record SerializationField(string Path, Type ValueType)
     /// <summary>Bits this field claims in the schema-wide header written at offset zero.</summary>
     public virtual int HeaderBits => 0;
 
+    /// <summary>
+    ///     Bits a delta write reserves for this field: whatever flags it needs (changed, presence-changed,
+    ///     tag-changed, length-changed) plus, where mutually exclusive branches share the same range, the
+    ///     widest of what each branch needs - the same overlap a union's variants already share. A leaf
+    ///     with no delta of its own contributes zero, same as <see cref="HeaderBits" /> for an unadorned field.
+    /// </summary>
+    public virtual int DiffHeaderBits => 0;
+
     /// <summary>Bytes claimed in the body, or <c>null</c> when the width depends on the runtime value.</summary>
     public virtual int? BodyBytes => 0;
 
@@ -34,12 +42,14 @@ public sealed record BoolField(string Path, Type ValueType)
     : SerializationField(Path, ValueType)
 {
     public override int HeaderBits => 1;
+    public override int DiffHeaderBits => 1 + HeaderBits;
 }
 
 public sealed record NumberField(string Path, Type ValueType, NumberType NumberType)
     : SerializationField(Path, ValueType)
 {
     public override int? BodyBytes => NumberType.ByteCount();
+    public override int DiffHeaderBits => 1;
 }
 
 /// <summary>
@@ -51,6 +61,7 @@ public sealed record RangedNumberField(string Path, Type ValueType, double Minim
 {
     public double StateCount => Math.Floor((Maximum - Minimum) / Step) + 1;
     public override int HeaderBits => BitWidth.ForStateCount(StateCount);
+    public override int DiffHeaderBits => 1 + HeaderBits;
 }
 
 /// <summary>
@@ -62,12 +73,14 @@ public sealed record BlobField(string Path, Type ValueType, string? TypeofCheck,
     : SerializationField(Path, ValueType)
 {
     public override bool ProducesBlob => true;
+    public override int DiffHeaderBits => 1;
 }
 
 public sealed record StringField(string Path, Type ValueType, NumberType LengthType)
     : SerializationField(Path, ValueType)
 {
     public override int? BodyBytes => null;
+    public override int DiffHeaderBits => 1;
 }
 
 public sealed record ArrayField(string Path, Type ValueType, NumberType LengthType, SerializationField Element)
@@ -76,6 +89,11 @@ public sealed record ArrayField(string Path, Type ValueType, NumberType LengthTy
     public override int? BodyBytes => null;
     public override bool ProducesBlob => Element.ProducesBlob || Element.Children.Any(c => c.ProducesBlob);
     public override IEnumerable<SerializationField> Children => [Element];
+
+    // The length-changed flag is the only bit this field owns; a full resend reuses the ordinary
+    // write, and an unchanged-length diff shares a per-element block sized by the element's own
+    // DiffHeaderBits, the same way HeaderBits already does for an array of header-bit-needing elements.
+    public override int DiffHeaderBits => 1;
 }
 
 /// <summary>
@@ -92,6 +110,11 @@ public sealed record MapField(string Path, Type ValueType, NumberType LengthType
 
     /// <summary>Bits one pair claims in the block the entries share.</summary>
     public int EntryBits => Key.HeaderBits + Value.HeaderBits;
+
+    // A map's diff is entirely body-driven - added/removed/changed key runs, each length-prefixed -
+    // so like HeaderBits it owns no bits of its own. A changed entry's value recurses through
+    // Value's own diff, sharing a per-entry block sized by DiffEntryBits the same way EntryBits does.
+    public int DiffEntryBits => Value.DiffHeaderBits;
 }
 
 /// <summary>A fixed-length sequence. The length is static, so unlike <see cref="ArrayField" /> it writes no prefix.</summary>
@@ -102,6 +125,10 @@ public sealed record TupleField(string Path, Type ValueType, IReadOnlyList<Seria
     public override int? BodyBytes => Elements.Aggregate((int?)0, (total, e) => total + e.BodyBytes);
     public override bool ProducesBlob => Elements.Any(e => e.ProducesBlob);
     public override IEnumerable<SerializationField> Children => Elements;
+
+    // No bit of its own - a flattened struct's fields are always present, so each one is diffed
+    // independently rather than gated behind a presence check.
+    public override int DiffHeaderBits => Elements.Sum(e => e.DiffHeaderBits);
 }
 
 /// <summary>One presence bit in the header, followed by the payload only when present.</summary>
@@ -114,6 +141,11 @@ public sealed record OptionalField(string Path, Type ValueType, SerializationFie
     public override int? BodyBytes => Inner.BodyBytes == 0 ? 0 : null;
     public override bool ProducesBlob => Inner.ProducesBlob;
     public override IEnumerable<SerializationField> Children => [Inner];
+
+    // A presence-changed flag, then either a full resend (HeaderBits, presence plus a fresh inner
+    // value) or a recursive dive into Inner's own diff - mutually exclusive, so they share the same
+    // range the way a union's variants already do, rather than paying for both.
+    public override int DiffHeaderBits => 1 + Math.Max(HeaderBits, Inner.DiffHeaderBits);
 }
 
 public sealed record SerializationVariant(object? Discriminant, IReadOnlyList<SerializationField> Fields);
@@ -140,6 +172,11 @@ public sealed record UnionField(string Path, Type ValueType, UnionDiscrimination
 
     public override bool ProducesBlob => Variants.Any(v => v.Fields.Any(f => f.ProducesBlob));
     public override IEnumerable<SerializationField> Children => Variants.SelectMany(v => v.Fields);
+
+    // A tag-changed flag, then either a full resend of the new variant (HeaderBits) or a recursive
+    // dive into the shared, unchanged variant's fields - mutually exclusive, so they overlap the same
+    // way the ordinary write already lets live variants share one region.
+    public override int DiffHeaderBits => 1 + Math.Max(HeaderBits, Variants.Max(v => v.Fields.Sum(f => f.DiffHeaderBits)));
 }
 
 public enum UnionDiscrimination : byte
@@ -162,6 +199,7 @@ public sealed record DatatypeField(string Path, Type ValueType, RobloxDatatype D
 
     // A sentinel match writes no components at all, which is what costs the type its fixed width.
     public override int? BodyBytes => UseSentinels ? null : Datatype.Components.Count * NumberType.ByteCount();
+    public override int DiffHeaderBits => 1 + HeaderBits;
 }
 
 public sealed record CFrameField(string Path, Type ValueType, CFrameEncoding Encoding, NumberType NumberType, bool UseSentinels)
@@ -182,4 +220,5 @@ public sealed record CFrameField(string Path, Type ValueType, CFrameEncoding Enc
     public int ComponentCount => Encoding == CFrameEncoding.Compressed ? 3 : 7;
 
     public override int? BodyBytes => UseSentinels ? null : ComponentCount * NumberType.ByteCount();
+    public override int DiffHeaderBits => 1 + HeaderBits;
 }
