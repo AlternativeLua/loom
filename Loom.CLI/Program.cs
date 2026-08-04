@@ -7,9 +7,15 @@ Console.OutputEncoding = Encoding.UTF8;
 var diagnosticOptions = new DiagnosticOptions { FailFast = true };
 
 var directory = args.ElementAtOrDefault(0) ?? ".";
-var config = ConfigReader.LocateFromDirectory(directory);
+var config = ConfigReader.LocateFromDirectory(directory, out var configDiagnostics);
 if (config == null)
-    throw new ArgumentException($"Could not locate Loom configuration file in directory '{directory}'.");
+{
+    if (configDiagnostics.Count == 0)
+        throw new ArgumentException($"Could not locate Loom configuration file in directory '{directory}'.");
+
+    Console.WriteLine(string.Join(Environment.NewLine, configDiagnostics.Select(diagnostic => $"loom-config.toml {diagnostic}")));
+    return 1;
+}
 
 var compilationUnit = new CompilationUnit(config, diagnosticOptions);
 var result = compilationUnit.Compile();
@@ -29,7 +35,7 @@ var failureInfo = result.Failures.Count == 0
 
 Console.WriteLine(string.Join(Environment.NewLine, diagnosticInfo.Concat(failureInfo)));
 const string includeFolderName = "include";
-return;
+return 0;
 
 static void writeIncludeFolder(LoomConfig config)
 {
