@@ -305,9 +305,39 @@ internal sealed partial class SerializationEmitter
         body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), One, [], Zero))));
 
         var resend = new List<LuauStatement>();
+        ResolveSentinel(field, currentValue, resend);
         EmitValueWrite(field, currentValue, cursor, resend);
         if (resend.Count > 0)
             body.Add(new IfStatement(new Identifier(changed), new Chunk(resend), [], null));
+    }
+
+    /// <summary>
+    ///     Binds a sentinelled field's value and resolves which sentinel it matched, the same way
+    ///     <see cref="EmitSentinelPrologue" /> does for the whole schema up front - except <see cref="EmitSentinelPrologue" />
+    ///     only ever runs once, against <c>value</c>, and this emitter's delta functions never call it, so a
+    ///     changed sentinelled leaf has to resolve its own sentinel here before <see cref="EmitValueWrite" />
+    ///     reads the locals it expects to already exist. A no-op for anything that isn't sentinelled.
+    /// </summary>
+    private void ResolveSentinel(SerializationField field, LuauExpression value, List<LuauStatement> body)
+    {
+        if (SentinelNamesOf(field) is not { Count: > 0 } sentinels)
+            return;
+
+        var valueLocal = SentinelValueLocal(field.Path);
+        var indexLocal = SentinelIndexLocal(field.Path);
+        body.Add(new ConstVariable(valueLocal, null, value));
+        body.Add(new LocalVariable(indexLocal, null, Zero));
+
+        var branches = new List<ElseIfBranch>();
+        for (var index = 0; index < sentinels.Count; index++)
+        {
+            var condition = new BinaryOperator(new Identifier(valueLocal), "==", new Identifier(sentinels[index]));
+            var assign = new Chunk([new ExpressionStatement(new BinaryOperator(new Identifier(indexLocal), "=", new NumberLiteral(index + 1)))]);
+            if (index == 0)
+                body.Add(new IfStatement(condition, assign, branches, null));
+            else
+                branches.Add(new ElseIfBranch(condition, assign));
+        }
     }
 
     /// <summary>

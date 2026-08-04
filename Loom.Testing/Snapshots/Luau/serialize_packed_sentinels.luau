@@ -85,6 +85,19 @@ const function Entity_diff_binary_write(baseline: Entity, value: Entity, b: buff
   const position_changed = not Loom.deep_equal(baseline.position, value.position)
   buffer_writebits(b, 1, 1, if position_changed then 1 else 0)
   if position_changed then
+    const position_value = value.position
+    local position_sentinel = 0
+    if position_value == Vector3.zero then
+      position_sentinel = 1
+    elseif position_value == Vector3.one then
+      position_sentinel = 2
+    elseif position_value == Vector3.xAxis then
+      position_sentinel = 3
+    elseif position_value == Vector3.yAxis then
+      position_sentinel = 4
+    elseif position_value == Vector3.zAxis then
+      position_sentinel = 5
+    end
     buffer_writebits(b, 2, 3, position_sentinel)
     if position_sentinel == 0 then
       buffer_writei16(b, offset, position_value.X)

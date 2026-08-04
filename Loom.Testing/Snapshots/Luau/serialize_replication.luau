@@ -657,6 +657,19 @@ const function PlayerSnapshot_diff_binary_write(baseline: PlayerSnapshot, value:
   const velocity_changed = not Loom.deep_equal(baseline.velocity, value.velocity)
   buffer_writebits(b, 15, 1, if velocity_changed then 1 else 0)
   if velocity_changed then
+    const velocity_value = value.velocity
+    local velocity_sentinel = 0
+    if velocity_value == Vector3.zero then
+      velocity_sentinel = 1
+    elseif velocity_value == Vector3.one then
+      velocity_sentinel = 2
+    elseif velocity_value == Vector3.xAxis then
+      velocity_sentinel = 3
+    elseif velocity_value == Vector3.yAxis then
+      velocity_sentinel = 4
+    elseif velocity_value == Vector3.zAxis then
+      velocity_sentinel = 5
+    end
     buffer_writebits(b, 16, 3, velocity_sentinel)
     if velocity_sentinel == 0 then
       buffer_writei16(b, offset, velocity_value.X)
@@ -670,6 +683,11 @@ const function PlayerSnapshot_diff_binary_write(baseline: PlayerSnapshot, value:
   const aim_changed = not Loom.deep_equal(baseline.aim, value.aim)
   buffer_writebits(b, 19, 1, if aim_changed then 1 else 0)
   if aim_changed then
+    const aim_value = value.aim
+    local aim_sentinel = 0
+    if aim_value == CFrame.identity then
+      aim_sentinel = 1
+    end
     buffer_writebits(b, 20, 1, aim_sentinel)
     if aim_sentinel == 0 then
       buffer_writef32(b, offset, aim_value.X)

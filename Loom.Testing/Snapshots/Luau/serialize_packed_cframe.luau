@@ -65,6 +65,11 @@ const function Waypoint_diff_binary_write(baseline: Waypoint, value: Waypoint, b
   const frame_changed = not Loom.deep_equal(baseline.frame, value.frame)
   buffer_writebits(b, 0, 1, if frame_changed then 1 else 0)
   if frame_changed then
+    const frame_value = value.frame
+    local frame_sentinel = 0
+    if frame_value == CFrame.identity then
+      frame_sentinel = 1
+    end
     buffer_writebits(b, 1, 1, frame_sentinel)
     if frame_sentinel == 0 then
       buffer_writef32(b, offset, frame_value.X)
