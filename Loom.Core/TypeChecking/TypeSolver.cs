@@ -174,8 +174,12 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
                 (FunctionType f1, FunctionType f2) => UnifyFunctionTypes(f1, f2, span, out updated, trace),
                 (ArrayType t1, ArrayType t2) => UnifyArrayTypes(t1, t2, span, out updated, trace),
                 (ObjectType o1, ObjectType o2) => UnifyObjectTypes(o1, o2, span, out updated, trace),
-                (ObjectType o, InterfaceType i) => UnifyObjectWithInterface(o, i, span, out updated, trace),
-                (InterfaceType i, ObjectType o) => UnifyObjectWithInterface(o, i, span, out updated, trace),
+                // UnifyObjectTypes is directional (a is the source, b is what it must satisfy), so which
+                // side is the interface and which is the plain object has to carry through in the same
+                // order it arrived in - collapsing both orderings onto one helper with a fixed argument
+                // order silently swapped actual and expected for one of the two orderings.
+                (ObjectType o, InterfaceType i) => TryUnify(o, i.AssignabilityType, span, out updated, new TypeMismatchTrace(o, i, trace)),
+                (InterfaceType i, ObjectType o) => TryUnify(i.AssignabilityType, o, span, out updated, new TypeMismatchTrace(i, o, trace)),
                 (InterfaceType i1, InterfaceType i2) => UnifyInterfaceTypes(i1, i2, span, out updated, trace),
                 (TypeParameter p1, TypeParameter p2) => UnifyTypeParameters(p1, p2, span, out updated, trace),
 
@@ -285,17 +289,26 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
                 success = false;
         }
 
+        // Directional, like ObjectType.IsAssignableTo: every property b requires must exist on a, but a
+        // may have more than b asks for. A name present only on a is excess and not itself a mismatch -
+        // skipping BOTH directions here (as a plain Union of the two name sets did) treated two objects
+        // with zero overlapping property names as compatible with each other, since neither name matched
+        // on both sides and the loop then never touched 'success' at all.
         var aProps = a.Properties.ToDictionary(p => p.Name);
-        var bProps = b.Properties.ToDictionary(p => p.Name);
-        var allPropertyNames = aProps.Keys.Union(bProps.Keys).ToList();
-        foreach (var name in allPropertyNames)
+        foreach (var propB in b.Properties)
         {
-            if (!aProps.TryGetValue(name, out var propA) || !bProps.TryGetValue(name, out var propB)) continue;
+            if (!aProps.TryGetValue(propB.Name, out var propA))
+            {
+                if (!ReportTypeMismatch(a, b, span, $"Type '{a}' is missing property '{propB.Name}' required by type '{b}'.", trace))
+                    success = false;
+
+                continue;
+            }
 
             CombineUnify(propA.ValueType, propB.ValueType, span, ref success, ref updated, childTrace);
 
             if (propA.IsMutable == propB.IsMutable) continue;
-            if (!ReportTypeMismatch(a, b, span, $"Property types match, but mutability of property '{name}' does not match that of type '{b}'.", trace))
+            if (!ReportTypeMismatch(a, b, span, $"Property types match, but mutability of property '{propB.Name}' does not match that of type '{b}'.", trace))
                 success = false;
         }
 
@@ -308,12 +321,6 @@ public sealed class TypeSolver(DiagnosticBag diagnostics)
             success = false;
         else if (stepUpdated)
             updated = true;
-    }
-
-    private bool UnifyObjectWithInterface(ObjectType objectType, InterfaceType interfaceType, LocationSpan span, out bool updated, TypeMismatchTrace? trace)
-    {
-        updated = false;
-        return TryUnify(objectType, interfaceType.AssignabilityType, span, out updated, new TypeMismatchTrace(objectType, interfaceType, trace));
     }
 
     private bool UnifyInterfaceTypes(InterfaceType a, InterfaceType b, LocationSpan span, out bool updated, TypeMismatchTrace? trace)

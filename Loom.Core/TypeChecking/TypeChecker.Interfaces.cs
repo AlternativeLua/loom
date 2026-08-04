@@ -188,7 +188,18 @@ public sealed partial class TypeChecker
             );
 
         if (type is InterfaceType nonGeneric)
-            return BindInterfaceInvocation(interfaceInvocation, nonGeneric, traitProperties);
+        {
+            var boundType = BindInterfaceInvocation(interfaceInvocation, nonGeneric, traitProperties);
+
+            // A non-generic invocation has nothing to infer from 'expected', but 'new X { ... }' used
+            // where a different, structurally incompatible type is expected still needs to be flagged -
+            // deferred to TypeSolver rather than reported directly, same as every other Check case, so
+            // it composes with whatever else is still being inferred around it.
+            if (expected != null && !boundType.IsAssignableTo(expected))
+                _semanticModel.TypeSolver.AddConstraint(boundType, expected, interfaceInvocation);
+
+            return boundType;
+        }
 
         if (type is not GenericType { UnderlyingType: InterfaceType underlying } generic)
         {
