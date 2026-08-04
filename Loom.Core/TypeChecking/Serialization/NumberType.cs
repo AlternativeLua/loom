@@ -22,7 +22,6 @@ public static class NumberTypeExtensions
             NumberType.I8 or NumberType.U8 => 1,
             NumberType.I16 or NumberType.U16 => 2,
             NumberType.I32 or NumberType.U32 or NumberType.F32 => 4,
-            NumberType.F64 => 8,
             _ => 8
         };
 

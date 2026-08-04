@@ -1,5 +1,4 @@
 using Loom.Core.Diagnostics;
-using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking.Serialization;
 
 namespace Loom.Testing;
@@ -290,8 +289,7 @@ public class SerializationSchemaTest
         Utility.AssertDiagnostic(diagnostics, InternalCodes.NotSerializable, "Interface 'Plain' is not serializable.");
     }
     [Fact]
-    public void SerializesInterface_ImportedFromAnotherModule()
-    {
+    public void SerializesInterface_ImportedFromAnotherModule() =>
         Utility.WithTempProject(
             [
                 ("packets.loom",
@@ -324,7 +322,6 @@ public class SerializationSchemaTest
                 Assert.DoesNotContain("MyData_serialize_binary(", consumer);
             }
         );
-    }
     [Fact]
     public void ArrayOfStrings_MeasuresByWalkingTheValue()
     {

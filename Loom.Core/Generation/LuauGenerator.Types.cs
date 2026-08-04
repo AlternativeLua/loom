@@ -84,7 +84,7 @@ public sealed partial class LuauGenerator
         );
 
     public override LuauNode VisitTypeOf(TypeOf typeOf) => new TypeOfType(Visit(typeOf.Expression));
-    public override LuauNode VisitTypePredicateType(Parsing.AST.TypePredicateType typePredicateType) => Luau.AST.PrimitiveType.Boolean;
+    public override LuauNode VisitTypePredicateType(TypePredicateType typePredicateType) => Luau.AST.PrimitiveType.Boolean;
     public override LuauNode VisitIntersectionType(IntersectionType intersectionType) => new Luau.AST.IntersectionType(intersectionType.Types.ConvertAll(Visit));
     public override LuauNode VisitUnionType(UnionType unionType) => new Luau.AST.UnionType(unionType.Types.ConvertAll(Visit));
     public override LuauNode VisitArrayType(ArrayType arrayType) => TableType.Array(Visit(arrayType.ElementType));

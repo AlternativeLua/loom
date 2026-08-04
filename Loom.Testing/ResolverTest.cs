@@ -1029,7 +1029,7 @@ public class ResolverTest
         var symbol = Assert.IsType<PropertySymbol>(model.GetDeclarationSymbol(signature, SymbolKind.Function));
 
         Assert.True(symbol.TryGetIntrinsicAttribute("luau_name", out var attribute));
-        Assert.Equal("luau_name", attribute!.Name);
+        Assert.Equal("luau_name", attribute.Name);
     }
 
     [Fact]

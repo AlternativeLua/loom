@@ -11,7 +11,6 @@ using Loom.Luau.AST;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
 using Expression = Loom.Core.Parsing.AST.Expression;
 using ExpressionStatement = Loom.Luau.AST.ExpressionStatement;
-using FunctionDeclaration = Loom.Core.Parsing.AST.FunctionDeclaration;
 using Identifier = Loom.Luau.AST.Identifier;
 using Parameter = Loom.Core.Parsing.AST.Parameter;
 using Return = Loom.Luau.AST.Return;

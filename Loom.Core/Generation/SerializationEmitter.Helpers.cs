@@ -1,6 +1,5 @@
 using System.Text;
 using Loom.Core.TypeChecking.Serialization;
-using Loom.Core.TypeChecking.Types;
 using Loom.Luau.AST;
 
 namespace Loom.Core.Generation;

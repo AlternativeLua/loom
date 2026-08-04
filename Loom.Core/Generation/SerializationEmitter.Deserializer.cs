@@ -1,5 +1,4 @@
 using Loom.Core.TypeChecking.Serialization;
-using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
 

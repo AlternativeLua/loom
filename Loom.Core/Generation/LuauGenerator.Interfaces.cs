@@ -2,6 +2,7 @@ using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking.Serialization;
+using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
@@ -179,7 +180,7 @@ public sealed partial class LuauGenerator
     }
 
     /// <summary>Name of the codec emitted for <paramref name="interfaceType" />, or null when it has none.</summary>
-    private string? ResolveSerializerName(Loom.Core.TypeChecking.Types.InterfaceType interfaceType)
+    private string? ResolveSerializerName(InterfaceType interfaceType)
     {
         var symbol = _semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
         return symbol == null ? null : SerializationEmitter.SerializerName(symbol.Name);

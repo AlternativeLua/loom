@@ -1,5 +1,4 @@
 using Loom.Core.TypeChecking.Serialization;
-using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
 
@@ -223,7 +222,7 @@ internal sealed partial class SerializationEmitter
                     ElementBitBlockSize(arrayField.Element.HeaderBits, Length(value))
                 ),
             OptionalField { Inner.BodyBytes: 0 } => Zero,
-            OptionalField { Inner.BodyBytes: { } innerBytes } optional =>
+            OptionalField { Inner.BodyBytes: { } innerBytes } =>
                 new IfExpression(IsPresent(value), new NumberLiteral(innerBytes), [], Zero),
             _ => null
         };

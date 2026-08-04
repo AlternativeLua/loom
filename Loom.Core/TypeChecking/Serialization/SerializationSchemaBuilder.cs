@@ -355,7 +355,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         // An indexer is a map: the interface has no named properties to flatten, only a key type and a
         // value type, so it encodes as pairs rather than as a struct.
         if (interfaceType.Indexer is { } indexer)
-            return BuildMapField(path, interfaceType, indexer, options, isPacked, reportNode);
+            return BuildMapField(path, interfaceType, indexer, options, reportNode);
 
         // Instances have no buffer representation, but their class is checkable on the way back.
         if (IsInstanceType(interfaceType))
@@ -390,7 +390,6 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
         Types.InterfaceType interfaceType,
         Types.ObjectIndexer indexer,
         FieldOptions options,
-        bool isPacked,
         Node reportNode)
     {
         // Neither half takes sentinels: those resolve once per field before the allocation, which cannot
@@ -431,7 +430,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
             return new UnionField(path, type, UnionDiscrimination.LiteralValue, null, literalVariants);
         }
 
-        if (TryBuildDiscriminatedUnion(path, type, members, isPacked, reportNode) is { } discriminated)
+        if (TryBuildDiscriminatedUnion(path, type, members, isPacked) is { } discriminated)
             return discriminated;
 
         if (TryBuildRuntimeKindUnion(path, type, members, options, isPacked, reportNode) is { } byKind)
@@ -451,7 +450,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
     ///     Interfaces sharing a literal-typed property with a distinct value per variant. The discriminant
     ///     costs nothing: it is recoverable from the tag, so the tag <em>is</em> the field.
     /// </summary>
-    private UnionField? TryBuildDiscriminatedUnion(string path, Type type, List<Type> members, bool isPacked, Node reportNode)
+    private UnionField? TryBuildDiscriminatedUnion(string path, Type type, List<Type> members, bool isPacked)
     {
         if (!members.TrueForAll(m => m is Types.InterfaceType))
             return null;

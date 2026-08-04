@@ -116,7 +116,7 @@ public sealed partial class TypeChecker
     public override Type VisitPrimitiveType(PrimitiveType primitiveType)
     {
         if (primitiveType.Width is { } width)
-            return BindType(primitiveType, new Types.SizedNumberType(width));
+            return BindType(primitiveType, new SizedNumberType(width));
 
         return BindType(primitiveType, primitiveType.TypeArguments != null ? VisitSizedStringType(primitiveType) : new Types.PrimitiveType(primitiveType.Kind));
     }
@@ -142,7 +142,7 @@ public sealed partial class TypeChecker
         }
 
         var argumentType = Visit(argument);
-        if (argumentType is not Types.SizedNumberType sized)
+        if (argumentType is not SizedNumberType sized)
         {
             _diagnostics.Error(argument, InternalCodes.InvalidTypeArguments, $"string's length type must be a sized type like 'u8', but is '{argumentType}'.");
             return Types.PrimitiveType.String;
@@ -160,7 +160,7 @@ public sealed partial class TypeChecker
             return Types.PrimitiveType.String;
         }
 
-        return new Types.SizedStringType(sized.NumberType);
+        return new SizedStringType(sized.NumberType);
     }
     public override Type VisitLiteralType(LiteralType literalType) => BindType(literalType, new Types.LiteralType(literalType.Value));
 
