@@ -117,3 +117,23 @@ function Loom.unpack_quaternion(packed)
 	insert(components, largest + 1, missing)
 	return components[1], components[2], components[3], components[4]
 end
+
+function Loom.deep_equal(a, b)
+	if a == b then
+		return true
+	end
+	if type(a) ~= "table" or type(b) ~= "table" then
+		return false
+	end
+	for key, value in a do
+		if not Loom.deep_equal(value, b[key]) then
+			return false
+		end
+	end
+	for key in b do
+		if a[key] == nil then
+			return false
+		end
+	end
+	return true
+end

@@ -207,5 +207,32 @@ function Loom.unpack_quaternion(packed: number): (number, number, number, number
 	return components[1], components[2], components[3], components[4]
 end
 
+-- Delta serialization compares a baseline against a current value field by field; == already
+-- covers primitives and Roblox datatypes (Vector3/CFrame overload it structurally), so this only
+-- has to recurse for the table shapes arrays, maps and flattened structs come out as.
+function Loom.deep_equal(a: any, b: any): boolean
+	if a == b then
+		return true
+	end
+
+	if type(a) ~= "table" or type(b) ~= "table" then
+		return false
+	end
+
+	for key, value in a do
+		if not Loom.deep_equal(value, b[key]) then
+			return false
+		end
+	end
+
+	for key in b do
+		if a[key] == nil then
+			return false
+		end
+	end
+
+	return true
+end
+
 table.freeze(Loom)
 return Loom
