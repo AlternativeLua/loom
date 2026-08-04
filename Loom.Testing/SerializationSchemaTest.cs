@@ -75,6 +75,66 @@ public class SerializationSchemaTest
     }
 
     [Fact]
+    public void ThrowsFor_NumberRange_OnSizedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_range(0, 100)]
+                health: u8;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ConflictingAttributes,
+            "'health' is already 'u8', so 'number_range' has nothing left to set.",
+            "remove 'number_range', or declare 'health: number' to use a bounded range instead."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_NumberType_OnSizedType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U16)]
+                health: u8;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ConflictingAttributes,
+            "'health' is already 'u8', so 'number_type' has nothing left to set.",
+            "remove 'number_type', or declare 'health: number' to pick a width with the attribute instead."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_NumberType_OnPlainNumber()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.U8)]
+                id: number;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidAttributeTargetType,
+            "'number_type' no longer applies to a plain 'number' - 'id' should be a sized type instead.",
+            "use one of u8/u16/u32/i8/i16/i32/f32/f64, e.g. 'id: u8'."
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_Quantize_WithoutNumberRange()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
@@ -312,8 +372,7 @@ public class SerializationSchemaTest
                     """
                     [serializable]
                     export interface MyData {
-                        [number_type(NumberType.U8)]
-                        id: number;
+                        id: u8;
                     }
                     """),
                 ("main.server.loom",
@@ -375,8 +434,7 @@ public class SerializationSchemaTest
         var luau = Utility.GetLuauAST(
                 """
                 [serializable] interface Scores {
-                    [number_type(NumberType.U8)]
-                    values: number[];
+                    values: u8[];
                 }
                 """,
                 true
@@ -440,8 +498,7 @@ public class SerializationSchemaTest
         var luau = Utility.GetLuauAST(
                 """
                 [serializable] interface Entity {
-                    [number_type(NumberType.I16)]
-                    target: number?;
+                    target: i16?;
                 }
                 """,
                 true
@@ -458,8 +515,7 @@ public class SerializationSchemaTest
         interface IAction<Kind: string> { kind: Kind }
         [serializable] interface LogOutAction: IAction<"LogOut">;
         [serializable] interface ClickAction: IAction<"Click"> {
-            [number_type(NumberType.U8)]
-            x: number;
+            x: u8;
         }
 
         [serializable] interface Envelope { action: LogOutAction | ClickAction }
@@ -539,8 +595,7 @@ public class SerializationSchemaTest
             interface IShape<Kind: string> { kind: Kind }
             [serializable] interface Dot: IShape<"Dot">;
             [serializable] interface Path: IShape<"Path"> {
-                [number_type(NumberType.U8)]
-                n: number;
+                n: u8;
             }
 
             [serializable] interface Drawing { shape: Dot | Path }
@@ -597,8 +652,7 @@ public class SerializationSchemaTest
 
                 [serializable] interface Inner {
                     flag: bool;
-                    [number_type(NumberType.U8)]
-                    code: number;
+                    code: u8;
                 }
 
                 [serializable] interface KitchenSink {
@@ -632,8 +686,7 @@ public class SerializationSchemaTest
                 """
                 [serializable] interface Inner {
                     flag: bool;
-                    [number_type(NumberType.U8)]
-                    code: number;
+                    code: u8;
                 }
 
                 [serializable] interface Outer { inner: Inner }
@@ -691,7 +744,7 @@ public class SerializationSchemaTest
             diagnostics,
             InternalCodes.InvalidSerializationRange,
             "'total' needs more than 32 bits for range [0, 4294967296] with a step of 1.",
-            "narrow the range, widen the step, or use 'number_type' for a byte-aligned width."
+            "narrow the range, widen the step, or use a sized type (e.g. 'u32') for a byte-aligned width."
         );
     }
 
@@ -794,8 +847,7 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                id: number;
+                id: u8;
                 [number_type(NumberType.I16)]
                 position: Vector3;
             }
@@ -814,8 +866,7 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable, packed] interface MyData {
-                [number_type(NumberType.U8)]
-                id: number;
+                id: u8;
                 [number_type(NumberType.I16)]
                 position: Vector3;
             }
@@ -854,8 +905,7 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                id: number?;
+                id: u8?;
             }
             """
         );
@@ -872,6 +922,20 @@ public class SerializationSchemaTest
         var numberField = Assert.IsType<NumberField>(Assert.Single(schema.Fields));
         Assert.Equal(NumberType.F32, numberField.NumberType);
         Assert.Equal(4, schema.FixedByteCount);
+    }
+
+    [Theory]
+    [InlineData("u8", NumberType.U8, 1)]
+    [InlineData("i16", NumberType.I16, 2)]
+    [InlineData("u32", NumberType.U32, 4)]
+    [InlineData("f64", NumberType.F64, 8)]
+    public void SizedType_SetsWidthWithNoAttribute(string sizedType, NumberType expected, int byteCount)
+    {
+        var schema = GetSchema($"[serializable] interface MyData {{ value: {sizedType} }}");
+
+        var numberField = Assert.IsType<NumberField>(Assert.Single(schema.Fields));
+        Assert.Equal(expected, numberField.NumberType);
+        Assert.Equal(byteCount, schema.FixedByteCount);
     }
 
     [Fact]
@@ -938,8 +1002,7 @@ public class SerializationSchemaTest
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                id: number;
+                id: u8;
                 [ignore_serialization]
                 cached: string?;
             }
@@ -983,8 +1046,7 @@ public class SerializationSchemaTest
             interface IAction<Kind: string> { kind: Kind }
             [serializable] interface LogOutAction: IAction<"LogOut">;
             [serializable] interface ClickAction: IAction<"Click"> {
-                [number_type(NumberType.U8)]
-                x: number;
+                x: u8;
             }
 
             [serializable] interface MyData { action: LogOutAction | ClickAction }
@@ -1018,13 +1080,29 @@ public class SerializationSchemaTest
     }
 
     [Fact]
+    public void SizedTupleElement_OverridesTheSharedAttribute()
+    {
+        // A sized element picks its own width; an unsized sibling still falls back to the shared attribute.
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                [number_type(NumberType.F32)]
+                pair: (u8, number);
+            }
+            """
+        );
+
+        Assert.True(schema.IsFixedSize);
+        Assert.Equal(5, schema.FixedByteCount);
+    }
+
+    [Fact]
     public void ArrayIsVariableSized()
     {
         var schema = GetSchema(
             """
             [serializable] interface MyData {
-                [number_type(NumberType.U8)]
-                ids: number[];
+                ids: u8[];
             }
             """
         );

@@ -170,6 +170,11 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
 
     private SerializationField? BuildNumberField(string path, Type type, FieldOptions options, Node reportNode)
     {
+        // The type checker refuses 'number_type'/'number_range' on a sized type outright, so reaching
+        // here with one means the width comes from the type itself, not from FieldOptions.
+        if (type is Types.SizedNumberType sized)
+            return new NumberField(path, type, sized.NumberType);
+
         if (options.Range is not { } range)
             return new NumberField(path, type, options.NumberType ?? DefaultNumberType);
 
@@ -200,7 +205,7 @@ internal sealed class SerializationSchemaBuilder(SemanticModel semanticModel, Di
                 reportNode,
                 InternalCodes.InvalidSerializationRange,
                 $"'{path}' needs more than {BitWidth.MaximumBits} bits for range [{range.Minimum}, {range.Maximum}] with a step of {step}.",
-                "narrow the range, widen the step, or use 'number_type' for a byte-aligned width."
+                "narrow the range, widen the step, or use a sized type (e.g. 'u32') for a byte-aligned width."
             );
 
             return null;

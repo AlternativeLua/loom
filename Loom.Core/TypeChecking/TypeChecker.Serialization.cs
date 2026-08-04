@@ -151,7 +151,53 @@ public sealed partial class TypeChecker
 
         var hasNumberType = present.Contains("number_type");
         var hasNumberRange = present.Contains("number_range");
-        if (hasNumberType && hasNumberRange)
+        var unwrapped = Unwrap(propertyType);
+        var isSizedNumber = unwrapped is Types.SizedNumberType;
+
+        // A sized type already pins the width itself, so neither attribute has anything left to set -
+        // this is what replaces 'number_type' for a plain number, and is the one place 'number_range'
+        // is refused outright rather than just requiring a plain 'number'.
+        if (isSizedNumber && hasNumberType)
+        {
+            _diagnostics.Error(
+                property,
+                InternalCodes.ConflictingAttributes,
+                $"'{propertyName}' is already '{unwrapped}', so 'number_type' has nothing left to set.",
+                $"remove 'number_type', or declare '{propertyName}: number' to pick a width with the attribute instead."
+            );
+
+            valid = false;
+        }
+
+        if (isSizedNumber && hasNumberRange)
+        {
+            _diagnostics.Error(
+                property,
+                InternalCodes.ConflictingAttributes,
+                $"'{propertyName}' is already '{unwrapped}', so 'number_range' has nothing left to set.",
+                $"remove 'number_range', or declare '{propertyName}: number' to use a bounded range instead."
+            );
+
+            valid = false;
+        }
+
+        // A plain 'number' has a sized type to reach for now, so the attribute no longer applies there -
+        // it stays valid on a CFrame/datatype's per-component width and on an all-numeric tuple, neither
+        // of which has a type-level alternative. Skipped when 'number_range' is also present: the
+        // conflict check just below already covers that combination with a more specific message.
+        if (hasNumberType && !isSizedNumber && !hasNumberRange && unwrapped is Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.Number })
+        {
+            _diagnostics.Error(
+                property,
+                InternalCodes.InvalidAttributeTargetType,
+                $"'number_type' no longer applies to a plain 'number' - '{propertyName}' should be a sized type instead.",
+                $"use one of u8/u16/u32/i8/i16/i32/f32/f64, e.g. '{propertyName}: u8'."
+            );
+
+            valid = false;
+        }
+
+        if (!isSizedNumber && hasNumberType && hasNumberRange)
         {
             _diagnostics.Error(
                 property,
@@ -175,7 +221,7 @@ public sealed partial class TypeChecker
             valid = false;
         }
 
-        if ((hasNumberType || hasNumberRange) && !HasNumericComponents(propertyType))
+        if (!isSizedNumber && (hasNumberType || hasNumberRange) && !HasNumericComponents(propertyType))
         {
             _diagnostics.Error(
                 property,
