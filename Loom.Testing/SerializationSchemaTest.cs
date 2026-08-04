@@ -135,43 +135,20 @@ public class SerializationSchemaTest
     }
 
     [Fact]
-    public void ThrowsFor_LengthType_OnString()
+    public void ThrowsFor_LengthType_NoLongerExists()
     {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+        // Same treatment as number_type: string<u8>/Array<T, u8> replace every use it had, so it isn't
+        // declared at all anymore rather than kept around as an always-invalid stub.
+        var diagnostics = Utility.GetSemanticModel(
             """
             [serializable] interface MyData {
                 [length_type(NumberType.U8)]
                 name: string;
             }
             """
-        );
+        ).Diagnostics;
 
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.InvalidAttributeTargetType,
-            "'length_type' is no longer configurable via attribute on 'name'.",
-            "use 'string<u8>' for a string's length width, or 'Array<T, u8>' for an array's."
-        );
-    }
-
-    [Fact]
-    public void ThrowsFor_LengthType_OnArray()
-    {
-        var diagnostics = Utility.GetTypeCheckerDiagnostics(
-            """
-            [serializable] interface MyData {
-                [length_type(NumberType.U8)]
-                ids: u8[];
-            }
-            """
-        );
-
-        Utility.AssertDiagnostic(
-            diagnostics,
-            InternalCodes.InvalidAttributeTargetType,
-            "'length_type' is no longer configurable via attribute on 'ids'.",
-            "use 'string<u8>' for a string's length width, or 'Array<T, u8>' for an array's."
-        );
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.CannotFindName, "Cannot find name 'length_type'.");
     }
 
     [Fact]
@@ -251,6 +228,29 @@ public class SerializationSchemaTest
         );
 
         Assert.NotNull(diagnostics.Find(d => d.Code == InternalCodes.AmbiguousSerializableUnion));
+    }
+
+    [Theory]
+    [InlineData("Vector2int16", "Vector2")]
+    [InlineData("Vector3int16", "Vector3")]
+    public void ThrowsFor_Int16Datatype_PointingAtItsGenericReplacement(string datatype, string replacement)
+    {
+        // Vector2int16/Vector3int16 are permanently unserializable now - Vector2<i16>/Vector3<i16> already
+        // say the same thing with a configurable width, so there is no reason to keep both around.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            $$"""
+            [serializable] interface MyData {
+                position: {{datatype}};
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.NotSerializable,
+            $"'position' has type '{datatype}', which cannot be serialized.",
+            $"use '{replacement}<i16>' instead - its components are already i16, and the width is configurable."
+        );
     }
     #endregion Encodability
 
@@ -1029,6 +1029,24 @@ public class SerializationSchemaTest
         Assert.False(schema.IsFixedSize);
         var array = Assert.IsType<ArrayField>(Assert.Single(schema.Fields));
         Assert.Equal(NumberType.U32, array.LengthType);
+    }
+
+    [Fact]
+    public void ArrayAlias_ResolvesElementAndLengthArgumentsByName()
+    {
+        // T and L are looked up by parameter name, not position - this guards against a positional
+        // read silently swapping which argument means "element type" and which means "length width".
+        var schema = GetSchema(
+            """
+            [serializable] interface MyData {
+                tags: Array<string, u8>;
+            }
+            """
+        );
+
+        var array = Assert.IsType<ArrayField>(Assert.Single(schema.Fields));
+        Assert.Equal(NumberType.U8, array.LengthType);
+        Assert.IsType<StringField>(array.Element);
     }
 
     [Fact]
