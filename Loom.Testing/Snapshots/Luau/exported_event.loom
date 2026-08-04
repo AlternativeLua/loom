@@ -1,0 +1,9 @@
+export event message(text: string);
+
+fn handler(text: string): void {
+    print(text)
+}
+
+message += handler;
+message("hello");
+message -= handler;
