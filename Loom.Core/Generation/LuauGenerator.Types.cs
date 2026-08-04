@@ -46,7 +46,20 @@ public sealed partial class LuauGenerator
             return UnknownType;
         }
 
+        // 'Array<T, L>' is transparent sugar for 'T[]' - L only matters to the serializer, which reads
+        // it straight off the type argument, so it never has anything to reach Luau with. Nothing named
+        // 'Array' exists there, unlike 'T[]' itself.
+        if (IsSerializationOnlyArrayAlias(symbol) && typeName.TypeArguments?.ArgumentsList is [var elementType, ..])
+            return TableType.Array(Visit(elementType));
+
         var typeArguments = typeName.TypeArguments?.ArgumentsList.ConvertAll(Visit);
+
+        // Vector3/Vector2/CFrame's width parameter is the same kind of Loom-only metadata - Roblox's
+        // real datatype has no type parameter, so an explicit 'Vector3<i16>' still has to reach Luau as
+        // plain 'Vector3'.
+        if (IsPhantomSizedDatatype(symbol))
+            typeArguments = null;
+
         var luauTypeName = new Luau.AST.TypeName(typeName.Name.Text, typeArguments);
         if (IsLoomRuntimeType(symbol))
             return LuauFactory.QualifyRuntimeType(luauTypeName);
@@ -57,6 +70,11 @@ public sealed partial class LuauGenerator
 
     private static bool IsLoomRuntimeType(Symbol symbol) =>
         symbol is { IsIntrinsic: true, File.Name: "runtime.loom" or "None.loom" or "PluginSecurity.loom" } && _loomRuntimeTypeNames.Contains(symbol.Name);
+
+    private static bool IsSerializationOnlyArrayAlias(Symbol symbol) => symbol is { IsIntrinsic: true, File.Name: "loom.loom", Name: "Array" };
+
+    private static bool IsPhantomSizedDatatype(Symbol symbol) =>
+        symbol is { IsIntrinsic: true, File.Name: "None.loom" or "PluginSecurity.loom", Name: "Vector3" or "Vector2" or "CFrame" };
 
     public override LuauNode VisitFunctionType(FunctionType functionType) =>
         new Luau.AST.FunctionType(

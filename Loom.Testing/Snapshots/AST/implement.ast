@@ -96,6 +96,7 @@ Implement(
         ReturnType: ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Void
             Width: null
           )
@@ -114,6 +115,7 @@ Implement(
               ColonTypeClause(
                 ColonToken: Token(Colon, ":")
                 Type: PrimitiveType(
+                  TypeArguments: null
                   Kind: Number
                   Width: null
                 )

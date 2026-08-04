@@ -11,6 +11,7 @@
         Token(Identifier, "b")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
         Width: null
       )
@@ -30,6 +31,7 @@ ExpressionStatement(
         Token(Identifier, "b")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: String
         Width: null
       )
@@ -49,6 +51,7 @@ ExpressionStatement(
         Token(Identifier, "b")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
         Width: null
       )
@@ -64,6 +67,7 @@ ExpressionStatement(
         Token(Identifier, "a")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
         Width: null
       )
@@ -83,6 +87,7 @@ ExpressionStatement(
         Token(Identifier, "a")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Bool
         Width: null
       )
@@ -93,6 +98,7 @@ ExpressionStatement(
         Token(Identifier, "b")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Bool
         Width: null
       )
@@ -109,11 +115,13 @@ ExpressionStatement(
           Token(Identifier, "a")
         )
         Type: PrimitiveType(
+          TypeArguments: null
           Kind: Unknown
           Width: null
         )
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
         Width: null
       )
@@ -139,10 +147,12 @@ ExpressionStatement(
       ]
       Types: [
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
           Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: Bool
           Width: null
         )
@@ -165,10 +175,12 @@ ExpressionStatement(
       ]
       Types: [
         PrimitiveType(
+          TypeArguments: null
           Kind: String
           Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
           Width: null
         )
@@ -188,6 +200,7 @@ ExpressionStatement(
           Token(Identifier, "x")
         )
         Type: PrimitiveType(
+          TypeArguments: null
           Kind: Number
           Width: null
         )
@@ -209,6 +222,7 @@ ExpressionStatement(
       Question: Token(Question, "?")
       NonNullableType: ArrayType(
         ElementType: PrimitiveType(
+          TypeArguments: null
           Kind: Number
           Width: null
         )
@@ -228,16 +242,19 @@ ExpressionStatement(
           Token(Identifier, "x")
         )
         Type: PrimitiveType(
+          TypeArguments: null
           Kind: Unknown
           Width: null
         )
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Bool
         Width: null
       )
     )
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: String
       Width: null
     )
@@ -256,6 +273,7 @@ ExpressionStatement(
         RightArrow: Token(RArrow, ">")
         ArgumentsList: [
           PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -272,11 +290,13 @@ ExpressionStatement(
         Token(Identifier, "x")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Unknown
         Width: null
       )
     )
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Number
       Width: null
     )
@@ -289,6 +309,7 @@ ExpressionStatement(
       Token(Identifier, "x")
     )
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Number
       Width: null
     )

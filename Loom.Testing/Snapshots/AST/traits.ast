@@ -8,6 +8,7 @@
         ReturnType: ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Void
             Width: null
           )
@@ -99,6 +100,7 @@ TraitDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -125,6 +127,7 @@ TraitDeclaration(
         ReturnType: ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Void
             Width: null
           )
@@ -138,6 +141,7 @@ TraitDeclaration(
         ReturnType: ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Void
             Width: null
           )
@@ -151,6 +155,7 @@ TraitDeclaration(
         ReturnType: ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Void
             Width: null
           )

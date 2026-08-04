@@ -4,9 +4,12 @@ using Loom.Core.TypeChecking.Types;
 
 namespace Loom.Core.Parsing.AST;
 
-public class PrimitiveType(Token name)
-    : TypeExpression([name], [])
+public class PrimitiveType(Token name, TypeArguments? typeArguments = null)
+    : TypeExpression([name, ..typeArguments?.Tokens ?? []], [typeArguments])
 {
+    /// <summary>The argument list on a length-widened <c>string&lt;u8&gt;</c>, or <c>null</c> for every other primitive (including a bare <c>string</c>).</summary>
+    public TypeArguments? TypeArguments { get; } = typeArguments;
+
     public PrimitiveTypeKind Kind { get; } = name.Text switch
     {
         "number" => PrimitiveTypeKind.Number,

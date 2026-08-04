@@ -166,7 +166,7 @@ declare sealed interface ContentStatic {
 
 declare let Content: ContentStatic;
 
-declare sealed interface Vector2 {
+declare sealed interface Vector2<T: number = f32> {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Magnitude")] magnitude: number;
@@ -202,7 +202,7 @@ declare sealed interface Vector2int16 {
     [luau_name("Y")] y: number;
 }
 
-declare sealed interface Vector3 {
+declare sealed interface Vector3<T: number = f32> {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;
@@ -242,7 +242,7 @@ declare sealed interface Vector3int16 {
     [luau_name("Z")] z: number;
 }
 
-declare sealed interface CFrame {
+declare sealed interface CFrame<T: number = f32> {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;

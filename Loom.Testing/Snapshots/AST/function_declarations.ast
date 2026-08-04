@@ -40,6 +40,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
             Width: null
           )
@@ -63,6 +64,7 @@ FunctionDeclaration(
   ReturnType: ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Number
       Width: null
     )
@@ -95,6 +97,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -107,6 +110,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -145,6 +149,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -228,6 +233,7 @@ FunctionDeclaration(
   ReturnType: ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Void
       Width: null
     )
@@ -250,6 +256,7 @@ FunctionDeclaration(
   ReturnType: ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Void
       Width: null
     )
@@ -268,6 +275,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -280,6 +288,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
             Width: null
           )
@@ -292,6 +301,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Bool
             Width: null
           )
@@ -414,6 +424,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )
@@ -426,6 +437,7 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
             Width: null
           )

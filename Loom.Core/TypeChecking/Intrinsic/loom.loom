@@ -10,6 +10,10 @@ interface MutRecord<K, V> {
     mut [K]: V;
 }
 
+## Identical to 'T[]' - 'L' only matters to the serializer, which reads it off the type argument
+## directly rather than the array's own length prefix always being 'u32'.
+type Array<T, L: number = u32> = T[];
+
 enum AttributeTargets {
     Function = 1 << 0,
     Interface = 1 << 1,

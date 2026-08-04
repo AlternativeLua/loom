@@ -118,8 +118,8 @@ public sealed partial class Parser
             var typeArguments = ParseTypeArguments();
             if (typeArguments != null || Current() is { Kind: SyntaxKind.LBrace })
             {
-                TypeExpression type = SyntaxFacts.IsPrimitiveType(identifier.Text) && typeArguments == null
-                    ? new PrimitiveType(identifier)
+                TypeExpression type = SyntaxFacts.IsPrimitiveType(identifier.Text)
+                    ? new PrimitiveType(identifier, typeArguments)
                     : new TypeName(identifier, typeArguments);
 
                 ObjectPattern? objectPattern = null;

@@ -165,6 +165,7 @@ ExpressionStatement(
         Token(Identifier, "c")
       )
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
         Width: null
       )
