@@ -122,6 +122,6 @@ const function Account_deserialize_binary(serialized: Loom.Serialized): Loom.Res
     offset += tag_2_length
     tag = tag_2
   end
-  return { ok = true, value = { tag = tag, profile = { level = buffer_readu8(b, 1), nickname = nickname } } }
+  return { ok = true, value = { profile = { level = buffer_readu8(b, 1), nickname = nickname }, tag = tag } }
 end
 const Account_serializer: Loom.Serializer<Account> = { serialize = Account_serialize_binary, deserialize = Account_deserialize_binary }

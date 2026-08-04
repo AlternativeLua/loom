@@ -365,51 +365,6 @@ internal sealed partial class SerializationEmitter
             _ => 0
         };
 
-    /// <summary>
-    ///     Rebuilds the nesting that flattening removed. A nested serializable interface contributes its
-    ///     properties to the parent's field list under dotted paths, so reading them back into a flat
-    ///     table would hand the caller the wrong shape entirely.
-    /// </summary>
-    private static List<TableInitializer> NestByPath(List<TableInitializer> initializers, string prefix)
-    {
-        var nested = new List<TableInitializer>();
-        var groups = new Dictionary<string, List<TableInitializer>>();
-        var order = new List<string>();
-
-        foreach (var initializer in initializers)
-        {
-            if (initializer is not PropertyTableInitializer property)
-            {
-                nested.Add(initializer);
-                continue;
-            }
-
-            var relative = property.PropertyName.StartsWith(prefix, StringComparison.Ordinal)
-                ? property.PropertyName[prefix.Length..]
-                : property.PropertyName;
-
-            var dot = relative.IndexOf('.');
-            if (dot < 0)
-            {
-                nested.Add(new PropertyTableInitializer(relative, property.Value));
-                continue;
-            }
-
-            var head = relative[..dot];
-            if (!groups.TryGetValue(head, out var group))
-            {
-                groups[head] = group = [];
-                order.Add(head);
-            }
-
-            group.Add(new PropertyTableInitializer(relative, property.Value));
-        }
-
-        foreach (var head in order)
-            nested.Add(new PropertyTableInitializer(head, new Table(NestByPath(groups[head], head + "."))));
-
-        return nested;
-    }
 
     /// <summary>
     ///     Reserves the bit block a collection's entries share, returning its origin in bits, or null when

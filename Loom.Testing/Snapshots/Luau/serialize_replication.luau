@@ -359,9 +359,9 @@ const function PlayerSnapshot_deserialize_binary(serialized: Loom.Serialized): L
     team = team,
     velocity = velocity,
     aim = aim,
+    loadout = { primary = read_7, secondary = read_8 },
     recent = recent,
     character = character,
-    loadout = { primary = read_7, secondary = read_8 },
   } }
 end
 const PlayerSnapshot_serializer: Loom.Serializer<PlayerSnapshot> = { serialize = PlayerSnapshot_serialize_binary, deserialize = PlayerSnapshot_deserialize_binary }

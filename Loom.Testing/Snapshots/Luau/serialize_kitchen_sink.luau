@@ -228,12 +228,12 @@ const function KitchenSink_deserialize_binary(serialized: Loom.Serialized): Loom
   offset += 4
   return { ok = true, value = {
     tag = "sink",
+    inner = { flag = buffer_readbits(b, 0, 1) == 1, code = buffer_readu8(b, 2) },
     label = label,
     points = points,
     payload = payload,
     owner = owner_blob,
     frame = CFrame.new(read_6, read_7, read_8, read_9, read_10, read_11, read_12),
-    inner = { flag = buffer_readbits(b, 0, 1) == 1, code = buffer_readu8(b, 2) },
   } }
 end
 const KitchenSink_serializer: Loom.Serializer<KitchenSink> = { serialize = KitchenSink_serialize_binary, deserialize = KitchenSink_deserialize_binary }

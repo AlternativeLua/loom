@@ -40,10 +40,9 @@ internal sealed partial class SerializationEmitter
         }
 
         foreach (var serializationField in schema.Fields)
-            initializers.AddRange(EmitRead(serializationField, readCursor, reads));
+            initializers.Add(new PropertyTableInitializer(LeafName(serializationField.Path), EmitRead(serializationField, readCursor, reads)));
 
         body.AddRange(reads);
-        initializers = NestByPath(initializers, "");
         body.Add(
             new Return(
                 new Table(
@@ -123,74 +122,51 @@ internal sealed partial class SerializationEmitter
     ///     Returns the table initializers reconstructing this field, appending any statements it needs to
     ///     <paramref name="statements" />. Leaf reads are expressions, so most fields need no statement.
     /// </summary>
-    private List<TableInitializer> EmitRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
-    {
-        var name = serializationField.Path;
-        switch (serializationField)
+    /// <summary>
+    ///     Reads one field, returning the expression that reconstructs it. A flattened struct builds its
+    ///     own table from its parts, so nesting is structural rather than something a later pass has to
+    ///     reassemble from dotted names.
+    /// </summary>
+    private LuauExpression EmitRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements) =>
+        serializationField switch
         {
-            case ConstantField constant:
-                return [new PropertyTableInitializer(name, ToLiteral(constant.Value))];
+            ConstantField constant => ToLiteral(constant.Value),
+            BoolField => new BinaryOperator(ReadBits(cursor, 1), "==", One),
+            NumberField numberField => ReadNumber(cursor, numberField.NumberType, statements),
+            RangedNumberField ranged => EmitRangedRead(ranged, cursor),
+            BlobField blobField => EmitBlobRead(blobField, statements),
+            OptionalField optionalField => EmitOptionalRead(optionalField, cursor, statements),
+            ArrayField arrayField => EmitArrayRead(arrayField, cursor, statements),
+            MapField mapField => EmitMapRead(mapField, cursor, statements),
+            StringField stringField => EmitStringRead(stringField, cursor, statements),
+            DatatypeField { UseSentinels: false } datatypeField => new Call(
+                new Identifier(datatypeField.Datatype.Constructor),
+                datatypeField.Datatype.Components.Select(_ => ReadNumber(cursor, datatypeField.NumberType, statements)).ToList()
+            ),
+            CFrameField { UseSentinels: false } cframeField => EmitCFrameRead(cframeField, cursor, statements),
+            DatatypeField or CFrameField => EmitSentinelRead(serializationField, cursor, statements),
+            TupleField tupleField => EmitStructRead(tupleField, cursor, statements),
+            UnionField unionField => EmitUnionRead(unionField, cursor, statements),
+            _ => new NilLiteral()
+        };
 
-            case BoolField:
-                return [new PropertyTableInitializer(name, new BinaryOperator(ReadBits(cursor, 1), "==", One))];
+    /// <summary>Rebuilds a flattened struct as the table its properties belonged to.</summary>
+    private LuauExpression EmitStructRead(TupleField tupleField, Cursor cursor, List<LuauStatement> statements)
+    {
+        var initializers = new List<TableInitializer>();
+        foreach (var element in tupleField.Elements)
+            initializers.Add(new PropertyTableInitializer(LeafName(element.Path), EmitRead(element, cursor, statements)));
 
-            case NumberField numberField:
-                return [new PropertyTableInitializer(name, ReadNumber(cursor, numberField.NumberType, statements))];
+        return new Table(initializers);
+    }
 
-            case RangedNumberField ranged:
-            {
-                LuauExpression decoded = ReadBits(cursor, ranged.HeaderBits);
-                if (ranged.Step != 1)
-                    decoded = Multiply(decoded, new NumberLiteral(ranged.Step));
+    private LuauExpression EmitRangedRead(RangedNumberField ranged, Cursor cursor)
+    {
+        LuauExpression decoded = ReadBits(cursor, ranged.HeaderBits);
+        if (ranged.Step != 1)
+            decoded = Multiply(decoded, new NumberLiteral(ranged.Step));
 
-                if (ranged.Minimum != 0)
-                    decoded = Add(new NumberLiteral(ranged.Minimum), decoded);
-
-                return [new PropertyTableInitializer(name, decoded)];
-            }
-
-            case BlobField blobField:
-                return [new PropertyTableInitializer(name, EmitBlobRead(blobField, statements))];
-
-            case OptionalField optionalField:
-                return [new PropertyTableInitializer(name, EmitOptionalRead(optionalField, cursor, statements))];
-
-            case ArrayField arrayField:
-                return [new PropertyTableInitializer(name, EmitArrayRead(arrayField, cursor, statements))];
-
-            case MapField mapField:
-                return [new PropertyTableInitializer(name, EmitMapRead(mapField, cursor, statements))];
-
-            case StringField stringField:
-                return [new PropertyTableInitializer(name, EmitStringRead(stringField, cursor, statements))];
-
-            case DatatypeField { UseSentinels: false } datatypeField:
-                return
-                [
-                    new PropertyTableInitializer(
-                        name,
-                        new Call(
-                            new Identifier(datatypeField.Datatype.Constructor),
-                            datatypeField.Datatype.Components.Select(_ => ReadNumber(cursor, datatypeField.NumberType, statements)).ToList()
-                        )
-                    )
-                ];
-
-            case CFrameField { UseSentinels: false } cframeField:
-                return [new PropertyTableInitializer(name, EmitCFrameRead(cframeField, cursor, statements))];
-
-            case DatatypeField or CFrameField:
-                return [new PropertyTableInitializer(name, EmitSentinelRead(serializationField, cursor, statements))];
-
-            case TupleField tupleField:
-                return tupleField.Elements.SelectMany(element => EmitRead(element, cursor, statements)).ToList();
-
-            case UnionField unionField:
-                return [new PropertyTableInitializer(name, EmitUnionRead(unionField, cursor, statements))];
-
-            default:
-                return [];
-        }
+        return ranged.Minimum != 0 ? Add(new NumberLiteral(ranged.Minimum), decoded) : decoded;
     }
 
     /// <summary>
@@ -245,25 +221,6 @@ internal sealed partial class SerializationEmitter
         return new Identifier(local);
     }
 
-    /// <summary>
-    ///     Reads one value of a field's shape, returning the expression that reconstructs it. Unlike the
-    ///     property walk this produces no table initializer, so an array element or a map entry can bind
-    ///     it directly.
-    /// </summary>
-    /// <remarks>
-    ///     A flattened struct is reassembled whatever its arity - a single-property one still has to come
-    ///     back as a table, not as the property. Any other field arriving with several initializers is
-    ///     reassembled too, since taking the first would hand back a lone property in place of the value,
-    ///     which is exactly what an optional struct used to do.
-    /// </remarks>
-    private LuauExpression EmitValueRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
-    {
-        var initializers = EmitRead(serializationField, cursor, statements);
-        if (serializationField is TupleField || initializers.Count > 1)
-            return new Table(NestByPath(initializers, serializationField.Path + "."));
-
-        return initializers.OfType<PropertyTableInitializer>().FirstOrDefault()?.Value ?? new NilLiteral();
-    }
 
     /// <summary>
     ///     Reads a count-prefixed run of pairs back into a table. Order is not preserved and does not need
@@ -282,8 +239,8 @@ internal sealed partial class SerializationEmitter
         var loop = ReserveLocal(LoopLocal);
         var pairBody = new List<LuauStatement>();
         var restorePair = EnterElement(cursor, pairBits, mapField.EntryBits, loop);
-        var key = EmitValueRead(mapField.Key, cursor, pairBody);
-        var value = EmitValueRead(mapField.Value, cursor, pairBody);
+        var key = EmitRead(mapField.Key, cursor, pairBody);
+        var value = EmitRead(mapField.Value, cursor, pairBody);
         restorePair();
 
         pairBody.Add(new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), key), "=", value)));
@@ -322,7 +279,7 @@ internal sealed partial class SerializationEmitter
         var loop = ReserveLocal(LoopLocal);
         var elementBody = new List<LuauStatement>();
         var restore = EnterElement(cursor, bitBase, arrayField.Element.HeaderBits, loop);
-        var element = EmitValueRead(arrayField.Element, cursor, elementBody);
+        var element = EmitRead(arrayField.Element, cursor, elementBody);
         restore();
 
         elementBody.Add(
@@ -411,18 +368,16 @@ internal sealed partial class SerializationEmitter
             return ToLiteral(variant.Discriminant);
 
         if (unionField.Discrimination == UnionDiscrimination.RuntimeKind)
-            return variant.Fields.Count == 1 ? EmitValueRead(variant.Fields[0], cursor, body) : new NilLiteral();
+            return variant.Fields.Count == 1 ? EmitRead(variant.Fields[0], cursor, body) : new NilLiteral();
 
         var initializers = new List<TableInitializer>
         {
             new PropertyTableInitializer(unionField.DiscriminantName!, ToLiteral(variant.Discriminant))
         };
 
-        var variantInitializers = new List<TableInitializer>();
         foreach (var variantField in variant.Fields)
-            variantInitializers.AddRange(EmitRead(variantField, cursor, body));
+            initializers.Add(new PropertyTableInitializer(LeafName(variantField.Path), EmitRead(variantField, cursor, body)));
 
-        initializers.AddRange(NestByPath(variantInitializers, unionField.Path + "."));
         return new Table(initializers);
     }
 
@@ -490,7 +445,7 @@ internal sealed partial class SerializationEmitter
 
         // Read as one value, not as a list of initializers: a nested struct contributes one per
         // property, and assigning them in turn would leave the accumulator holding only the last.
-        var inner = EmitValueRead(optionalField.Inner, cursor, present);
+        var inner = EmitRead(optionalField.Inner, cursor, present);
         present.Add(new ExpressionStatement(new BinaryOperator(new Identifier(leaf), "=", inner)));
 
         statements.Add(new IfStatement(new Identifier(presentLocal), new Chunk(present), [], null));
