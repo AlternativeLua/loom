@@ -181,20 +181,56 @@ public sealed partial class TypeChecker
             valid = false;
         }
 
-        // A plain 'number' has a sized type to reach for now, so the attribute no longer applies there -
-        // it stays valid on a CFrame/datatype's per-component width and on an all-numeric tuple, neither
-        // of which has a type-level alternative. Skipped when 'number_range' is also present: the
-        // conflict check just below already covers that combination with a more specific message.
-        if (hasNumberType && !isSizedNumber && !hasNumberRange && unwrapped is Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.Number })
+        // 'number_type' now has exactly one valid target left: an all-numeric tuple, where there is no
+        // type-level way to set every element's width at once. Every other former target has either a
+        // type-level replacement (a plain number's sized type, Vector3/Vector2/CFrame's own <T>) or, for
+        // the other 7 Roblox datatypes, no replacement at all - their per-component width simply isn't
+        // configurable anymore. Skipped when 'number_range' is also present: the conflict check below
+        // already covers that combination with a more specific message.
+        if (hasNumberType && !isSizedNumber && !hasNumberRange)
         {
-            _diagnostics.Error(
-                property,
-                InternalCodes.InvalidAttributeTargetType,
-                $"'number_type' no longer applies to a plain 'number' - '{propertyName}' should be a sized type instead.",
-                $"use one of u8/u16/u32/i8/i16/i32/f32/f64, e.g. '{propertyName}: u8'."
-            );
+            if (unwrapped is Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.Number })
+            {
+                _diagnostics.Error(
+                    property,
+                    InternalCodes.InvalidAttributeTargetType,
+                    $"'number_type' no longer applies to a plain 'number' - '{propertyName}' should be a sized type instead.",
+                    $"use one of u8/u16/u32/i8/i16/i32/f32/f64, e.g. '{propertyName}: u8'."
+                );
 
-            valid = false;
+                valid = false;
+            }
+            else if (unwrapped is Types.InterfaceType { Name: "Vector3" or "Vector2" or "CFrame" } sizedComponentType)
+            {
+                _diagnostics.Error(
+                    property,
+                    InternalCodes.InvalidAttributeTargetType,
+                    $"'number_type' no longer applies to '{propertyName}' - use '{sizedComponentType.Name}<i16>' instead of the attribute.",
+                    $"declare it as '{propertyName}: {sizedComponentType.Name}<i16>', or drop the argument to keep the f32 default."
+                );
+
+                valid = false;
+            }
+            else if (unwrapped is Types.InterfaceType otherDatatype && RobloxDatatype.TryGet(otherDatatype.Name, out _))
+            {
+                _diagnostics.Error(
+                    property,
+                    InternalCodes.InvalidAttributeTargetType,
+                    $"'number_type' on '{propertyName}' is no longer configurable - '{otherDatatype.Name}' always serializes its components as f32."
+                );
+
+                valid = false;
+            }
+            else if (!HasNumericComponents(propertyType))
+            {
+                _diagnostics.Error(
+                    property,
+                    InternalCodes.InvalidAttributeTargetType,
+                    $"'number_type' requires '{propertyName}' to have numeric components, but it is '{propertyType}'."
+                );
+
+                valid = false;
+            }
         }
 
         if (!isSizedNumber && hasNumberType && hasNumberRange)
@@ -221,7 +257,11 @@ public sealed partial class TypeChecker
             valid = false;
         }
 
-        if (!isSizedNumber && (hasNumberType || hasNumberRange) && !HasNumericComponents(propertyType))
+        // 'number_type''s own non-numeric case is fully handled above; this only still needs to catch
+        // 'number_range' (alone, or paired with 'number_type' - the conflict check above already flags
+        // that combination, but a non-numeric target is a second, independent problem worth its own
+        // message too).
+        if (hasNumberRange && !isSizedNumber && !HasNumericComponents(propertyType))
         {
             _diagnostics.Error(
                 property,
@@ -233,7 +273,16 @@ public sealed partial class TypeChecker
         }
 
         if (present.Contains("length_type"))
-            valid &= CheckLengthTypeAttribute(property, propertyName, propertyType);
+        {
+            _diagnostics.Error(
+                property,
+                InternalCodes.InvalidAttributeTargetType,
+                $"'length_type' is no longer configurable via attribute on '{propertyName}'.",
+                "use 'string<u8>' for a string's length width, or 'Array<T, u8>' for an array's."
+            );
+
+            valid = false;
+        }
 
         if (present.Contains("cframe_type") && !IsNamedInterface(propertyType, "CFrame"))
         {
@@ -249,61 +298,35 @@ public sealed partial class TypeChecker
         return valid;
     }
 
-    private bool CheckLengthTypeAttribute(PropertyDeclaration property, string propertyName, Type propertyType)
-    {
-        var valid = true;
-        if (!IsLengthPrefixed(propertyType))
-        {
-            _diagnostics.Error(
-                property,
-                InternalCodes.InvalidAttributeTargetType,
-                $"'length_type' requires '{propertyName}' to be a string or array, but it is '{propertyType}'."
-            );
-
-            valid = false;
-        }
-
-        if (!property.TryGetIntrinsicAttribute(_semanticModel, "length_type", out var attribute)
-            || attribute.Attribute.Arguments.ArgumentList is not [var argument]
-            || _semanticModel.GetConstantValue(argument) is not double ordinal)
-            return valid;
-
-        var numberType = (NumberType)(int)ordinal;
-        if (numberType.IsUnsigned())
-            return valid;
-
-        _diagnostics.Error(
-            argument,
-            InternalCodes.InvalidAttributeTargetType,
-            $"'length_type' on '{propertyName}' must be an unsigned number type, but is '{numberType}'.",
-            "lengths are never negative; use U8, U16, or U32."
-        );
-
-        return false;
-    }
-
-    /// <summary>Whether <c>[number_type]</c> or <c>[number_range]</c> has anything to apply to.</summary>
+    /// <summary>
+    ///     Whether <c>[number_type]</c> or <c>[number_range]</c> has anything to apply to. Vector3/Vector2/
+    ///     CFrame and the other Roblox datatypes are deliberately absent - the former three source their
+    ///     width from a type argument now, and the rest lost per-component configuration outright, so
+    ///     neither attribute has a valid interface-shaped target left. Only an all-numeric tuple remains.
+    /// </summary>
     private static bool HasNumericComponents(Type type) =>
         Unwrap(type) switch
         {
             Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.Number } => true,
-            Types.InterfaceType interfaceType => interfaceType.Name == "CFrame" || RobloxDatatype.TryGet(interfaceType.Name, out _),
             // The attribute distributes to every element, so it applies as long as all of them are numeric.
             Types.TupleType tuple => tuple.ElementTypes.Count > 0 && tuple.ElementTypes.TrueForAll(HasNumericComponents),
             _ => false
         };
 
-    private static bool IsLengthPrefixed(Type type) =>
-        Unwrap(type) is Types.ArrayType or Types.PrimitiveType { Kind: Types.PrimitiveTypeKind.String };
-
     private static bool IsNamedInterface(Type type, string name) => Unwrap(type) is Types.InterfaceType interfaceType && interfaceType.Name == name;
 
-    /// <summary>Looks through optionals and arrays, since an attribute on those applies to the element.</summary>
+    /// <summary>
+    ///     Looks through optionals, arrays, and generic instantiations, since an attribute on those applies
+    ///     to the element - and Vector3/Vector2/CFrame are an <see cref="Types.InstantiatedType" /> now, not
+    ///     a plain <see cref="Types.InterfaceType" />, so reaching their name at all requires expanding
+    ///     first, same as every other reader of an instantiation elsewhere in the codebase already does.
+    /// </summary>
     private static Type Unwrap(Type type) =>
         type switch
         {
             Types.OptionalType optional => Unwrap(optional.NonNullableType),
             Types.ArrayType array => Unwrap(array.ElementType),
+            Types.InstantiatedType instantiated => Unwrap(instantiated.Expand()),
             _ => type
         };
 
