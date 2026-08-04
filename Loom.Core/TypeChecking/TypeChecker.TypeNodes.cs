@@ -1,6 +1,7 @@
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
+using Loom.Core.TypeChecking.Serialization;
 using Loom.Core.TypeChecking.Types;
 using ArrayType = Loom.Core.Parsing.AST.ArrayType;
 using FunctionType = Loom.Core.Parsing.AST.FunctionType;
@@ -112,11 +113,55 @@ public sealed partial class TypeChecker
     public override Type VisitArrayType(ArrayType arrayType) => BindType(arrayType, new Types.ArrayType(Visit(arrayType.ElementType), arrayType.MutKeyword != null));
     public override Type VisitTupleType(Parsing.AST.TupleType tupleType) => BindType(tupleType, new Types.TupleType(tupleType.Types.ConvertAll(Visit)));
     public override Type VisitOptionalType(OptionalType optionalType) => BindType(optionalType, new Types.OptionalType(Visit(optionalType.NonNullableType)));
-    public override Type VisitPrimitiveType(PrimitiveType primitiveType) =>
-        BindType(
-            primitiveType,
-            primitiveType.Width is { } width ? new Types.SizedNumberType(width) : new Types.PrimitiveType(primitiveType.Kind)
-        );
+    public override Type VisitPrimitiveType(PrimitiveType primitiveType)
+    {
+        if (primitiveType.Width is { } width)
+            return BindType(primitiveType, new Types.SizedNumberType(width));
+
+        return BindType(primitiveType, primitiveType.TypeArguments != null ? VisitSizedStringType(primitiveType) : new Types.PrimitiveType(primitiveType.Kind));
+    }
+
+    /// <summary>
+    ///     'string' is the only primitive a type argument ever reaches the type checker for - the parser
+    ///     deliberately never parses one for any other primitive (see <c>Parser.Types.cs</c>), but the
+    ///     'is'/match-pattern parse paths aren't restricted the same way, so this still has to reject one
+    ///     turning up on, say, 'number&lt;u8&gt;' rather than assume it can only be 'string'.
+    /// </summary>
+    private Type VisitSizedStringType(PrimitiveType primitiveType)
+    {
+        if (primitiveType.Kind != PrimitiveTypeKind.String)
+        {
+            _diagnostics.Error(primitiveType, InternalCodes.InvalidTypeArguments, $"'{primitiveType.Kind.ToString().ToLower()}' does not take a type argument.");
+            return new Types.PrimitiveType(primitiveType.Kind);
+        }
+
+        if (primitiveType.TypeArguments!.ArgumentsList is not [var argument])
+        {
+            _diagnostics.Error(primitiveType, InternalCodes.InvalidTypeArguments, "'string' takes exactly one type argument, its length-prefix width.");
+            return Types.PrimitiveType.String;
+        }
+
+        var argumentType = Visit(argument);
+        if (argumentType is not Types.SizedNumberType sized)
+        {
+            _diagnostics.Error(argument, InternalCodes.InvalidTypeArguments, $"string's length type must be a sized type like 'u8', but is '{argumentType}'.");
+            return Types.PrimitiveType.String;
+        }
+
+        if (!sized.NumberType.IsUnsigned())
+        {
+            _diagnostics.Error(
+                argument,
+                InternalCodes.InvalidTypeArguments,
+                $"string's length type must be unsigned, but is '{sized.NumberType}'.",
+                "lengths are never negative; use u8, u16, or u32."
+            );
+
+            return Types.PrimitiveType.String;
+        }
+
+        return new Types.SizedStringType(sized.NumberType);
+    }
     public override Type VisitLiteralType(LiteralType literalType) => BindType(literalType, new Types.LiteralType(literalType.Value));
 
     public override Type VisitTypeName(TypeName typeName)
