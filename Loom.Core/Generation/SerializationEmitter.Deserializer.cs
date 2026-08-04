@@ -246,20 +246,20 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>
-    ///     Reads a length-prefixed array. The count is checked against the buffer before the loop, so a
-    ///     hostile length reports rather than running off the end one element at a time.
-    /// </summary>
-    /// <summary>
     ///     Reads one value of a field's shape, returning the expression that reconstructs it. Unlike the
-    ///     property walk this produces no table initializer, so an array element can bind it by index.
+    ///     property walk this produces no table initializer, so an array element or a map entry can bind
+    ///     it directly.
     /// </summary>
+    /// <remarks>
+    ///     A flattened struct is reassembled whatever its arity - a single-property one still has to come
+    ///     back as a table, not as the property. Any other field arriving with several initializers is
+    ///     reassembled too, since taking the first would hand back a lone property in place of the value,
+    ///     which is exactly what an optional struct used to do.
+    /// </remarks>
     private LuauExpression EmitValueRead(SerializationField serializationField, Cursor cursor, List<LuauStatement> statements)
     {
         var initializers = EmitRead(serializationField, cursor, statements);
-
-        // A flattened struct contributes one initializer per property, which have to be reassembled
-        // rather than collapsed to the first.
-        if (serializationField is TupleField)
+        if (serializationField is TupleField || initializers.Count > 1)
             return new Table(NestByPath(initializers, serializationField.Path + "."));
 
         return initializers.OfType<PropertyTableInitializer>().FirstOrDefault()?.Value ?? new NilLiteral();

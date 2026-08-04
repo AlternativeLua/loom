@@ -144,7 +144,7 @@ internal sealed partial class SerializationEmitter
     {
         var constant = 0;
         LuauExpression? dynamic = null;
-        foreach (var variantField in variant.Fields)
+        foreach (var (variantField, variantValue) in ChildrenOf(unionField, variant, value))
         {
             if (variantField.BodyBytes is { } fixedBytes)
             {
@@ -152,7 +152,7 @@ internal sealed partial class SerializationEmitter
                 continue;
             }
 
-            if (InlineContribution(variantField, AccessRelative(value, variantField.Path, unionField.Path)) is not { } contribution)
+            if (InlineContribution(variantField, variantValue) is not { } contribution)
                 continue;
 
             dynamic = dynamic == null ? contribution : Add(dynamic, contribution);
@@ -236,8 +236,8 @@ internal sealed partial class SerializationEmitter
         // A flattened nested struct contributes each of its parts.
         if (serializationField is TupleField tupleField)
         {
-            foreach (var element in tupleField.Elements)
-                MeasureField(element, AccessRelative(value, element.Path, tupleField.Path), statements);
+            foreach (var (part, partValue) in ChildrenOf(tupleField, value))
+                MeasureField(part, partValue, statements);
 
             return;
         }
@@ -246,7 +246,8 @@ internal sealed partial class SerializationEmitter
         if (serializationField is OptionalField optionalField)
         {
             var innerStatements = new List<LuauStatement>();
-            MeasureField(optionalField.Inner, value, innerStatements);
+            foreach (var (inner, innerValue) in ChildrenOf(optionalField, value))
+                MeasureField(inner, innerValue, innerStatements);
 
             if (innerStatements.Count > 0)
                 statements.Add(new IfStatement(IsPresent(value), new Chunk(innerStatements), [], null));
@@ -539,7 +540,8 @@ internal sealed partial class SerializationEmitter
                 cursor.GoDynamic(body);
 
                 var present = new List<LuauStatement>();
-                EmitValueWrite(optionalField.Inner, value, cursor, present);
+                foreach (var (inner, innerValue) in ChildrenOf(optionalField, value))
+                    EmitValueWrite(inner, innerValue, cursor, present);
                 body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
 
                 return;
@@ -664,8 +666,8 @@ internal sealed partial class SerializationEmitter
             // Resolved against the value handed in, not the parameter: inside an array the base is the
             // bound element, whose path segment ('leaves[]') is not a property that could be indexed.
             case TupleField tupleField:
-                foreach (var element in tupleField.Elements)
-                    EmitValueWrite(element, AccessRelative(value, element.Path, tupleField.Path), cursor, body);
+                foreach (var (element, elementValue) in ChildrenOf(tupleField, value))
+                    EmitValueWrite(element, elementValue, cursor, body);
 
                 return;
 
@@ -688,8 +690,8 @@ internal sealed partial class SerializationEmitter
                 {
                     cursor.BitOffset = startBit;
                     var variantBody = new List<LuauStatement>();
-                    foreach (var variantField in unionField.Variants[index].Fields)
-                        EmitValueWrite(variantField, AccessRelative(value, variantField.Path, unionField.Path), cursor, variantBody);
+                    foreach (var (variantField, variantValue) in ChildrenOf(unionField, unionField.Variants[index], value))
+                        EmitValueWrite(variantField, variantValue, cursor, variantBody);
 
                     widestBit = Math.Max(widestBit, cursor.BitOffset);
 

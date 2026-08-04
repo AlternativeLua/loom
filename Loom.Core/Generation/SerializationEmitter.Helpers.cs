@@ -78,6 +78,27 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>
+    ///     Children of a composite, each paired with the expression that reaches it from the value the
+    ///     composite occupies. Sizing and writing both walk these, and resolving them independently is
+    ///     what let the two drift: each site that reached for the function's parameter instead of the
+    ///     value it was handed produced a path naming a property that does not exist.
+    /// </summary>
+    private static IEnumerable<(SerializationField Field, LuauExpression Value)> ChildrenOf(SerializationField parent, LuauExpression value) =>
+        parent switch
+        {
+            TupleField tuple => tuple.Elements.Select(element => (element, AccessRelative(value, element.Path, parent.Path))),
+            OptionalField optional => [(optional.Inner, AccessRelative(value, optional.Inner.Path, parent.Path))],
+            _ => []
+        };
+
+    /// <summary>One variant's fields, reached the same way. The variant shares the union's own path.</summary>
+    private static IEnumerable<(SerializationField Field, LuauExpression Value)> ChildrenOf(
+        UnionField union,
+        SerializationVariant variant,
+        LuauExpression value) =>
+        variant.Fields.Select(field => (field, AccessRelative(value, field.Path, union.Path)));
+
+    /// <summary>
     ///     Reaches a field from the value its enclosing path names. A runtime-kind union's variant carries
     ///     the union's own path rather than one beneath it - the value <em>is</em> the payload - so there
     ///     is nothing left to index.
