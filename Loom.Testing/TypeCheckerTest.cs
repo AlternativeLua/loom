@@ -1351,6 +1351,31 @@ public class TypeCheckerTest
         Assert.Equal(PrimitiveType.Number, type);
     }
 
+    [Theory]
+    [InlineData("Message.ShootGun", "ShootGunPacket")]
+    [InlineData("Message.Reload", "ReloadPacket")]
+    public void Checks_Generic_IndexedType_ResolvesEachConstraintsIndexer(string key, string expectedInterface)
+    {
+        // MessageData is two single-key interfaces merged through inheritance - each key has to resolve
+        // to its own constraint's value type, not whichever constraint's indexer is reached first.
+        var type = Utility.GetLastStatementType(
+            $$"""
+            enum Message { ShootGun, Reload }
+            interface ShootGunPacket { velocity: u8 }
+            interface ReloadPacket { ammo: u8 }
+            declare interface ShootGunEntry { [Message["ShootGun"]]: ShootGunPacket; }
+            declare interface ReloadEntry { [Message["Reload"]]: ReloadPacket; }
+            declare interface MessageData: ShootGunEntry, ReloadEntry;
+
+            fn get<K: Message>(k: K): MessageData[K] -> none as never as MessageData[K];
+            get({{key}})
+            """
+        );
+
+        var interfaceType = Assert.IsType<InterfaceType>(type);
+        Assert.Equal(expectedInterface, interfaceType.Name);
+    }
+
     [Fact]
     public void Checks_Generic_ArrayIndex()
     {

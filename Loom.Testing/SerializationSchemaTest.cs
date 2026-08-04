@@ -322,6 +322,34 @@ public class SerializationSchemaTest
                 Assert.DoesNotContain("MyData_serialize_binary(", consumer);
             }
         );
+
+    [Fact]
+    public void SerializerOf_MergesEveryConstraintsIndexer_NotJustTheFirst()
+    {
+        // A dispatch table is typically built by merging several single-key interfaces through
+        // inheritance, each contributing its own '[Message["..."]]: ...Packet' indexer - the map has to
+        // read every constraint's indexer, not just whichever one is reached first.
+        var luau = Utility.GetLuauAST(
+                """
+                enum Message { ShootGun, Reload }
+
+                [serializable] interface ShootGunPacket { velocity: u8 }
+                [serializable] interface ReloadPacket { ammo: u8 }
+
+                declare interface ShootGunEntry { [Message["ShootGun"]]: ShootGunPacket; }
+                declare interface ReloadEntry { [Message["Reload"]]: ReloadPacket; }
+                declare interface MessageData: ShootGunEntry, ReloadEntry;
+
+                fn get_serializer<K: Message>(message: K): Serializer<MessageData[K]>
+                    -> serializer_of::<MessageData, K>(message)
+                """,
+                true
+            )
+            .Render();
+
+        Assert.Contains("MessageData_serializer_map = { [0] = ShootGunPacket_serializer, [1] = ReloadPacket_serializer }", luau);
+    }
+
     [Fact]
     public void ArrayOfStrings_MeasuresByWalkingTheValue()
     {

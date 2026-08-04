@@ -5,6 +5,15 @@ public abstract class NativelyIndexableType : Type
     public abstract ObjectIndexer? Indexer { get; internal set; }
     public abstract List<ObjectProperty> Properties { get; }
 
+    /// <summary>
+    ///     Every indexer this type carries, not just the first. A plain <see cref="ObjectType" /> only
+    ///     ever has the one, but an <see cref="InterfaceType" /> merged from several single-key constraints
+    ///     - <c>declare interface MessageData: ShootGunEntry, ReloadEntry;</c>, each contributing its own
+    ///     <c>[Message["..."]]: ...Packet</c> - carries one per constraint, and <see cref="Indexer" />'s
+    ///     single slot can only ever expose one of them.
+    /// </summary>
+    public virtual IEnumerable<ObjectIndexer> Indexers => Indexer is { } indexer ? [indexer] : [];
+
     public abstract Type PropertyKeyUnion();
 
     public ObjectProperty? GetProperty(string name) => FindProperty(name);
@@ -16,9 +25,12 @@ public abstract class NativelyIndexableType : Type
         if (indexType is TypeParameter parameter)
         {
             if (parameter.Constraint == null)
-                return Indexer != null && indexType.IsAssignableTo(Indexer.KeyType)
-                    ? (Indexer, "")
+            {
+                var unconstrained = Indexers.FirstOrDefault(i => indexType.IsAssignableTo(i.KeyType));
+                return unconstrained != null
+                    ? (unconstrained, "")
                     : (null, $" Type parameter '{parameter.Name}' is unconstrained.");
+            }
 
             indexType = parameter.Constraint;
         }
@@ -29,7 +41,7 @@ public abstract class NativelyIndexableType : Type
             if (property != null)
                 return (property, "");
 
-            if (Indexer == null)
+            if (!Indexers.Any())
                 return (null, $" Property '{name}' does not exist on type '{this}'.");
         }
 
@@ -40,8 +52,15 @@ public abstract class NativelyIndexableType : Type
                 ValueUnionForKeyType(indexType)
             ), "");
 
-        if (Indexer != null && indexType.IsAssignableTo(Indexer.KeyType))
-            return (Indexer, "");
+        // An exact key match - the shape a specific enum-member literal takes indexing into a mapping
+        // interface merged from several single-key constraints - wins over a looser assignability check,
+        // so two indexers with distinct literal keys each resolve to their own value type rather than
+        // whichever one happens to be reachable first.
+        if (Indexers.FirstOrDefault(i => indexType.Equals(i.KeyType)) is { } exact)
+            return (exact, "");
+
+        if (Indexers.FirstOrDefault(i => indexType.IsAssignableTo(i.KeyType)) is { } assignable)
+            return (assignable, "");
 
         return Indexer == null
             ? (null, "")
@@ -58,8 +77,7 @@ public abstract class NativelyIndexableType : Type
             )
             .ToList();
 
-        if (Indexer != null)
-            matches.Add(Indexer.ValueType);
+        matches.AddRange(Indexers.Select(i => i.ValueType));
 
         return TypeSimplifier.Simplify(new UnionType(matches));
     }

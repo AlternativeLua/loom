@@ -43,6 +43,9 @@ internal sealed partial class SerializationEmitter(SerializationSchema schema, L
     ///     Emits one table per mapping interface, keyed exactly as the interface is. Properties key by
     ///     name; an indexer whose key is a literal type - the shape an enum-keyed map takes - keys by
     ///     that literal, so <c>[Message["ShootGun"]]: ShootGunPacket</c> lands under the member's value.
+    ///     A dispatch table typically merges several single-key interfaces through inheritance - each
+    ///     contributing its own indexer - so every one of <see cref="InterfaceType.Indexers" /> is read,
+    ///     not just the type's own.
     /// </summary>
     public static ConstVariable? EmitSerializerMap(
         InterfaceType mapType,
@@ -57,9 +60,12 @@ internal sealed partial class SerializationEmitter(SerializationSchema schema, L
             initializers.Add(new PropertyTableInitializer(property.Name, new Identifier(serializerName)));
         }
 
-        if (mapType.Indexer is { KeyType: LiteralType key, ValueType: InterfaceType indexedValue }
-            && resolveSerializerName(indexedValue) is { } indexedSerializer)
-            initializers.Add(new ComputedPropertyTableInitializer(ToLiteral(key.Value), new Identifier(indexedSerializer)));
+        foreach (var indexer in mapType.Indexers)
+        {
+            if (indexer is { KeyType: LiteralType key, ValueType: InterfaceType indexedValue }
+                && resolveSerializerName(indexedValue) is { } indexedSerializer)
+                initializers.Add(new ComputedPropertyTableInitializer(ToLiteral(key.Value), new Identifier(indexedSerializer)));
+        }
 
         return initializers.Count == 0
             ? null
