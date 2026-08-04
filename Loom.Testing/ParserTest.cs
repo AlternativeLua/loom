@@ -1205,6 +1205,28 @@ public class ParserTest
     }
 
     [Fact]
+    public void Parses_StringWithTypeArgument()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: string<u8> = \"a\";"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var primitiveType = Assert.IsType<PrimitiveType>(variableDeclaration.ColonTypeClause!.Type);
+
+        Assert.Equal(PrimitiveTypeKind.String, primitiveType.Kind);
+        var argument = Assert.Single(primitiveType.TypeArguments!.ArgumentsList);
+        Assert.Equal(NumberType.U8, Assert.IsType<PrimitiveType>(argument).Width);
+    }
+
+    [Fact]
+    public void Parses_BareString_WithNoTypeArguments()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: string = \"a\";"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var primitiveType = Assert.IsType<PrimitiveType>(variableDeclaration.ColonTypeClause!.Type);
+
+        Assert.Null(primitiveType.TypeArguments);
+    }
+
+    [Fact]
     public void Parses_TupleExpression()
     {
         var result = Utility.AssertNoErrors(Utility.Parse("let x = (\"a\", 1);"));

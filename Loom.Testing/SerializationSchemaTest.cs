@@ -1165,6 +1165,30 @@ public class SerializationSchemaTest
         Assert.Equal(16, schema.FixedByteCount);
     }
 
+    [Theory]
+    [InlineData("position: Vector3;")]
+    [InlineData("frame: CFrame;")]
+    public void BareSizedTypeWithNoTypeArgument_DefaultsToF32(string property)
+    {
+        var schema = GetSchema(
+            $$"""
+            [serializable] interface MyData {
+                {{property}}
+            }
+            """
+        );
+
+        var field = Assert.Single(schema.Fields);
+        var numberType = field switch
+        {
+            DatatypeField datatype => datatype.NumberType,
+            CFrameField cframe => cframe.NumberType,
+            _ => throw new InvalidOperationException($"Unexpected field type: {field.GetType()}")
+        };
+
+        Assert.Equal(NumberType.F32, numberType);
+    }
+
     [Fact]
     public void PreciseCFrameSpendsFourComponentsOnRotation()
     {

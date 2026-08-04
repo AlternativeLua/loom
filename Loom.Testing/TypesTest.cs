@@ -968,6 +968,40 @@ public class TypesTest
     }
 
     [Fact]
+    public void SizedStringType_Assignability()
+    {
+        var u8 = new SizedStringType(NumberType.U8);
+
+        // Same deliberate looseness as SizedNumberType: the length width only matters to the
+        // serializer, so a sized string stays freely assignable to and from a plain string.
+        Assert.True(u8.IsAssignableTo(String));
+        Assert.True(String.IsAssignableTo(u8));
+
+        var literal = new LiteralType("hi");
+        Assert.True(literal.IsAssignableTo(u8));
+    }
+
+    [Fact]
+    public void SizedStringType_Equality()
+    {
+        var u8 = new SizedStringType(NumberType.U8);
+        var otherU8 = new SizedStringType(NumberType.U8);
+        var u16 = new SizedStringType(NumberType.U16);
+
+        Assert.Equal(u8, otherU8);
+        Assert.NotEqual<Type>(u8, u16);
+        Assert.NotEqual<Type>(u8, String);
+        Assert.NotEqual<Type>(String, u8);
+    }
+
+    [Fact]
+    public void SizedStringType_ToString()
+    {
+        Assert.Equal("string<u8>", new SizedStringType(NumberType.U8).ToString());
+        Assert.Equal("string<u32>", new SizedStringType(NumberType.U32).ToString());
+    }
+
+    [Fact]
     public void Primitive_Assignability()
     {
         Assert.True(Bool.IsAssignableTo(Bool));
