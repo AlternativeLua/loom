@@ -14,6 +14,10 @@ public sealed class InterfaceSymbol(InterfaceDeclaration declaration, string nam
     public IReadOnlyList<Implement> FullImplementations => field ??= Implementations.Concat(GetFieldAndConstraintFields(i => i.Implementations)).ToArray();
     public List<Implement> Implementations { get; } = [];
 
+    /// <summary>Metamethod name (e.g. "__add") to property name, for own properties tagged with [luau_metamethod(...)].</summary>
+    public IReadOnlyDictionary<string, string> Metamethods { get; } =
+        MetamethodAttributes.Collect(declaration.Body?.Members.OfType<PropertyDeclaration>() ?? [], p => p.Name.Text, p => p.Attributes);
+
     public PropertySymbol? GetPropertyAtPath(IReadOnlyList<string> path)
     {
         if (path.Count == 0)
