@@ -208,6 +208,104 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_TernaryOperator_WithHoistingBranch_PromotesToStatementForm()
+    {
+        // Neither branch may run unless its own side of the condition is actually taken - a plain
+        // IfExpression can't guarantee that, since Visit()-ing both branches unconditionally hoists
+        // whatever they need (e.g. an error-propagation guard) into the same shared, unconditional scope.
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn a(): Result<number, string> { return Result.ok(1); }
+            fn b(): Result<number, string> { return Result.ok(2); }
+            fn pick(cond: bool): Result<number, string> {
+                let value = cond ? a()? : b()?;
+                return Result.ok(value);
+            }
+            """,
+            true
+        );
+
+        var pick = luauTree.Statements.OfType<Function>().Single(f => f.Name == "pick");
+        var ternaryLocal = Assert.IsType<LocalVariable>(pick.Body.Statements[0]);
+        Assert.Equal("_ternary", ternaryLocal.Name);
+
+        var ifStatement = Assert.IsType<IfStatement>(pick.Body.Statements[1]);
+        Assert.Equal("cond", Assert.IsType<Identifier>(ifStatement.Condition).Name);
+
+        var thenGuard = Assert.IsType<IfStatement>(ifStatement.ThenBranch.Statements[1]);
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[2]).Expression);
+        Assert.Equal("_ternary", Assert.IsType<Identifier>(thenAssignment.Left).Name);
+        Assert.NotNull(thenGuard.ThenBranch.Statements.OfType<Return>().SingleOrDefault());
+
+        var elseGuard = Assert.IsType<IfStatement>(ifStatement.ElseBranch!.Statements[1]);
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch.Statements[2]).Expression);
+        Assert.Equal("_ternary", Assert.IsType<Identifier>(elseAssignment.Left).Name);
+        Assert.NotNull(elseGuard.ThenBranch.Statements.OfType<Return>().SingleOrDefault());
+    }
+
+    [Fact]
+    public void Generates_ErrorPropagation_MatchesIssueExample()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn some_other_unsafe_fn(): Result<number, string> {
+                return Result.ok(1);
+            }
+            fn unsafe_fn(): Result<number, string> {
+                let value = some_other_unsafe_fn()?;
+                return Result.ok(69 + value);
+            }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("const _result = some_other_unsafe_fn()", rendered);
+        Assert.Contains("if not _result.ok then", rendered);
+        Assert.Contains("return _result", rendered);
+        Assert.Contains("const value = _result.value", rendered);
+        Assert.Contains("return { ok = true, value = 69 + value }", rendered);
+    }
+
+    [Fact]
+    public void Generates_ErrorPropagation_CachesReceiverOnlyOnce()
+    {
+        // A side-effecting receiver (here, just any non-identifier expression) must be evaluated exactly
+        // once - PushToVariable caching, same discipline as #153/#154 - not once for the nil/'ok' check
+        // and again for '.value'.
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn get(): Result<number, string> { return Result.ok(1); }
+            fn use_it(): Result<number, string> {
+                let value = get()?;
+                return Result.ok(value);
+            }
+            """,
+            true
+        );
+
+        var useIt = luauTree.Statements.OfType<Function>().Single(f => f.Name == "use_it");
+        var cached = Assert.IsType<ConstVariable>(useIt.Body.Statements[0]);
+        Assert.Equal("_result", cached.Name);
+        var call = Assert.IsType<Call>(cached.Initializer);
+        Assert.Equal("get", Assert.IsType<Identifier>(call.Callee).Name);
+
+        var guard = Assert.IsType<IfStatement>(useIt.Body.Statements[1]);
+        var condition = Assert.IsType<UnaryOperator>(guard.Condition);
+        Assert.Equal("not ", condition.Operator);
+        var okAccess = Assert.IsType<PropertyAccess>(condition.Operand);
+        Assert.Equal("_result", Assert.IsType<Identifier>(okAccess.Target).Name);
+        Assert.Equal(["ok"], okAccess.Names);
+
+        var returnStatement = Assert.IsType<Return>(Assert.Single(guard.ThenBranch.Statements));
+        Assert.Equal("_result", Assert.IsType<Identifier>(returnStatement.Expression).Name);
+
+        var valueLocal = Assert.IsType<ConstVariable>(useIt.Body.Statements[2]);
+        var valueAccess = Assert.IsType<PropertyAccess>(valueLocal.Initializer);
+        Assert.Equal("_result", Assert.IsType<Identifier>(valueAccess.Target).Name);
+        Assert.Equal(["value"], valueAccess.Names);
+    }
+
+    [Fact]
     public void Generates_ForLoop_OverArray()
     {
         var luauTree = Utility.GetLuauAST("for x : [1, 2, 3] { }", true);

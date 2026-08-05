@@ -1,0 +1,118 @@
+﻿ExpressionStatement(
+  Expression: ErrorPropagation(
+    Expression: Invocation(
+      Expression: Identifier(
+        Name: Token(Identifier, "foo")
+        Token(Identifier, "foo")
+      )
+      TypeArguments: null
+      Arguments(
+        LeftParen: Token(LParen, "(")
+        RightParen: Token(RParen, ")")
+        ArgumentList: []
+      )
+    )
+    Question: Token(Question, "?")
+  )
+)
+ExpressionStatement(
+  Expression: BinaryOperator(
+    Operator: Token(Plus, "+")
+    Left: ErrorPropagation(
+      Expression: Invocation(
+        Expression: Identifier(
+          Name: Token(Identifier, "foo")
+          Token(Identifier, "foo")
+        )
+        TypeArguments: null
+        Arguments(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          ArgumentList: []
+        )
+      )
+      Question: Token(Question, "?")
+    )
+    Right: Literal(
+      Token(NumberLiteral, "1")
+      Value: 1
+    )
+  )
+)
+ExpressionStatement(
+  Expression: TernaryOperator(
+    Question: Token(Question, "?")
+    Colon: Token(Colon, ":")
+    Condition: Identifier(
+      Name: Token(Identifier, "cond")
+      Token(Identifier, "cond")
+    )
+    ThenBranch: Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    ElseBranch: Identifier(
+      Name: Token(Identifier, "b")
+      Token(Identifier, "b")
+    )
+  )
+)
+ExpressionStatement(
+  Expression: TernaryOperator(
+    Question: Token(Question, "?")
+    Colon: Token(Colon, ":")
+    Condition: Identifier(
+      Name: Token(Identifier, "cond")
+      Token(Identifier, "cond")
+    )
+    ThenBranch: ErrorPropagation(
+      Expression: Invocation(
+        Expression: Identifier(
+          Name: Token(Identifier, "unwrap")
+          Token(Identifier, "unwrap")
+        )
+        TypeArguments: null
+        Arguments(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          ArgumentList: []
+        )
+      )
+      Question: Token(Question, "?")
+    )
+    ElseBranch: Identifier(
+      Name: Token(Identifier, "fallback")
+      Token(Identifier, "fallback")
+    )
+  )
+)
+ExpressionStatement(
+  Expression: ErrorPropagation(
+    Expression: Invocation(
+      Expression: Identifier(
+        Name: Token(Identifier, "foo")
+        Token(Identifier, "foo")
+      )
+      TypeArguments(
+        LeftArrow: Token(ColonColonLArrow, "::<")
+        RightArrow: Token(RArrow, ">")
+        ArgumentsList: [
+          TypeName(
+            Name: Token(Identifier, "T")
+            TypeArguments: null
+          )
+          TypeName(
+            Name: Token(Identifier, "U")
+            TypeArguments: null
+          )
+        ]
+      )
+      Arguments(
+        LeftParen: Token(LParen, "(")
+        RightParen: Token(RParen, ")")
+        ArgumentList: []
+      )
+    )
+    Question: Token(Question, "?")
+  )
+)

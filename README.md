@@ -65,6 +65,7 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
   - [Ternary Operator](#ternary-operator)
   - [keyof](#keyof)
   - [Result Pattern](#result-pattern)
+  - [Error Propagation](#error-propagation)
   - [Array.join()](#arrayjoin)
   - [Range.clamp()](#rangeclamp)
   - [String Methods](#string-methods)
@@ -103,6 +104,8 @@ More in [Destructuring](#destructuring) and [Tuples](#tuples) below.
 - **Default parameter values** – Omit trailing arguments at the call site and fall back to a default. See [example](#functions).
 - **Generic functions and types** – Full support for type parameters including constraints and defaults
 - **Result pattern for errors** – Error handling uses the result pattern from Rust, no more `pcall`s. See [example](#result-pattern).
+- **Error propagation** – The postfix `?` operator unwraps a `Result<T, E>`, returning early on failure - same idea as Rust's `?`. See
+  [example](#error-propagation).
 - **Events** – Built-in user events with shorthand syntax. See [example](#events).
 - **Traits** – Define reusable behavior that interfaces can implement, enabling shared APIs and generic constraints that reflect behavior, including an
   explicit `@` self receiver inside implementations. See [example](#traits--implementations).
@@ -970,6 +973,41 @@ end
 const result = unsafe_function(true)
 print(if result.ok then result.value else result.error)
 ```
+---
+## Error Propagation
+
+The postfix `?` operator unwraps a `Result<T, E>` in one step: on success it evaluates to the `value`; on failure it returns the whole `Result` from
+the enclosing function immediately, rather than making you write the `if !result.ok return result;` check by hand every time. It requires the
+enclosing function to declare a `Result<T, E>` return type, and the propagated error must be assignable to that function's own error type.
+
+```rs
+fn some_other_unsafe_fn(): Result<number, string> {
+    return Result.ok(1);
+}
+
+fn unsafe_fn(): Result<number, string> {
+    let value = some_other_unsafe_fn()?;
+    return Result.ok(69 + value);
+}
+```
+
+```luau
+const function some_other_unsafe_fn(): Result<number, string>
+  return { ok = true, value = 1 }
+end
+const function unsafe_fn(): Result<number, string>
+  const _result = some_other_unsafe_fn()
+  if not _result.ok then
+    return _result
+  end
+  const value = _result.value
+  return { ok = true, value = 69 + value }
+end
+```
+
+`foo()?.bar` always means [optional chaining](#optional-chaining) on `foo()` itself - `?.` is its own token, tokenized before `?` ever gets a chance
+to mean error propagation. To propagate and then access a member, parenthesize: `(foo()?).bar`.
+
 ---
 ## Array.join()
 

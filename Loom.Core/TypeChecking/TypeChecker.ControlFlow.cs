@@ -134,9 +134,9 @@ public sealed partial class TypeChecker
         return BindType(@return, actual);
     }
 
-    private Type? GetEnclosingDeclaredReturnType(Return @return)
+    private Type? GetEnclosingDeclaredReturnType(Node node)
     {
-        if (@return.FirstAncestorImplementing<IFunctionLike>() is not { } enclosingFunction)
+        if (node.FirstAncestorImplementing<IFunctionLike>() is not { } enclosingFunction)
             return null;
 
         return ((IFunctionLike)enclosingFunction).ReturnType != null

@@ -131,6 +131,27 @@ public sealed partial class Resolver
         return false;
     }
 
+    // '?' desugars to an early 'return' of the unwrapped Result on the error path, so it needs exactly the
+    // same function/scheduler-boundary validation VisitReturn does above - an 'after'/'every' body runs as
+    // a separate deferred callback, so a 'return' (or the implicit one inside a propagated '?') there
+    // doesn't actually exit the enclosing declared function.
+    public override bool VisitErrorPropagation(ErrorPropagation errorPropagation)
+    {
+        if (errorPropagation.FirstAncestorImplementing<IFunctionLike>() is { } enclosingFunction)
+        {
+            var schedulerAncestor = FirstSchedulerAncestor(errorPropagation);
+            if (schedulerAncestor == null || FirstSchedulerAncestor(enclosingFunction) == schedulerAncestor)
+                return base.VisitErrorPropagation(errorPropagation);
+
+            var keyword = schedulerAncestor is After ? "after" : "every";
+            _diagnostics.Error(errorPropagation, InternalCodes.ErrorPropagationInAfter, $"Cannot use '?' inside an '{keyword}' statement body.");
+            return false;
+        }
+
+        _diagnostics.Error(errorPropagation, InternalCodes.ErrorPropagationOutsideFunction, "'?' can only be used inside of functions.");
+        return false;
+    }
+
     /// <summary>
     ///     The nearest deferred-execution body (an 'after' or 'every' statement) wrapping <paramref name="node" />,
     ///     if any - a bare 'return' inside one is ambiguous with returning from the enclosing function, so it's

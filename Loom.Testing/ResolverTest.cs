@@ -498,6 +498,31 @@ public class ResolverTest
         Utility.AssertNoErrors(Utility.GetSemanticModel("every 1s { let f = fn(): number { return 69; }; }"));
 
     [Fact]
+    public void ThrowsFor_ErrorPropagationOutsideFunction()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn get() {} get()?;").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ErrorPropagationOutsideFunction, "'?' can only be used inside of functions.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ErrorPropagationInsideAfter()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn get() {} fn abc { after 1s { get()?; } }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ErrorPropagationInAfter, "Cannot use '?' inside an 'after' statement body.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ErrorPropagationInsideEvery()
+    {
+        var diagnostics = Utility.GetSemanticModel("fn get() {} fn abc { every 1s { get()?; } }").Diagnostics;
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.ErrorPropagationInAfter, "Cannot use '?' inside an 'every' statement body.");
+    }
+
+    [Fact]
+    public void Allows_ErrorPropagationInsideFunctionExpression_NestedInsideEvery() =>
+        Utility.AssertNoErrors(Utility.GetSemanticModel("fn get() {} every 1s { let f = fn() { get()?; }; }"));
+
+    [Fact]
     public void ThrowsFor_DeclareVariable_MissingType()
     {
         var diagnostics = Utility.GetSemanticModel("declare let x").Diagnostics;

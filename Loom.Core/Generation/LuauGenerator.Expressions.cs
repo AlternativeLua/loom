@@ -226,6 +226,28 @@ public sealed partial class LuauGenerator
         return resultIdentifier;
     }
 
+    // expr? => local _result = expr
+    //          if not _result.ok then return _result end
+    //          _result.value
+    // The receiver is cached once via PushToVariable (a no-op for a plain identifier) so a side-effecting
+    // expr is only ever evaluated once, matching #153/#154's caching discipline. The guard is hoisted as a
+    // prereq statement rather than an if-expression, since Luau's if-expression can't hold a 'return' -
+    // that's also why this is the one operator in this file whose branch actually returns from the
+    // enclosing function rather than producing a value for it.
+    public override LuauNode VisitErrorPropagation(ErrorPropagation errorPropagation)
+    {
+        var target = Visit(errorPropagation.Expression);
+        var cached = _state.PushToVariable("_result", target);
+        _state.Prereq(new IfStatement(
+            NegateCondition(new Luau.AST.PropertyAccess(cached, ["ok"])),
+            new Chunk([new Luau.AST.Return(cached)]),
+            [],
+            null
+        ));
+
+        return new Luau.AST.PropertyAccess(cached, ["value"]);
+    }
+
     public override LuauNode VisitBinaryOperator(BinaryOperator binaryOperator)
     {
         if (SyntaxFacts.IsBitwiseOperator(binaryOperator.Operator.Kind))
@@ -342,8 +364,36 @@ public sealed partial class LuauGenerator
             : new Luau.AST.UnaryOperator(LuauOperatorMap.UnaryOperator(unaryOperator.Operator.Text), operand);
     }
 
-    public override LuauNode VisitTernaryOperator(TernaryOperator ternaryOperator) =>
-        new IfExpression(Visit(ternaryOperator.Condition), Visit(ternaryOperator.ThenBranch), [], Visit(ternaryOperator.ElseBranch));
+    // A branch that needs to hoist statements (an optional chain, a match, now '?') can't just contribute
+    // its value to a plain IfExpression: only the actually-taken branch may run those statements, and
+    // Luau's if-expression has nowhere to put a statement at all. So each branch is visited in its own
+    // captured scope first; if neither needed to hoist anything, the cheap IfExpression from before is
+    // still used. Otherwise the whole ternary becomes a statement-based if/else - mirroring how
+    // GenerateOptionalChain/match expressions already promote themselves - assigning to a shared result
+    // local so each branch's hoisted statements only run when that branch is actually selected.
+    public override LuauNode VisitTernaryOperator(TernaryOperator ternaryOperator)
+    {
+        var condition = Visit(ternaryOperator.Condition);
+        var (thenValue, thenScope) = _state.Capture(() => Visit(ternaryOperator.ThenBranch));
+        var (elseValue, elseScope) = _state.Capture(() => Visit(ternaryOperator.ElseBranch));
+
+        if (thenScope.PrereqStatements.Count == 0 && thenScope.PostreqStatements.Count == 0
+            && elseScope.PrereqStatements.Count == 0 && elseScope.PostreqStatements.Count == 0)
+            return new IfExpression(condition, thenValue, [], elseValue);
+
+        var resultName = _state.Scope.AddIdentifier("_ternary");
+        var resultIdentifier = new Luau.AST.Identifier(resultName);
+        _state.Prereq(new LocalVariable(resultName, null, null));
+
+        var thenStatements = new List<LuauStatement>();
+        ApplyPrereqAndPostreq(thenStatements, thenScope, new ExpressionStatement(new Luau.AST.BinaryOperator(resultIdentifier, "=", thenValue)));
+
+        var elseStatements = new List<LuauStatement>();
+        ApplyPrereqAndPostreq(elseStatements, elseScope, new ExpressionStatement(new Luau.AST.BinaryOperator(resultIdentifier, "=", elseValue)));
+
+        _state.Prereq(new IfStatement(condition, new Chunk(thenStatements), [], new Chunk(elseStatements)));
+        return resultIdentifier;
+    }
 
     public override LuauNode VisitParenthesized(Parenthesized parenthesized) => new Luau.AST.Parenthesized(Visit(parenthesized.Expression));
 

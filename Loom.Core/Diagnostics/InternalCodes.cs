@@ -125,6 +125,11 @@ public static class InternalCodes
     public const string AmbiguousSerializableUnion = "L39A";
     public const string InvalidSerializationRange = "L39B";
     public const string PossiblyNoneAccess = "L39C";
+    public const string ErrorPropagationOutsideFunction = "L39D";
+    public const string ErrorPropagationInAfter = "L39E";
+    public const string ErrorPropagationRequiresResultType = "L39F";
+    public const string ErrorPropagationOutsideResultFunction = "L3A0";
+    public const string ErrorPropagationErrorTypeMismatch = "L3A1";
 
     public const string SimplifiableCode = "L400";
 }

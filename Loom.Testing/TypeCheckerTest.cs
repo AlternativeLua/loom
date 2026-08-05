@@ -3863,6 +3863,82 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_ErrorPropagation_UnwrapsToValueType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn get(): Result<number, string> { return Result.ok(1); }
+            fn use_it(): Result<number, string> {
+                let value: number = get()?;
+                return Result.ok(value);
+            }
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_ErrorPropagation_OnNonResultOperand()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn use_it(): Result<number, string> {
+                let value = 5?;
+                return Result.ok(value);
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ErrorPropagationRequiresResultType,
+            "The '?' operator can only be used on a value of type 'Result<T, E>', but got '5'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_ErrorPropagation_InFunctionWithoutResultReturnType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn get(): Result<number, string> { return Result.ok(1); }
+            fn use_it(): number {
+                let value = get()?;
+                return value;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ErrorPropagationOutsideResultFunction,
+            "'?' can only be used inside of a function with a declared 'Result<T, E>' return type."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_ErrorPropagation_WithMismatchedErrorType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface MyError { message: string }
+            fn get(): Result<number, string> { return Result.ok(1); }
+            fn use_it(): Result<number, MyError> {
+                let value = get()?;
+                return Result.ok(value);
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.ErrorPropagationErrorTypeMismatch,
+            "Cannot propagate error of type 'string' through '?': the enclosing function's error type is 'MyError'."
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_PropertyAccess_OnOptionalTarget_WithoutOptionalChaining()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics("interface Foo { bar: number } let x: Foo? = none; x.bar");

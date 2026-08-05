@@ -1,0 +1,8 @@
+fn some_other_unsafe_fn(): Result<number, string> {
+    return Result.ok(1);
+}
+
+fn unsafe_fn(): Result<number, string> {
+    let value = some_other_unsafe_fn()?;
+    return Result.ok(69 + value);
+}

@@ -102,6 +102,8 @@ public sealed partial class Parser
                 expression = ParseNamedAccess(dot, expression);
             else if (Current().Kind == SyntaxKind.Bang && IsOnSameLine(expression.Tokens[^1], Current()))
                 expression = new NullForgiving(expression, Advance());
+            else if (AtErrorPropagationStart())
+                expression = new ErrorPropagation(expression, Advance());
             else
                 break;
 
@@ -119,6 +121,159 @@ public sealed partial class Parser
         Current().Kind == SyntaxKind.Question
         && OffsetAfterBrackets(1) is { } closeOffset
         && PeekKind(closeOffset + 1) != SyntaxKind.Colon;
+
+    // A bare postfix '?' means error-propagation (ErrorPropagation) unless it's actually the start of a
+    // ternary sharing the same token. This is a pure lookahead - it never Advance()s, so an abandoned
+    // attempt can't leak diagnostics (DiagnosticBag has no rollback) - that scans forward for a
+    // same-statement ':' at bracket depth 0, requiring at least one token before it: a ternary can't have
+    // a zero-length then-branch, so a ':' immediately after '?' can only belong to an *enclosing* ternary,
+    // not one starting here (this is what makes 'cond ? unwrap()? : fallback' parse correctly - the inner
+    // '?' must not mistake the outer ':' for its own).
+    //
+    // Statements don't require a trailing ';' in this grammar (ParseStatement only *optionally* consumes
+    // one), so the scan can't just look for an explicit terminator - 'foo()?\nbar()' has nothing between
+    // the two statements at all. Instead it tracks whether it's in "expecting an operand" or "expecting an
+    // operator/terminator" position, mirroring how ParseBinaryLevel/ParsePostfix actually consume tokens:
+    // two operand-shaped tokens with nothing connecting them (e.g. the 'bar' that starts a new statement,
+    // sitting right where an operator was expected) can only mean the implied then-branch already ended,
+    // which is what makes this safe even though it deliberately does not track real statement boundaries.
+    //
+    // A bare '{' never starts an expression anywhere in this grammar except as 'new Foo { ... }' or
+    // 'match x { ... }', both always immediately preceded by 'new'/'match' - so an unguarded '{' ends the
+    // scan (e.g. the if-body in 'if foo()? { ... }', since if/while/for conditions aren't parenthesized),
+    // while a guarded one is tracked as an openable region like '(' or '['. A '::<...>' generic argument
+    // list gets its own depth counter so a comma inside it (foo::<T, U>()) isn't mistaken for one ending
+    // an argument list the '?' sits in.
+    //
+    // Known limitation: a 'match'/'new' used directly as another match's subject with no separating
+    // brackets confuses this single pending-brace flag. Contrived enough to leave unhandled - wrap the
+    // inner one in parens if it ever comes up.
+    private bool AtErrorPropagationStart()
+    {
+        if (Current().Kind != SyntaxKind.Question || PeekKind(1) == SyntaxKind.LBracket)
+            return false;
+
+        var parenDepth = 0;
+        var bracketDepth = 0;
+        var braceDepth = 0;
+        var angleDepth = 0;
+        var expectingBrace = false;
+        var expectingOperand = true;
+
+        for (var i = 1;; i++)
+        {
+            var atZero = parenDepth == 0 && bracketDepth == 0 && braceDepth == 0 && angleDepth == 0;
+            var kind = PeekKind(i);
+
+            switch (kind)
+            {
+                case SyntaxKind.Eof:
+                    return true;
+
+                case SyntaxKind.LParen:
+                    parenDepth++;
+                    continue;
+                case SyntaxKind.RParen:
+                    if (--parenDepth < 0) return true;
+                    expectingOperand = false;
+                    continue;
+
+                case SyntaxKind.LBracket:
+                    bracketDepth++;
+                    continue;
+                case SyntaxKind.RBracket:
+                    if (--bracketDepth < 0) return true;
+                    expectingOperand = false;
+                    continue;
+
+                case SyntaxKind.LBrace when atZero:
+                    if (!expectingBrace) return true;
+                    expectingBrace = false;
+                    braceDepth++;
+                    continue;
+                case SyntaxKind.LBrace:
+                    braceDepth++;
+                    continue;
+                case SyntaxKind.RBrace:
+                    if (--braceDepth < 0) return true;
+                    expectingOperand = false;
+                    continue;
+
+                case SyntaxKind.ColonColonLArrow when atZero:
+                    angleDepth++;
+                    continue;
+                case SyntaxKind.LArrow when angleDepth > 0:
+                    angleDepth++;
+                    continue;
+                case SyntaxKind.RArrow when angleDepth > 0:
+                    angleDepth--;
+                    expectingOperand = false;
+                    continue;
+                case SyntaxKind.RArrowRArrow when angleDepth > 0:
+                    angleDepth = Math.Max(0, angleDepth - 2);
+                    expectingOperand = false;
+                    continue;
+                case SyntaxKind.RArrowRArrowRArrow when angleDepth > 0:
+                    angleDepth = Math.Max(0, angleDepth - 3);
+                    expectingOperand = false;
+                    continue;
+            }
+
+            if (!atZero || expectingBrace)
+                continue;
+
+            if (expectingOperand)
+            {
+                switch (kind)
+                {
+                    case SyntaxKind.Colon:
+                        return true;
+                    case SyntaxKind.NewKeyword or SyntaxKind.MatchKeyword:
+                        expectingBrace = true;
+                        continue;
+                    case SyntaxKind.Minus or SyntaxKind.Tilde or SyntaxKind.Bang or SyntaxKind.MutKeyword:
+                        continue;
+                    case SyntaxKind.Identifier or SyntaxKind.NameOfKeyword or SyntaxKind.At or SyntaxKind.InterpolatedStringStart:
+                        expectingOperand = false;
+                        continue;
+                    default:
+                        if (!SyntaxFacts.IsLiteral(kind))
+                            return true;
+
+                        expectingOperand = false;
+                        continue;
+                }
+            }
+
+            switch (kind)
+            {
+                case SyntaxKind.Colon:
+                    return false;
+                case SyntaxKind.Dot or SyntaxKind.QuestionDot:
+                    // A member name (an identifier) must follow, unlike the postfix operators below.
+                    expectingOperand = true;
+                    continue;
+                case SyntaxKind.Bang or SyntaxKind.Question:
+                    continue;
+                default:
+                    if (!IsErrorPropagationBinaryOperator(kind))
+                        return true;
+
+                    expectingOperand = true;
+                    continue;
+            }
+        }
+    }
+
+    // 'Question' itself is excluded even though BinaryPrecedenceLevel registers it for the ternary: it's
+    // handled as a postfix continuation above instead (another '?' right after a completed operand keeps
+    // "expecting operand" false, it doesn't reset to "needs a fresh operand" the way a real binary
+    // operator would) - this also means a second statement that itself starts with 'x ? y : z' gets its
+    // own '?' misread as a continuation rather than recognized as a new ternary, but that only delays the
+    // eventual operand-after-operand collision (at 'y') by one token, so the verdict for the original '?'
+    // still comes out right.
+    private static bool IsErrorPropagationBinaryOperator(SyntaxKind kind) =>
+        kind != SyntaxKind.Question && (BinaryPrecedenceLevel.Levels.Any(level => level.Matches(kind)) || kind == SyntaxKind.DotDot);
 
     private static bool IsOnSameLine(Token previous, Token next) => previous.GetLocation().End.Line == next.GetLocation().Start.Line;
 
