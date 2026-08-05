@@ -1,0 +1,73 @@
+﻿TraitDeclaration(
+  Body: TraitBody(
+    LeftBrace: Token(LBrace, "{")
+    RightBrace: Token(RBrace, "}")
+    Members: [
+      DeclareFunctionSignature(
+        Parameters(
+          LeftParen: Token(LParen, "(")
+          RightParen: Token(RParen, ")")
+          ParameterList: [
+            Parameter(
+              DotDot: null
+              ColonTypeClause(
+                ColonToken: Token(Colon, ":")
+                Type: TypeName(
+                  Name: Token(Identifier, "T")
+                  TypeArguments: null
+                )
+              )
+              EqualsValueClause: null
+              Name: Token(Identifier, "other")
+            )
+          ]
+        )
+        ReturnType: ColonTypeClause(
+          ColonToken: Token(Colon, ":")
+          Type: TypeName(
+            Name: Token(Identifier, "T")
+            TypeArguments: null
+          )
+        )
+        Attributes(
+          LeftBracket: Token(LBracket, "[")
+          RightBracket: Token(RBracket, "]")
+          AttributeList: [
+            Attribute(
+              IsInvoked: True
+              Expression: Identifier(
+                Name: Token(Identifier, "luau_metamethod")
+                Token(Identifier, "luau_metamethod")
+              )
+              TypeArguments: null
+              Arguments(
+                LeftParen: Token(LParen, "(")
+                RightParen: Token(RParen, ")")
+                ArgumentList: [
+                  Literal(
+                    Token(StringLiteral, ""__add"")
+                    Value: "__add"
+                  )
+                ]
+              )
+            )
+          ]
+        )
+        TypeParameters: null
+        Name: Token(Identifier, "add")
+      )
+    ]
+  )
+  TypeParameters(
+    LeftArrow: Token(LArrow, "<")
+    RightArrow: Token(RArrow, ">")
+    ParameterList: [
+      TypeParameter(
+        ColonTypeClause: null
+        EqualsTypeClause: null
+        Name: Token(Identifier, "T")
+      )
+    ]
+  )
+  Name: Token(Identifier, "Add")
+)

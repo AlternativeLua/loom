@@ -1,0 +1,4 @@
+trait Add<T> {
+    [luau_metamethod("__add")]
+    fn add(other: T): T;
+}
