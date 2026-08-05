@@ -142,7 +142,7 @@ public sealed class TypeNarrower
 
         FlowAddress? address;
         Type? baseType;
-        if (predicate.ParameterIndex is int index)
+        if (predicate.ParameterIndex is { } index)
         {
             var argument = invocation.Arguments.ArgumentList.ElementAtOrDefault(index);
             if (argument == null)

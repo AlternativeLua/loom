@@ -50,6 +50,7 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
             var bindings = bindingsByModule.GetValueOrDefault(module, []);
             statements.AddRange(bindings.Where(binding => binding.RequiresModuleAtRuntime).Select(binding => GenerateValueImport(binding, moduleName)));
             statements.AddRange(bindings.Where(binding => binding.Symbol.IsTypeSymbol).Select(binding => GenerateTypeImport(binding, moduleName)));
+            statements.AddRange(bindings.Where(IsSerializableInterface).Select(binding => GenerateSerializerImport(binding, moduleName)));
         }
 
         return statements;
@@ -95,6 +96,20 @@ internal sealed class ModuleImportExportGenerator(SemanticModel semanticModel, D
 
     private static ConstVariable GenerateValueImport(ImportBinding binding, string moduleName) =>
         new(binding.LocalName, null, new PropertyAccess(new Identifier(moduleName), [binding.ExportedName]));
+
+    private bool IsSerializableInterface(ImportBinding binding) =>
+        binding.Symbol is InterfaceSymbol interfaceSymbol && semanticModel.SerializationSchemas.ContainsKey(interfaceSymbol);
+
+    /// <summary>
+    ///     Binds an imported interface's codec under the same name the declaring module emitted it with,
+    ///     so a serialization call in this file resolves to a local exactly as it would at home. An
+    ///     interface is a type and carries no runtime binding of its own, so nothing else brings it in.
+    /// </summary>
+    private static ConstVariable GenerateSerializerImport(ImportBinding binding, string moduleName)
+    {
+        var name = SerializationEmitter.SerializerName(binding.ExportedName);
+        return new ConstVariable(name, null, new PropertyAccess(new Identifier(moduleName), [name]));
+    }
 
     private static TypeAlias GenerateTypeImport(ImportBinding binding, string moduleName) =>
         GenerateTypeAlias(binding.LocalName, binding.ExportedName, binding.Symbol, moduleName, false);

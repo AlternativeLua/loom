@@ -1,0 +1,6 @@
+[serializable] interface Flags { values: bool[] }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Flags);
+    let restored = deserialize_binary::<Flags>(payload);
+}

@@ -40,7 +40,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
+            Width: null
           )
         )
         EqualsValueClause(
@@ -62,7 +64,9 @@ FunctionDeclaration(
   ReturnType: ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Number
+      Width: null
     )
   )
   Body: Block(
@@ -93,7 +97,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -104,7 +110,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -141,7 +149,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -223,7 +233,9 @@ FunctionDeclaration(
   ReturnType: ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Void
+      Width: null
     )
   )
   Body: Block(
@@ -244,7 +256,9 @@ FunctionDeclaration(
   ReturnType: ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Void
+      Width: null
     )
   )
   Body: Block(
@@ -261,7 +275,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -272,7 +288,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -283,7 +301,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Bool
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -404,7 +424,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsValueClause: null
@@ -415,7 +437,9 @@ FunctionDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsValueClause: null

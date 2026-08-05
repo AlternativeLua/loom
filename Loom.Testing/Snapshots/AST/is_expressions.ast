@@ -21,7 +21,9 @@ ExpressionStatement(
     )
     Pattern: TypePattern(
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
       ObjectPattern: null
     )

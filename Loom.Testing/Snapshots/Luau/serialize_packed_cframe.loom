@@ -1,0 +1,9 @@
+[serializable, packed]
+interface Waypoint {
+    frame: CFrame<f32>;
+}
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Waypoint);
+    let restored = deserialize_binary::<Waypoint>(payload);
+}

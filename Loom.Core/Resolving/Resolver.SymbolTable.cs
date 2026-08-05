@@ -66,20 +66,6 @@ public sealed partial class Resolver
 
         if (parserResult.Tree.File.IsIntrinsic)
             symbol.IsIntrinsic = true;
-
-        if (_semanticModel.EmitDebugDiagnostics)
-            _diagnostics.Debug(symbol.Declaration, DescribeDeclaration(symbol));
-    }
-
-    private static string DescribeDeclaration(Symbol symbol)
-    {
-        var flags = new List<string>();
-        if (symbol.IsGlobal) flags.Add("global");
-        if (symbol.IsAmbient) flags.Add("ambient");
-        if (symbol.IsIntrinsic) flags.Add("intrinsic");
-
-        var suffix = flags.Count > 0 ? $" [{string.Join(", ", flags)}]" : "";
-        return $"Declared '{symbol.Name}' ({symbol.Kind}){suffix}";
     }
 
     private void AddToLookup(Symbol symbol) => AddToLookup(symbol.Name, symbol);

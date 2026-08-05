@@ -34,7 +34,9 @@
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
           EqualsTypeClause: null
@@ -56,7 +58,9 @@ Declare(
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
           EqualsValueClause: null
@@ -67,7 +71,9 @@ Declare(
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
           EqualsValueClause: null
@@ -78,7 +84,9 @@ Declare(
     ReturnType: ColonTypeClause(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
     )
     Attributes: null
@@ -138,7 +146,9 @@ Declare(
     ReturnType: ColonTypeClause(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
     )
     Attributes: null
@@ -152,7 +162,9 @@ Declare(
     ReturnType: ColonTypeClause(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Void
+        Width: null
       )
     )
     Attributes: null
@@ -165,7 +177,9 @@ Declare(
     ColonTypeClause(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
     )
     Name: Token(Identifier, "x")
@@ -176,7 +190,9 @@ Declare(
     ColonTypeClause(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: String
+        Width: null
       )
     )
     Name: Token(Identifier, "y")
@@ -205,7 +221,9 @@ Declare(
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
           Attributes: null
@@ -229,7 +247,9 @@ Declare(
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: String
+              Width: null
             )
           )
           EqualsValueClause: null

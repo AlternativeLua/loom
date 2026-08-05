@@ -8,6 +8,7 @@ using Loom.Luau.AST;
 using Attribute = Loom.Core.Parsing.AST.Attribute;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
 using Identifier = Loom.Luau.AST.Identifier;
+using InterfaceType = Loom.Core.TypeChecking.Types.InterfaceType;
 using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Generation.Macros.Providers;
@@ -20,7 +21,8 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
         expression is Parsing.AST.Identifier && semanticModel.GetSymbol(expression) is { IsIntrinsic: true };
 
     public bool IsInvocationOnlyMember(string memberName) =>
-        memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute";
+        memberName is "string" or "number" or "new_instance" or "get_service" or "type_is" or "get_metadata" or "has_attribute"
+            or "serialize_binary" or "deserialize_binary" or "serializer" or "serializer_of" or "diff_binary" or "apply_diff_binary";
 
     public bool TryInvocation(
         MacroContext context,
@@ -63,7 +65,7 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                     ? new NilLiteral()
                     : new Table(
                         matchedAttribute.Arguments.ArgumentList
-                            .ConvertAll(argument => (TableInitializer)new TableInitializer(ToLuauConstant(context.SemanticModel.GetConstantValue(argument))))
+                            .ConvertAll(argument => new TableInitializer(ToLuauConstant(context.SemanticModel.GetConstantValue(argument))))
                     );
 
                 return true;
@@ -74,10 +76,134 @@ internal sealed class IntrinsicGlobalInvocationMacroProvider : IMacroProvider
                 expression = new BooleanLiteral(!hadError && matchedAttribute != null);
                 return true;
             }
+            case "serializer_of":
+            {
+                // The whole table, not one codec: inside a generic wrapper the key is a runtime value,
+                // so the choice cannot be made statically the way serializer::<T>() does.
+                if (typeArguments?.ArgumentsList.FirstOrDefault() is not { } mapArgument
+                    || context.SemanticModel.GetType(mapArgument) is not InterfaceType mapType)
+                {
+                    context.Diagnostics.Error(context.Node, InternalCodes.InvalidTypeArguments, "'serializer_of' requires a mapping interface as its first type argument.");
+                    expression = new NilLiteral();
+                    return true;
+                }
+
+                if (!context.SemanticModel.SerializerMaps.Contains(mapType))
+                    context.SemanticModel.SerializerMaps.Add(mapType);
+
+                expression = new Luau.AST.ElementAccess(new Identifier(SerializationEmitter.SerializerMapName(mapType.Name)), call.Arguments[0]);
+                return true;
+            }
+            case "serialize_binary":
+            case "deserialize_binary":
+            case "serializer":
+            {
+                // serialize_binary infers its interface from the argument's static type; deserialize_binary
+                // has no value to infer from, so it takes the interface as a type argument.
+                var isSerialize = name == "serialize_binary";
+                var invocation = (Invocation)context.Node;
+                Node? subject = isSerialize
+                    ? invocation.Arguments.ArgumentList.FirstOrDefault()
+                    : typeArguments?.ArgumentsList.FirstOrDefault();
+
+                if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName, out var declaringFile))
+                {
+                    expression = new NilLiteral();
+                    return true;
+                }
+
+                // Only the codec object crosses a module boundary, so an imported interface's calls go
+                // through it rather than through function names that are local to the declaring file.
+                var isImported = declaringFile != context.SemanticModel.Tree.File.AbsolutePath;
+
+                // 'serializer' hands back the codec value itself rather than calling through it.
+                if (name == "serializer")
+                {
+                    expression = new Identifier(SerializationEmitter.SerializerName(interfaceName));
+                    return true;
+                }
+
+                LuauExpression callee = isImported
+                    ? new Luau.AST.PropertyAccess(
+                        new Identifier(SerializationEmitter.SerializerName(interfaceName)),
+                        [isSerialize ? "serialize" : "deserialize"]
+                    )
+                    : new Identifier(isSerialize ? SerializationEmitter.SerializeName(interfaceName) : SerializationEmitter.DeserializeName(interfaceName));
+
+                expression = new Call(callee, call.Arguments);
+                return true;
+            }
+            case "diff_binary":
+            case "apply_diff_binary":
+            {
+                // Both take the baseline as their first argument, so - unlike deserialize_binary - the
+                // interface is always inferable from a value and neither needs a type argument.
+                var isDiff = name == "diff_binary";
+                var invocation = (Invocation)context.Node;
+                var subject = invocation.Arguments.ArgumentList.FirstOrDefault();
+
+                if (subject == null || !TryGetSerializableName(context, subject, name, out var interfaceName, out var declaringFile))
+                {
+                    expression = new NilLiteral();
+                    return true;
+                }
+
+                var isImported = declaringFile != context.SemanticModel.Tree.File.AbsolutePath;
+                LuauExpression callee = isImported
+                    ? new Luau.AST.PropertyAccess(
+                        new Identifier(SerializationEmitter.SerializerName(interfaceName)),
+                        [isDiff ? "diff" : "applyDiff"]
+                    )
+                    : new Identifier(isDiff ? SerializationEmitter.DiffName(interfaceName) : SerializationEmitter.ApplyDiffName(interfaceName));
+
+                expression = new Call(callee, call.Arguments);
+                return true;
+            }
         }
 
         expression = null;
         return false;
+    }
+
+    /// <summary>
+    ///     Resolves the interface a serialization call targets and confirms the type checker built a
+    ///     schema for it. Nothing in the signature constrains T to a serializable type, so an unmarked
+    ///     interface has to be caught here rather than silently emitting a call to a function that was
+    ///     never generated.
+    /// </summary>
+    private static bool TryGetSerializableName(MacroContext context, Node subject, string name, out string interfaceName, out string declaringFile)
+    {
+        interfaceName = "";
+        declaringFile = "";
+        var semanticModel = context.SemanticModel;
+        var subjectType = semanticModel.GetType(subject);
+        if (subjectType is not InterfaceType interfaceType)
+        {
+            context.Diagnostics.Error(
+                context.Node,
+                InternalCodes.NotSerializable,
+                $"'{name}' requires a serializable interface, but was given '{subjectType}'."
+            );
+
+            return false;
+        }
+
+        var schemaEntry = semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
+        if (schemaEntry == null)
+        {
+            context.Diagnostics.Error(
+                context.Node,
+                InternalCodes.NotSerializable,
+                $"Interface '{interfaceType.Name}' is not serializable.",
+                $"add the 'serializable' attribute to '{interfaceType.Name}'."
+            );
+
+            return false;
+        }
+
+        interfaceName = interfaceType.Name;
+        declaringFile = schemaEntry.File.AbsolutePath;
+        return true;
     }
 
     private static Attribute? FindMatchedAttribute(MacroContext context, TypeArguments? typeArguments, string name, out bool hadError)

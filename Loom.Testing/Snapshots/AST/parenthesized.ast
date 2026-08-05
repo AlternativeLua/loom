@@ -184,7 +184,9 @@
                 Token(Identifier, "x")
               )
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
           ]

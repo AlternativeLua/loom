@@ -54,6 +54,14 @@ public sealed partial class Parser
             return ParseEventDeclaration(eventKeyword, attributes);
         }
 
+        if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBefore(SyntaxKind.ExportKeyword))
+        {
+            var leftBracket = Advance();
+            var attributes = ParseAttributes(leftBracket);
+            var exportKeyword = Expect(SyntaxKind.ExportKeyword);
+            return ParseExport(exportKeyword, attributes);
+        }
+
         if (Current().Kind == SyntaxKind.LBracket && LooksLikeAttributesBefore(SyntaxKind.DeclareKeyword))
         {
             var leftBracket = Advance();

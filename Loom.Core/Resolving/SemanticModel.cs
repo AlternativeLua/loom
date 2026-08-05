@@ -4,6 +4,7 @@ using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.TypeChecking;
+using Loom.Core.TypeChecking.Serialization;
 using Loom.Core.TypeChecking.Types;
 using LiteralType = Loom.Core.TypeChecking.Types.LiteralType;
 using Type = Loom.Core.TypeChecking.Types.Type;
@@ -16,13 +17,32 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     internal int RuntimeReferences = 0;
     public List<ExportBinding> Exports { get; } = [];
 
+    /// <summary>
+    ///     Wire formats built by the type checker for each <c>[serializable]</c> interface, consumed by the
+    ///     generator to emit serializers. Compile-time only - no schema reaches the output.
+    /// </summary>
+    public Dictionary<InterfaceSymbol, SerializationSchema> SerializationSchemas { get; } = [];
+
+    /// <summary>
+    ///     Mapping interfaces a <c>serializer_map</c> call asked for, in first-use order. Hoisted into
+    ///     one table per interface by the generator rather than rebuilt at each call site.
+    /// </summary>
+    public List<InterfaceType> SerializerMaps { get; } = [];
+
+    /// <summary>
+    ///     Which of each <c>[serializable]</c> interface's codec pieces this file's own calls actually
+    ///     reach, collected before generation so <c>EmitSerializers</c> only emits those. An interface
+    ///     absent here has no local usage at all - not the same as <see cref="SerializationUsage.None" />,
+    ///     which would mean "checked and found nothing" rather than "never checked".
+    /// </summary>
+    public Dictionary<InterfaceSymbol, SerializationUsage> SerializationUsages { get; } = [];
+
     private Dictionary<string, List<ExportBinding>> ExportsByName { get; } = [];
 
     public List<ImportBinding> ImportBindings { get; } = [];
 
     private HashSet<Symbol> ImportedSymbols { get; } = [];
     public bool DisableRuntimeLibraryImport { get; set; }
-    public bool EmitDebugDiagnostics { get; set; }
     public bool MustImportRuntimeLibrary =>
         !DisableRuntimeLibraryImport
         && !Tree.File.IsIntrinsic

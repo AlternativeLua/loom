@@ -22,9 +22,15 @@ public sealed class InterfaceType(
     public HashSet<string> TraitMethodNames { get; init; } = traitMethodNames ?? [];
     public override ObjectIndexer? Indexer
     {
-        get => ObjectType.Indexer ?? Constraints.Select(c => c.Indexer).FirstOrDefault(i => i != null);
+        get => Indexers.FirstOrDefault();
         internal set => throw new NotImplementedException();
     }
+
+    /// <summary>Own indexer first, then each constraint's - recursively, so a multi-level inheritance chain still surfaces every one.</summary>
+    public override IEnumerable<ObjectIndexer> Indexers =>
+        ObjectType.Indexer is { } own
+            ? [own, ..Constraints.SelectMany(c => c.Indexers)]
+            : Constraints.SelectMany(c => c.Indexers);
 
     /// <summary>
     ///     Cheap-to-recompute version signal combining this interface's own <see cref="ObjectType.Version" />

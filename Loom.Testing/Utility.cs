@@ -48,14 +48,13 @@ internal static class Utility
         string source,
         bool isDeclaration = false,
         bool disableRuntimeLib = true,
-        bool debug = false,
         ProjectType projectType = ProjectType.Game)
     {
         var parserResult = Parse(source);
         if (isDeclaration)
             parserResult.Tree.File.IsDeclaration = true;
 
-        var compilationUnit = new CompilationUnit(new LoomConfig { Debug = debug, ProjectType = projectType });
+        var compilationUnit = new CompilationUnit(new LoomConfig { ProjectType = projectType });
         var semanticModel = new Resolver(parserResult, compilationUnit).Resolve();
         semanticModel.DisableRuntimeLibraryImport = disableRuntimeLib;
 

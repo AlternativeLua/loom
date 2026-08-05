@@ -1,0 +1,18 @@
+[serializable]
+interface Profile {
+    level: u8;
+    nickname: string?;
+}
+
+[serializable]
+interface Account {
+    profile: Profile;
+    tag: string?;
+}
+
+fn _trigger_usage(): void {
+    let profile_payload = serialize_binary(none as never as Profile);
+    let profile_restored = deserialize_binary::<Profile>(profile_payload);
+    let account_payload = serialize_binary(none as never as Account);
+    let account_restored = deserialize_binary::<Account>(account_payload);
+}

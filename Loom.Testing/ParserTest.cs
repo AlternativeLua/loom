@@ -2,6 +2,7 @@ using Loom.Core.Debug;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Text;
+using Loom.Core.TypeChecking.Serialization;
 using PrimitiveTypeKind = Loom.Core.TypeChecking.Types.PrimitiveTypeKind;
 
 namespace Loom.Testing;
@@ -1184,6 +1185,47 @@ public class ParserTest
         Assert.IsType<PrimitiveType>(tupleType.Types[1]);
     }
 
+    [Theory]
+    [InlineData("u8", NumberType.U8)]
+    [InlineData("u16", NumberType.U16)]
+    [InlineData("u32", NumberType.U32)]
+    [InlineData("i8", NumberType.I8)]
+    [InlineData("i16", NumberType.I16)]
+    [InlineData("i32", NumberType.I32)]
+    [InlineData("f32", NumberType.F32)]
+    [InlineData("f64", NumberType.F64)]
+    public void Parses_SizedNumberType(string typeName, NumberType expected)
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse($"let x: {typeName} = 1;"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var primitiveType = Assert.IsType<PrimitiveType>(variableDeclaration.ColonTypeClause!.Type);
+
+        Assert.Equal(PrimitiveTypeKind.Number, primitiveType.Kind);
+        Assert.Equal(expected, primitiveType.Width);
+    }
+
+    [Fact]
+    public void Parses_StringWithTypeArgument()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: string<u8> = \"a\";"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var primitiveType = Assert.IsType<PrimitiveType>(variableDeclaration.ColonTypeClause!.Type);
+
+        Assert.Equal(PrimitiveTypeKind.String, primitiveType.Kind);
+        var argument = Assert.Single(primitiveType.TypeArguments!.ArgumentsList);
+        Assert.Equal(NumberType.U8, Assert.IsType<PrimitiveType>(argument).Width);
+    }
+
+    [Fact]
+    public void Parses_BareString_WithNoTypeArguments()
+    {
+        var result = Utility.AssertNoErrors(Utility.Parse("let x: string = \"a\";"));
+        var variableDeclaration = Assert.IsType<VariableDeclaration>(result.Tree.Statements.Single());
+        var primitiveType = Assert.IsType<PrimitiveType>(variableDeclaration.ColonTypeClause!.Type);
+
+        Assert.Null(primitiveType.TypeArguments);
+    }
+
     [Fact]
     public void Parses_TupleExpression()
     {
@@ -1382,4 +1424,37 @@ public class ParserTest
         Assert.True(attribute.IsInvoked);
     }
     #endregion Decorators
+    #region ExportedAttributes
+    [Fact]
+    public void Parses_AttributesOnExportedInterface()
+    {
+        var tree = Utility.GetAST("[serializable]\nexport interface Foo { x: number }");
+        var declaration = tree.GetDescendants<InterfaceDeclaration>().Single();
+
+        Assert.NotNull(declaration.Attributes);
+        Assert.Equal("serializable", Assert.Single(declaration.Attributes.AttributeList).Expression.ToString());
+    }
+
+    [Fact]
+    public void Parses_AttributesOnExportedFunction()
+    {
+        var tree = Utility.GetAST("[luau_name(\"Bar\")]\nexport fn foo -> 1");
+        var declaration = tree.GetDescendants<FunctionDeclaration>().Single();
+
+        Assert.NotNull(declaration.Attributes);
+        Assert.Single(declaration.Attributes.AttributeList);
+    }
+
+    [Fact]
+    public void ThrowsFor_AttributesOnExportedTypeAlias()
+    {
+        var diagnostics = Utility.GetParserDiagnostics("[serializable]\nexport type Foo = number;");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.AttributesNotSupportedOnDeclaration,
+            "Attributes are not supported on 'type' declarations."
+        );
+    }
+    #endregion ExportedAttributes
+
 }

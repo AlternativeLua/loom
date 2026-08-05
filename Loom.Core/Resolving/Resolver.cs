@@ -23,10 +23,7 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
     [MemberNotNull(nameof(_semanticModel))]
     public SemanticModel Resolve()
     {
-        _semanticModel = new SemanticModel(parserResult.Tree, _diagnostics, _allDeclarations, _allReferences)
-        {
-            EmitDebugDiagnostics = compilationUnit.Config.Debug
-        };
+        _semanticModel = new SemanticModel(parserResult.Tree, _diagnostics, _allDeclarations, _allReferences);
 
         // ambient names live in a scope of their own so that a module declaring 'Vector3' shadows the
         // intrinsic rather than colliding with it — the file's own declarations are the ones it can see

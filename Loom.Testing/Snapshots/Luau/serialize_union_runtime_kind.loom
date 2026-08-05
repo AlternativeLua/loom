@@ -1,0 +1,9 @@
+[serializable]
+interface Cell {
+    content: number | string;
+}
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Cell);
+    let restored = deserialize_binary::<Cell>(payload);
+}

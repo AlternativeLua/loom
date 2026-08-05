@@ -1,0 +1,10 @@
+[serializable, packed]
+interface Entity {
+    id: u8;
+    position: Vector3<i16>;
+}
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Entity);
+    let restored = deserialize_binary::<Entity>(payload);
+}

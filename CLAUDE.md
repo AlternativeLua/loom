@@ -62,6 +62,10 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 - Per-stage expectations (from CONTRIBUTING.md): parser — valid parses/invalid errors/AST shape; resolver — symbols declared, scope rules; type checker —
   inference, assignability, and for new types test `Equals`, `IsAssignableTo`, `ToString`; codegen — Luau AST correct, rendering valid, edge cases (escaping,
   empty collections).
+- Round-trip tests: `Loom.Testing/Runtime/*.luau` assertion bodies pair by name with a `Snapshots/Luau` case and actually *execute* the emitted serializers
+  on an embedded Luau ([SerializationRuntimeTest.cs](Loom.Testing/SerializationRuntimeTest.cs)). Snapshots only prove the output did not change; these prove it
+  works, and caught several bugs snapshots could not (wrong value shape, a shadowed local, an undersized buffer). The interpreter comes from the `NuLua.Luau`
+  package, so they need nothing installed and run under a plain `dotnet test`.
 
 ## Conventions
 

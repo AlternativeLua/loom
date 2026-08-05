@@ -1,0 +1,44 @@
+## Server-to-client replication for one player, sent every tick.
+
+enum Team { Neutral, Red, Blue }
+
+interface IEvent<Kind: string> { kind: Kind }
+
+[serializable]
+interface Damaged: IEvent<"Damaged"> {
+    [number_range(0, 1000)]
+    amount: number;
+    attacker: Player?;
+}
+
+[serializable]
+interface Respawned: IEvent<"Respawned"> {
+    at: Vector3<i16>;
+}
+
+[serializable]
+interface Loadout {
+    primary: u8;
+    secondary: u8;
+}
+
+[serializable, packed]
+interface PlayerSnapshot {
+    user_id: u16;
+    display_name: string;
+    [number_range(0, 100)]
+    health: number;
+    alive: bool;
+    team: Team;
+    velocity: Vector3<i16>;
+    [cframe_type(CFrameType.Compressed)]
+    aim: CFrame<f32>;
+    loadout: Loadout;
+    recent: (Damaged | Respawned)[];
+    character: Model?;
+}
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as PlayerSnapshot);
+    let restored = deserialize_binary::<PlayerSnapshot>(payload);
+}

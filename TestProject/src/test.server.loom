@@ -1,9 +1,9 @@
-let collection_service = get_service::<CollectionService>();
-
-for obj : collection_service.get_tagged("Lava") {
-    if obj is not BasePart continue;
-    obj.touched += fn(hit: BasePart) -> 
-        hit.parent
-            ?.find_first_child_of_class::<Humanoid>()
-            ?.take_damage(100)
+[serializable, packed]
+interface User {
+  id: u8;
+  name: string<u8>;
+  is_admin: bool;
 }
+
+let user = new User { id: 69, name: "Shan", is_admin: true};
+let serialized = serialize_binary(user);

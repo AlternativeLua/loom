@@ -1,0 +1,12 @@
+[serializable]
+interface Anchor {
+    [cframe_type(CFrameType.Precise)]
+    exact: CFrame<f32>;
+    [cframe_type(CFrameType.Compressed)]
+    approximate: CFrame<f32>;
+}
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Anchor);
+    let restored = deserialize_binary::<Anchor>(payload);
+}

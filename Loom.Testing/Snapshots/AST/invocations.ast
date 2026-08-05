@@ -72,7 +72,9 @@ ExpressionStatement(
       RightArrow: Token(RArrow, ">")
       ArgumentsList: [
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
       ]
     )
@@ -105,7 +107,9 @@ ExpressionStatement(
             RightArrow: Token(RArrow, ">")
             ArgumentsList: [
               PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             ]
           )
@@ -251,7 +255,9 @@ ExpressionStatement(
                   RightArrow: Token(RArrow, ">")
                   ArgumentsList: [
                     PrimitiveType(
+                      TypeArguments: null
                       Kind: Number
+                      Width: null
                     )
                   ]
                 )
@@ -308,10 +314,14 @@ ExpressionStatement(
       RightArrow: Token(RArrow, ">")
       ArgumentsList: [
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: String
+          Width: null
         )
       ]
     )

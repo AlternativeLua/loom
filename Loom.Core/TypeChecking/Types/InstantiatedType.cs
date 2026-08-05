@@ -40,7 +40,7 @@ public sealed class InstantiatedType(GenericType genericType, List<Type> argumen
     // FunctionType needs its own case (unlike every other composite type) because a nested function's own
     // type parameters must be filtered out of its declaration once substitution binds them, not merely have
     // their usages replaced - TypeSolver.Transform's generic per-child recursion has no way to know that.
-    private Type SubstituteTypeParameters(Type type, TypeParameterSubstitution substitution) =>
+    private static Type SubstituteTypeParameters(Type type, TypeParameterSubstitution substitution) =>
         type switch
         {
             TypeParameter typeParameter when substitution.TryGetValue(typeParameter, out var substituted) => substituted,

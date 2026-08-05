@@ -1,0 +1,10 @@
+[serializable]
+interface MyData {
+    id: u8;
+}
+
+let data = new MyData { id: 3 };
+let payload = serialize_binary(data);
+let restored = deserialize_binary::<MyData>(payload);
+if restored.ok
+    print(restored.value.id);

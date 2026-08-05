@@ -433,6 +433,103 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void ThrowsFor_InterfaceInvocation_AssignedToStructurallyIncompatibleType()
+    {
+        // 'new ReloadPacket { ... }' never checked its own bound type against 'expected' at all when
+        // the interface being constructed isn't generic - it only validated the initializer against
+        // ReloadPacket's own declared shape, so any two interfaces sharing zero property names were
+        // silently interchangeable everywhere a value is checked against a context type.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface ShootGunPacket { velocity: u8 }
+            interface ReloadPacket { ammo: u8 }
+            let wrong: ShootGunPacket = new ReloadPacket { ammo: 5 };
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'ReloadPacket' is not assignable to type 'ShootGunPacket'.\n"
+            + "    Type '{ ammo: u8 }' is not assignable to type '{ velocity: u8 }'. Type '{ ammo: u8 }' is missing property 'velocity' required by type '{ velocity: u8 }'."
+        );
+    }
+
+    [Fact]
+    public void Allows_InterfaceInvocation_AssignedToItsOwnType() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                interface ShootGunPacket { velocity: u8 }
+                let good: ShootGunPacket = new ShootGunPacket { velocity: 1 };
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_NamedValue_AssignedToStructurallyIncompatibleType()
+    {
+        // The same two interfaces via a named value rather than 'new X {...}' directly - this path
+        // (CheckSubsumption, not CheckInterfaceInvocation) already worked, but is worth pinning down
+        // alongside the interface-invocation case since both went through IsAssignableTo correctly and
+        // it was only TypeSolver's deferred-constraint path that had gaps.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface ShootGunPacket { velocity: u8 }
+            interface ReloadPacket { ammo: u8 }
+            let reload = new ReloadPacket { ammo: 5 };
+            let wrong: ShootGunPacket = reload;
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'ReloadPacket' is not assignable to type 'ShootGunPacket'.\n"
+            + "    Type '{ ammo: u8 }' is not assignable to type '{ velocity: u8 }'. Type '{ ammo: u8 }' is missing property 'velocity' required by type '{ velocity: u8 }'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_FunctionArgument_StructurallyIncompatibleInterface()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface ShootGunPacket { velocity: u8 }
+            interface ReloadPacket { ammo: u8 }
+            fn take(x: ShootGunPacket): void { }
+            take(new ReloadPacket { ammo: 5 });
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.TypeMismatch,
+            "Type 'ReloadPacket' is not assignable to type 'ShootGunPacket'.\n"
+            + "    Type '{ ammo: u8 }' is not assignable to type '{ velocity: u8 }'. Type '{ ammo: u8 }' is missing property 'velocity' required by type '{ velocity: u8 }'."
+        );
+    }
+
+    [Fact]
+    public void Allows_ForLoop_OverRange()
+    {
+        // Regression guard for a fix adjacent to the interface-vs-object mismatch above: checking that a
+        // for-loop's collection is at least object-shaped unifies an interface against the literally empty
+        // object type in whichever argument order the two happened to arrive in. Getting that order backwards
+        // makes the empty side look like it's missing every one of the populated side's properties, since an
+        // interface's own properties are never assignable *to* the specific properties of an empty object.
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                mut result = 1;
+                for i : 2..5
+                    result *= i;
+                """
+            )
+        );
+    }
+
+    [Fact]
     public void ThrowsFor_FunctionCall_IncorrectGenericArity()
     {
         const string source = """
@@ -1349,6 +1446,31 @@ public class TypeCheckerTest
         );
 
         Assert.Equal(PrimitiveType.Number, type);
+    }
+
+    [Theory]
+    [InlineData("Message.ShootGun", "ShootGunPacket")]
+    [InlineData("Message.Reload", "ReloadPacket")]
+    public void Checks_Generic_IndexedType_ResolvesEachConstraintsIndexer(string key, string expectedInterface)
+    {
+        // MessageData is two single-key interfaces merged through inheritance - each key has to resolve
+        // to its own constraint's value type, not whichever constraint's indexer is reached first.
+        var type = Utility.GetLastStatementType(
+            $$"""
+            enum Message { ShootGun, Reload }
+            interface ShootGunPacket { velocity: u8 }
+            interface ReloadPacket { ammo: u8 }
+            declare interface ShootGunEntry { [Message["ShootGun"]]: ShootGunPacket; }
+            declare interface ReloadEntry { [Message["Reload"]]: ReloadPacket; }
+            declare interface MessageData: ShootGunEntry, ReloadEntry;
+
+            fn get<K: Message>(k: K): MessageData[K] -> none as never as MessageData[K];
+            get({{key}})
+            """
+        );
+
+        var interfaceType = Assert.IsType<InterfaceType>(type);
+        Assert.Equal(expectedInterface, interfaceType.Name);
     }
 
     [Fact]
@@ -8143,4 +8265,60 @@ public class TypeCheckerTest
             )
         );
     #endregion Decorators
+
+    #region SizedTypeArguments
+    [Fact]
+    public void Checks_StringWithSizedTypeArgument_NoErrors() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("let x: string<u8> = \"a\";"));
+
+    [Fact]
+    public void ThrowsFor_StringTypeArgument_NotSized()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x: string<number> = \"a\";");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidTypeArguments,
+            "string's length type must be a sized type like 'u8', but is 'number'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_StringTypeArgument_Signed()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x: string<i8> = \"a\";");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidTypeArguments,
+            "string's length type must be unsigned, but is 'I8'.",
+            "lengths are never negative; use u8, u16, or u32."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_StringTypeArgument_WrongCount()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x: string<u8, u16> = \"a\";");
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidTypeArguments,
+            "'string' takes exactly one type argument, its length-prefix width."
+        );
+    }
+
+    [Fact]
+    public void Vector3WithTypeArgument_ParsesAndChecksWithNoErrors() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("interface Holder { position: Vector3<i16> }"));
+
+    [Fact]
+    public void ArrayAlias_WithBothArguments_NoErrors() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("let x: Array<string, u8> = [\"a\"];"));
+
+    [Fact]
+    public void ArrayAlias_WithOnlyElementArgument_DefaultsLengthType_NoErrors() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("let x: Array<string> = [\"a\"];"));
+
+    [Fact]
+    public void ArrayAlias_IsAssignableToPlainArray() =>
+        Utility.AssertNoErrors(Utility.GetTypeCheckerDiagnostics("let x: string[] = [\"a\"] as Array<string, u8>;"));
+    #endregion SizedTypeArguments
 }

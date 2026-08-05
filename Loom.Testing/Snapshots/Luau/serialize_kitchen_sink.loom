@@ -1,0 +1,34 @@
+interface IEvent<Kind: string> { kind: Kind }
+
+[serializable]
+interface Ping: IEvent<"Ping">;
+
+[serializable]
+interface Chat: IEvent<"Chat"> {
+    message: string;
+    [number_range(0, 100)]
+    volume: number;
+}
+
+[serializable]
+interface Inner {
+    flag: bool;
+    code: u8;
+}
+
+[serializable]
+interface KitchenSink {
+    tag: "sink";
+    inner: Inner;
+    label: string?;
+    points: Vector3<i16>[];
+    payload: Ping | Chat;
+    owner: Part;
+    [cframe_type(CFrameType.Precise)]
+    frame: CFrame<f32>;
+}
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as KitchenSink);
+    let restored = deserialize_binary::<KitchenSink>(payload);
+}

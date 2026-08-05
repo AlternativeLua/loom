@@ -14,21 +14,6 @@ public class DiagnosticBagTest
     private Identifier NewIdentifier(string name = "x") => new(new Token(SyntaxKind.Identifier, _span, name));
 
     [Fact]
-    public void Debug_Node_RecordsDiagnostic()
-    {
-        var bag = new DiagnosticBag();
-        var node = NewIdentifier();
-        bag.Debug(node, "my-code", "hello");
-        Assert.Single(bag.Set);
-
-        var diag = bag.Set.Single();
-        Assert.Equal(DiagnosticSeverity.Debug, diag.Severity);
-        Assert.Equal("my-code", diag.Code);
-        Assert.Equal("hello", diag.Message);
-        Assert.Equal(node.LocationSpan, diag.Span);
-    }
-
-    [Fact]
     public void Info_Node_RecordsDiagnostic()
     {
         var bag = new DiagnosticBag();
@@ -270,21 +255,6 @@ public class DiagnosticBagTest
         var bag = new DiagnosticBag(options: options);
         Assert.Same(options, bag.Errors().Options);
         Assert.Same(options, bag.WithoutInfo().Options);
-    }
-
-    [Fact]
-    public void Debug_Node_TwoArgOverload_RecordsDiagnosticWithNullCode()
-    {
-        var bag = new DiagnosticBag();
-        var node = NewIdentifier();
-        bag.Debug(node, "hello");
-        Assert.Single(bag.Set);
-
-        var diag = bag.Set.Single();
-        Assert.Equal(DiagnosticSeverity.Debug, diag.Severity);
-        Assert.Null(diag.Code);
-        Assert.Equal("hello", diag.Message);
-        Assert.Equal(node.LocationSpan, diag.Span);
     }
 
     [Fact]

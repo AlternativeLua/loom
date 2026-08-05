@@ -1,0 +1,13 @@
+local p = Waypoint_serialize_binary({ frame = CFrame.identity })
+assert(buffer.len(p.buffer) == 1, "identity size " .. buffer.len(p.buffer))
+local ident = Waypoint_deserialize_binary(p)
+assert(ident.ok, "identity roundtrip")
+assert(ident.value.frame == CFrame.identity, "identity value")
+
+local rotated = CFrame.new(10, 20, 30, 0.2, 0.3, 0.4, 0.84)
+local q = Waypoint_serialize_binary({ frame = rotated })
+assert(buffer.len(q.buffer) == 17, "rotated size " .. buffer.len(q.buffer))
+local r = Waypoint_deserialize_binary(q)
+assert(r.ok, "rotated ok")
+assert(math.abs(r.value.frame.X - 10) < 0.01, "position x")
+assert(r.value.frame == rotated, "rotation within tolerance")

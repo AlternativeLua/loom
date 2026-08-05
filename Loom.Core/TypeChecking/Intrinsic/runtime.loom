@@ -25,3 +25,54 @@ declare interface ResultStatic {
 }
 
 declare let Result: ResultStatic;
+
+## String-valued so the emitted kind is readable in a payload dump, and so the generated
+## type alias stays a literal union instead of collapsing to 'number' like a numeric enum.
+enum DeserializeErrorKind: string {
+    Truncated = "truncated",
+    InvalidTag = "invalid_tag",
+    InvalidLength = "invalid_length",
+    MissingBlob = "missing_blob",
+    InvalidBlob = "invalid_blob",
+}
+
+## 'buffer' is absent when every field of the type encodes to zero bytes, 'blobs' when the
+## value carries none — both are elided rather than sent as an empty buffer or table.
+interface Serialized {
+    buffer: buffer?;
+    blobs: unknown[]?;
+}
+
+interface DeserializeError {
+    kind: DeserializeErrorKind;
+    field: string?;
+    offset: number?;
+}
+
+## A serializable type's codec as a value, so it can be stored, passed to a generic network
+## wrapper, or selected at runtime. Every [serializable] interface emits one.
+interface Serializer<T> {
+    serialize: fn(value: T): Serialized;
+    deserialize: fn(serialized: Serialized): Result<T, DeserializeError>;
+    diff: fn(baseline: T, value: T): Serialized;
+    applyDiff: fn(baseline: T, diff: Serialized): Result<T, DeserializeError>;
+}
+
+declare fn serialize_binary<T>(value: T): Serialized;
+declare fn deserialize_binary<T>(serialized: Serialized): Result<T, DeserializeError>;
+declare fn serializer<T>(): Serializer<T>;
+
+## Encodes only what changed between 'baseline' and 'value', diffing into structs, unions,
+## optionals, array elements and map entries rather than resending a field wholesale - an
+## unchanged field costs one bit. 'T' is inferred from 'baseline', so no type argument is needed.
+declare fn diff_binary<T>(baseline: T, value: T): Serialized;
+
+## Reconstructs the value a 'diff_binary' payload was taken against, given the same baseline the
+## sender diffed from. A stale or mismatched baseline produces a wrong value rather than an error -
+## the payload carries no baseline identity of its own to check it against.
+declare fn apply_diff_binary<T>(baseline: T, diff: Serialized): Result<T, DeserializeError>;
+
+## Picks a codec out of a key-to-type mapping interface using a runtime key. This is the generic
+## case serializer::<T>() cannot express, since inside a wrapper's body the type is not known - only
+## the key value is. The result stays exactly typed as Serializer<T[K]>, so no cast is needed.
+declare fn serializer_of<T, K>(key: K): Serializer<T[K]>;

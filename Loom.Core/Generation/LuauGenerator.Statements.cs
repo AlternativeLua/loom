@@ -40,17 +40,39 @@ public sealed partial class LuauGenerator
         statements.AddRange(_moduleGenerator.GenerateExportedTypeAliases());
 
         var valueExports = _semanticModel.Exports.FindAll(export => export.EmitsRuntimeBinding);
-        if (valueExports.Count <= 0)
+        var serializerExports = GenerateSerializerExports();
+        if (valueExports.Count <= 0 && serializerExports.Count == 0)
             return new LuauTree(statements);
 
         {
             var initializers = valueExports.ConvertAll(TableInitializer (export) => new PropertyTableInitializer(export.Name, _moduleGenerator.GenerateExportedValue(export)));
             initializers.AddRange(GenerateConnectionStoreExports(valueExports));
+            initializers.AddRange(serializerExports);
 
             statements.Add(new Luau.AST.Return(new Table(initializers)));
         }
 
         return new LuauTree(statements);
+    }
+
+    /// <summary>
+    ///     Exports the codec of every exported serializable interface. An interface is a type, so it
+    ///     carries no runtime binding of its own - without this the serializer stays file-local and a
+    ///     consumer in another module has nothing to reach.
+    /// </summary>
+    private List<TableInitializer> GenerateSerializerExports()
+    {
+        var initializers = new List<TableInitializer>();
+        foreach (var export in _semanticModel.Exports)
+        {
+            if (export.Symbol is not InterfaceSymbol interfaceSymbol || !_semanticModel.SerializationSchemas.ContainsKey(interfaceSymbol))
+                continue;
+
+            var name = SerializationEmitter.SerializerName(interfaceSymbol.Name);
+            initializers.Add(new PropertyTableInitializer(name, new Luau.AST.Identifier(name)));
+        }
+
+        return initializers;
     }
 
     private List<TableInitializer> GenerateConnectionStoreExports(List<ExportBinding> valueExports)
@@ -214,9 +236,9 @@ public sealed partial class LuauGenerator
         condition switch
         {
             Is isExpression => _isPreludes.GetValueOrDefault(isExpression, []),
-            Loom.Core.Parsing.AST.BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand } and =>
+            Parsing.AST.BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand } and =>
                 [..CollectIsPreludes(and.Left), ..CollectIsPreludes(and.Right)],
-            Loom.Core.Parsing.AST.Parenthesized parenthesized => CollectIsPreludes(parenthesized.Expression),
+            Parsing.AST.Parenthesized parenthesized => CollectIsPreludes(parenthesized.Expression),
             _ => []
         };
 }

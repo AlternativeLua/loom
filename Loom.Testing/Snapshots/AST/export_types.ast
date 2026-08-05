@@ -4,7 +4,9 @@
     EqualsTypeClause(
       EqualsToken: Token(Equals, "=")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
     )
     TypeParameters: null
@@ -25,7 +27,9 @@ ExportDeclaration(
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
           Attributes: null
@@ -36,7 +40,9 @@ ExportDeclaration(
           ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
           Attributes: null
@@ -91,7 +97,9 @@ ExportDeclaration(
           ReturnType: ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Void
+              Width: null
             )
           )
           Attributes: null

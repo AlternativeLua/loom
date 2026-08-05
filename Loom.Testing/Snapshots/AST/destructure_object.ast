@@ -10,7 +10,9 @@
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
+            Width: null
           )
         )
         Attributes: null
@@ -21,7 +23,9 @@
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         Attributes: null

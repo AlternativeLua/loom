@@ -378,7 +378,9 @@ ExpressionStatement(
                   Name: Token(Identifier, "name")
                   When: Token(WhenKeyword, "when")
                   Type: PrimitiveType(
+                    TypeArguments: null
                     Kind: String
+                    Width: null
                   )
                   ObjectPattern: null
                 )
@@ -461,7 +463,9 @@ ExpressionStatement(
           Name: Token(Identifier, "s")
           When: Token(WhenKeyword, "when")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
+            Width: null
           )
           ObjectPattern: null
         )
@@ -499,7 +503,9 @@ ExpressionStatement(
                   Name: Token(Identifier, "name")
                   When: Token(WhenKeyword, "when")
                   Type: PrimitiveType(
+                    TypeArguments: null
                     Kind: String
+                    Width: null
                   )
                   ObjectPattern: null
                 )

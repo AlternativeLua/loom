@@ -11,7 +11,6 @@ using Loom.Luau.AST;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
 using Expression = Loom.Core.Parsing.AST.Expression;
 using ExpressionStatement = Loom.Luau.AST.ExpressionStatement;
-using FunctionDeclaration = Loom.Core.Parsing.AST.FunctionDeclaration;
 using Identifier = Loom.Luau.AST.Identifier;
 using Parameter = Loom.Core.Parsing.AST.Parameter;
 using Return = Loom.Luau.AST.Return;
@@ -29,6 +28,9 @@ public sealed partial class LuauGenerator
     private readonly Dictionary<Is, List<LuauStatement>> _isPreludes = [];
     private readonly Dictionary<Is, LuauExpression> _isSubjects = [];
     private readonly Lazy<HashSet<(EventTarget Target, Symbol Function)>> _localSafeConnections;
+
+    /// <summary>Buffer library members the file's serializers touched, hoisted into constants in <see cref="Generate" />.</summary>
+    private readonly List<string> _bufferMembers = [];
     private readonly MacroExpander _macroExpander;
     private readonly ModuleImportExportGenerator _moduleGenerator;
     // private readonly ModuleRequirePathResolver? _moduleRequirePaths;
@@ -53,7 +55,23 @@ public sealed partial class LuauGenerator
     public LuauGeneratorResult Generate()
     {
         var moduleImports = _moduleGenerator.GenerateImports();
+
+        // Ahead of the walk, since a call reaching an interface can appear earlier in the file than its
+        // own declaration - EmitSerializers needs the full picture already in hand by the time it decides
+        // what a given interface's codec actually needs to cover.
+        CollectSerializationUsage();
+
         var luauTree = VisitTree(_semanticModel.Tree);
+
+        // Both are hoisted after the walk, because what a file needs is only known once every
+        // serializer and serializer_map call in it has been expanded.
+        foreach (var mapType in _semanticModel.SerializerMaps)
+            if (SerializationEmitter.EmitSerializerMap(mapType, ResolveSerializerName) is { } map)
+                luauTree.Statements.Insert(0, map);
+
+        if (_bufferMembers.Count > 0)
+            luauTree.Statements.InsertRange(0, SerializationEmitter.DeclareBufferConstants(_bufferMembers));
+
         luauTree.Statements.InsertRange(0, _eventConnections.StoreDeclarations);
         luauTree.Statements.InsertRange(0, moduleImports);
 

@@ -99,7 +99,10 @@ public sealed partial class Parser
 
         var name = ExpectIdentifier("type");
         if (SyntaxFacts.IsPrimitiveType(name.Text))
-            return new PrimitiveType(name);
+            // Only 'string' ever takes one ('string<u8>', its length-prefix width) - trying this for
+            // every primitive would make 'a as number < b' commit to parsing '<' as a generic argument
+            // list instead of a comparison the moment it sees a type name, with no way back out.
+            return new PrimitiveType(name, name.Text == "string" ? ParseTypeArguments() : null);
 
         var typeArguments = ParseTypeArguments();
         var typeName = new TypeName(name, typeArguments);

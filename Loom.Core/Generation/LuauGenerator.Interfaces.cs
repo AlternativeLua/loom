@@ -1,6 +1,8 @@
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving.Symbols;
+using Loom.Core.TypeChecking.Serialization;
+using Loom.Core.TypeChecking.Types;
 using Loom.Luau;
 using Loom.Luau.AST;
 using BinaryOperator = Loom.Luau.AST.BinaryOperator;
@@ -98,6 +100,8 @@ public sealed partial class LuauGenerator
             .Concat(eventDeclarations.Select(GenerateInterfaceEventType))
             .ToList();
 
+        EmitSerializers(interfaceSymbol);
+
         var tableType = new TableType(tableIndexer, properties);
         return new TypeAlias(
             interfaceDeclaration.Name.Text,
@@ -113,6 +117,234 @@ public sealed partial class LuauGenerator
                 : tableType
         );
     }
+
+    /// <summary>
+    ///     Emits a <c>[serializable]</c> interface's serializer pair after its type alias, the same way an
+    ///     <c>implement</c> block trails its metatable. They live in the declaring file so a consumer in
+    ///     another module reaches them through the ordinary export path. Only the pieces this file's calls
+    ///     (or an export, conservatively) actually need are emitted - see <see cref="ResolveSerializationUsage" />.
+    /// </summary>
+    private void EmitSerializers(InterfaceSymbol interfaceSymbol)
+    {
+        if (!_semanticModel.SerializationSchemas.TryGetValue(interfaceSymbol, out var schema))
+            return;
+
+        // An imported interface's codec belongs to its declaring module; emitting a second copy here
+        // would shadow the import binding that already brought it in.
+        if (interfaceSymbol.File.AbsolutePath != _semanticModel.Tree.File.AbsolutePath)
+            return;
+
+        if (!CheckSchemaIsEmittable(interfaceSymbol, schema))
+            return;
+
+        var usage = ResolveSerializationUsage(interfaceSymbol);
+        if (usage == SerializationUsage.None)
+            return;
+
+        // The emitted signatures name Loom.Serialized and Loom.Result even when the source never
+        // mentions a runtime type, so the import has to be requested explicitly.
+        _semanticModel.RuntimeReferences += 1;
+
+        var emitter = new SerializationEmitter(schema, _bufferMembers);
+        if (usage.HasFlag(SerializationUsage.Serialize))
+            _state.Postreq(emitter.EmitSerializer());
+
+        if (usage.HasFlag(SerializationUsage.Deserialize))
+            _state.Postreq(emitter.EmitDeserializer());
+
+        if (usage.HasFlag(SerializationUsage.Delta))
+        {
+            // A fresh instance rather than reusing the one above: EmitSerializer already primed
+            // _prologueTags/_locals for that function's own body, and a delta write walks unions and
+            // sentinels in a different order, so it needs to resolve them itself rather than finding
+            // stale bookkeeping left over from a sibling function.
+            var deltaEmitter = new SerializationEmitter(schema, _bufferMembers);
+            _state.Postreq(deltaEmitter.EmitDeltaWriteHelper());
+            _state.Postreq(deltaEmitter.EmitDeltaAttempt());
+            _state.Postreq(deltaEmitter.EmitDeltaSerializer());
+            _state.Postreq(deltaEmitter.EmitDeltaReadHelper());
+            _state.Postreq(deltaEmitter.EmitDeltaDeserializer());
+        }
+
+        if (usage.HasFlag(SerializationUsage.SerializerObject))
+            _state.Postreq(emitter.EmitSerializerObject());
+    }
+
+    /// <summary>
+    ///     What this interface's codec actually needs to cover. An exported interface assumes everything:
+    ///     a cross-module consumer always calls through the codec object rather than a bare function name,
+    ///     and files compile in dependency order, so a declaring file's own codegen runs before anything
+    ///     that later imports it is even analyzed - there is no "wait and see" available. A non-exported
+    ///     interface is scoped to <see cref="Resolving.SemanticModel.SerializationUsages" />, collected by
+    ///     <see cref="CollectSerializationUsage" /> before generation starts; requesting the codec object
+    ///     itself still widens to everything, since the object bundles all four callbacks by name.
+    /// </summary>
+    private SerializationUsage ResolveSerializationUsage(InterfaceSymbol interfaceSymbol)
+    {
+        if (_semanticModel.Exports.Any(export => export.Symbol == interfaceSymbol))
+            return SerializationUsage.All;
+
+        var usage = _semanticModel.SerializationUsages.GetValueOrDefault(interfaceSymbol);
+        if (usage.HasFlag(SerializationUsage.SerializerObject))
+            return SerializationUsage.All;
+
+        // diff_binary's own body estimates a scratch buffer's size by calling serialize_binary directly
+        // by name (see EmitDeltaSerializer) - Delta on its own would leave that call dangling.
+        // apply_diff_binary has no equivalent dependency on deserialize_binary.
+        if (usage.HasFlag(SerializationUsage.Delta))
+            usage |= SerializationUsage.Serialize;
+
+        return usage;
+    }
+
+    /// <summary>
+    ///     Scans every call this file makes to <c>serialize_binary</c>/<c>deserialize_binary</c>/
+    ///     <c>serializer</c>/<c>diff_binary</c>/<c>apply_diff_binary</c>/<c>serializer_of</c> before the
+    ///     main tree walk, so <see cref="EmitSerializers" /> already knows what each interface needs
+    ///     regardless of whether the declaration or the call comes first in the file. Best-effort: a
+    ///     malformed call is left for the macro expander (which runs during the real walk) to diagnose
+    ///     properly, so anything that does not resolve cleanly here is simply skipped rather than reported.
+    /// </summary>
+    private void CollectSerializationUsage()
+    {
+        foreach (var invocation in _semanticModel.Tree.GetDescendants<Invocation>())
+        {
+            if (invocation.Expression is not Parsing.AST.Identifier identifier
+                || _semanticModel.GetSymbol(identifier) is not { IsIntrinsic: true } symbol)
+                continue;
+
+            if (symbol.Name == "serializer_of")
+            {
+                MarkSerializerMapTargets(invocation);
+                continue;
+            }
+
+            var usage = symbol.Name switch
+            {
+                "serialize_binary" => SerializationUsage.Serialize,
+                "deserialize_binary" => SerializationUsage.Deserialize,
+                "serializer" => SerializationUsage.SerializerObject,
+                "diff_binary" or "apply_diff_binary" => SerializationUsage.Delta,
+                _ => SerializationUsage.None
+            };
+
+            if (usage == SerializationUsage.None)
+                continue;
+
+            // deserialize_binary/serializer have nothing to infer from, so the interface is a type
+            // argument instead of the first value argument the other three take.
+            Node? subject = symbol.Name is "deserialize_binary" or "serializer"
+                ? invocation.TypeArguments?.ArgumentsList.FirstOrDefault()
+                : invocation.Arguments.ArgumentList.FirstOrDefault();
+
+            if (subject != null)
+                MarkUsage(subject, usage);
+        }
+    }
+
+    /// <summary>
+    ///     'serializer_of::&lt;MessageData, K&gt;(key)' never names the value interfaces it might return
+    ///     directly - only the mapping interface. Every property and indexer value type the mapping
+    ///     interface carries is a codec the emitted dispatch table can hand back, so each one needs its
+    ///     object emitted the same as a direct 'serializer::&lt;T&gt;()' call would.
+    /// </summary>
+    private void MarkSerializerMapTargets(Invocation invocation)
+    {
+        if (invocation.TypeArguments?.ArgumentsList.FirstOrDefault() is not { } mapArgument
+            || _semanticModel.GetType(mapArgument) is not InterfaceType mapType)
+            return;
+
+        foreach (var property in mapType.Properties)
+            MarkSerializerObjectUsage(property.ValueType);
+
+        foreach (var indexer in mapType.Indexers)
+            MarkSerializerObjectUsage(indexer.ValueType);
+    }
+
+    private void MarkSerializerObjectUsage(TypeChecking.Types.Type valueType)
+    {
+        if (valueType is InterfaceType interfaceType)
+            MarkUsage(interfaceType, SerializationUsage.SerializerObject);
+    }
+
+    private void MarkUsage(Node subject, SerializationUsage usage)
+    {
+        if (_semanticModel.GetType(subject) is InterfaceType interfaceType)
+            MarkUsage(interfaceType, usage);
+    }
+
+    private void MarkUsage(InterfaceType interfaceType, SerializationUsage usage)
+    {
+        if (_semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name) is not { } interfaceSymbol)
+            return;
+
+        _semanticModel.SerializationUsages[interfaceSymbol] = _semanticModel.SerializationUsages.GetValueOrDefault(interfaceSymbol) | usage;
+    }
+
+    /// <summary>
+    ///     Refuses to emit a schema the generator cannot fully cover. Every field kind the schema builder
+    ///     produces is emittable today, so this reports nothing - it stays as a backstop for the next one
+    ///     added, since a field the emitter skips goes missing from the payload silently rather than
+    ///     loudly, which is how several bugs reached the snapshot suite unnoticed.
+    /// </summary>
+    private bool CheckSchemaIsEmittable(InterfaceSymbol interfaceSymbol, SerializationSchema schema)
+    {
+        var declaration = interfaceSymbol.Declaration;
+        if (FindUnsupportedField(schema.Fields) is not { } unsupported)
+            return true;
+
+        _diagnostics.NotImplemented(
+            declaration,
+            $"Serializing '{unsupported.Path}' of type '{unsupported.ValueType}' is not yet generated.",
+            "variable-length and union fields are described by the schema but not yet emitted."
+        );
+
+        return false;
+    }
+
+    /// <summary>Name of the codec emitted for <paramref name="interfaceType" />, or null when it has none.</summary>
+    private string? ResolveSerializerName(InterfaceType interfaceType)
+    {
+        var symbol = _semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name);
+        return symbol == null ? null : SerializationEmitter.SerializerName(symbol.Name);
+    }
+
+    private static SerializationField? FindUnsupportedField(IEnumerable<SerializationField> fields)
+    {
+        foreach (var serializationField in fields)
+        {
+            if (!IsMeasurable(serializationField))
+                return serializationField;
+
+            if (FindUnsupportedField(serializationField.Children) is { } nested)
+                return nested;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    ///     Whether the generator can compute a field's width. Everything is allocated before a byte is
+    ///     written, so a field whose width cannot be stated - inline or by walking the value - would leave
+    ///     the buffer short and the writes running off the end.
+    /// </summary>
+    private static bool IsMeasurable(SerializationField serializationField) =>
+        serializationField switch
+        {
+            _ when serializationField.BodyBytes != null => true,
+            StringField => true,
+            // Sentinelled: either the components in full or nothing, and which is known before allocating.
+            DatatypeField or CFrameField => true,
+            // Entries share a bit block reserved after the length prefix, and an entry whose own width
+            // needs walking gets a nested loop, so the only requirement left is that it be measurable.
+            ArrayField arrayField => IsMeasurable(arrayField.Element),
+            OptionalField optionalField => IsMeasurable(optionalField.Inner),
+            MapField mapField => IsMeasurable(mapField.Key) && IsMeasurable(mapField.Value),
+            // A flattened nested struct, or a real tuple: measurable exactly when its parts are.
+            TupleField tupleField => tupleField.Elements.All(IsMeasurable),
+            UnionField unionField => unionField.Variants.All(v => v.Fields.All(IsMeasurable)),
+            _ => false
+        };
 
     // Mirrors TypeChecker.Interfaces.cs's MergeOverloadedProperties: same-named function-typed table properties become one field typed as their intersection.
     private static List<TableTypeProperty> MergeOverloadedPropertyTypes(List<TableTypeProperty> properties)

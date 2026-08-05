@@ -1,0 +1,30 @@
+## Exercises every branch of the delta write/read: a leaf, a flattened struct, a packed sentinelled
+## datatype, an optional wrapping a union, an array of unions and a map whose values are structs.
+
+[serializable]
+interface Loadout {
+    primary: u8;
+    secondary: u8;
+}
+
+[serializable]
+interface Hit { kind: "Hit"; amount: number; }
+
+[serializable]
+interface Miss { kind: "Miss"; }
+
+[serializable, packed]
+interface PlayerState {
+    health: u16;
+    name: string;
+    loadout: Loadout;
+    position: Vector3<i16>;
+    last_event: (Hit | Miss)?;
+    recent: (Hit | Miss)[];
+    scores: Record<string, Loadout>;
+}
+
+fn _trigger_usage(): void {
+    let diff = diff_binary(none as never as PlayerState, none as never as PlayerState);
+    let applied = apply_diff_binary(none as never as PlayerState, diff);
+}

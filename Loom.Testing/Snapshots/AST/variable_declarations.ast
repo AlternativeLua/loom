@@ -41,7 +41,9 @@ VariableDeclaration(
   ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Number
+      Width: null
     )
   )
   Name: Token(Identifier, "x")
@@ -57,7 +59,9 @@ VariableDeclaration(
   ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Bool
+      Width: null
     )
   )
   Name: Token(Identifier, "x")
@@ -67,7 +71,9 @@ VariableDeclaration(
   ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Number
+      Width: null
     )
   )
   Name: Token(Identifier, "x")
@@ -77,7 +83,9 @@ VariableDeclaration(
   ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: String
+      Width: null
     )
   )
   Name: Token(Identifier, "x")
@@ -87,7 +95,9 @@ VariableDeclaration(
   ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Unknown
+      Width: null
     )
   )
   Name: Token(Identifier, "x")
@@ -97,7 +107,9 @@ VariableDeclaration(
   ColonTypeClause(
     ColonToken: Token(Colon, ":")
     Type: PrimitiveType(
+      TypeArguments: null
       Kind: Never
+      Width: null
     )
   )
   Name: Token(Identifier, "x")
@@ -191,7 +203,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -202,7 +216,9 @@ VariableDeclaration(
       ReturnType: ColonTypeClause(
         ColonToken: Token(Colon, ":")
         Type: PrimitiveType(
+          TypeArguments: null
           Kind: String
+          Width: null
         )
       )
     )
@@ -266,7 +282,9 @@ VariableDeclaration(
         RightArrow: Token(RArrow, ">")
         ArgumentsList: [
           PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         ]
       )
@@ -291,7 +309,9 @@ VariableDeclaration(
               RightArrow: Token(RArrow, ">")
               ArgumentsList: [
                 PrimitiveType(
+                  TypeArguments: null
                   Kind: String
+                  Width: null
                 )
               ]
             )
@@ -319,13 +339,19 @@ VariableDeclaration(
       ]
       Types: [
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: String
+          Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: Bool
+          Width: null
         )
       ]
     )
@@ -349,13 +375,19 @@ VariableDeclaration(
       ]
       Types: [
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: String
+          Width: null
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: Bool
+          Width: null
         )
       ]
     )
@@ -379,10 +411,14 @@ VariableDeclaration(
           ]
           Types: [
             PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
             PrimitiveType(
+              TypeArguments: null
               Kind: String
+              Width: null
             )
           ]
         )
@@ -627,7 +663,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -638,7 +676,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: String
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -657,7 +697,9 @@ VariableDeclaration(
           ]
           Types: [
             PrimitiveType(
+              TypeArguments: null
               Kind: Bool
+              Width: null
             )
             FunctionType(
               FnKeyword: Token(FnKeyword, "fn")
@@ -671,7 +713,9 @@ VariableDeclaration(
                     ColonTypeClause(
                       ColonToken: Token(Colon, ":")
                       Type: PrimitiveType(
+                        TypeArguments: null
                         Kind: Bool
+                        Width: null
                       )
                     )
                     EqualsValueClause: null
@@ -682,7 +726,9 @@ VariableDeclaration(
               ReturnType: ColonTypeClause(
                 ColonToken: Token(Colon, ":")
                 Type: PrimitiveType(
+                  TypeArguments: null
                   Kind: Number
+                  Width: null
                 )
               )
             )
@@ -710,7 +756,9 @@ VariableDeclaration(
               RightArrow: Token(RArrow, ">")
               ArgumentsList: [
                 PrimitiveType(
+                  TypeArguments: null
                   Kind: String
+                  Width: null
                 )
                 TypeName(
                   Name: Token(Identifier, "List")
@@ -719,7 +767,9 @@ VariableDeclaration(
                     RightArrow: Token(RArrow, ">")
                     ArgumentsList: [
                       PrimitiveType(
+                        TypeArguments: null
                         Kind: Number
+                        Width: null
                       )
                     ]
                   )
@@ -744,7 +794,9 @@ VariableDeclaration(
       ReturnType: ColonTypeClause(
         ColonToken: Token(Colon, ":")
         Type: PrimitiveType(
+          TypeArguments: null
           Kind: Void
+          Width: null
         )
       )
     )
@@ -767,7 +819,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -780,7 +834,9 @@ VariableDeclaration(
         Type: OptionalType(
           Question: Token(Question, "?")
           NonNullableType: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
       )
@@ -804,7 +860,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -816,7 +874,9 @@ VariableDeclaration(
         ColonToken: Token(Colon, ":")
         Type: ArrayType(
           ElementType: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
           LeftBracket: Token(LBracket, "[")
           MutKeyword: null
@@ -843,7 +903,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
             EqualsValueClause: null
@@ -862,10 +924,14 @@ VariableDeclaration(
           ]
           Types: [
             PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
             PrimitiveType(
+              TypeArguments: null
               Kind: String
+              Width: null
             )
           ]
         )
@@ -895,7 +961,9 @@ VariableDeclaration(
                 ColonTypeClause(
                   ColonToken: Token(Colon, ":")
                   Type: PrimitiveType(
+                    TypeArguments: null
                     Kind: Number
+                    Width: null
                   )
                 )
                 EqualsValueClause: null
@@ -906,7 +974,9 @@ VariableDeclaration(
           ReturnType: ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
         )
@@ -935,7 +1005,9 @@ VariableDeclaration(
                 ColonTypeClause(
                   ColonToken: Token(Colon, ":")
                   Type: PrimitiveType(
+                    TypeArguments: null
                     Kind: Number
+                    Width: null
                   )
                 )
                 EqualsValueClause: null
@@ -946,7 +1018,9 @@ VariableDeclaration(
           ReturnType: ColonTypeClause(
             ColonToken: Token(Colon, ":")
             Type: PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           )
         )
@@ -1018,7 +1092,9 @@ VariableDeclaration(
             ColonTypeClause(
               ColonToken: Token(Colon, ":")
               Type: PrimitiveType(
+                TypeArguments: null
                 Kind: Number
+                Width: null
               )
             )
             EqualsTypeClause: null
@@ -1087,10 +1163,14 @@ VariableDeclaration(
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       TargetType: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
       IndexType: PrimitiveType(
+        TypeArguments: null
         Kind: String
+        Width: null
       )
     )
   )
@@ -1332,7 +1412,9 @@ VariableDeclaration(
           )
         )
         PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
       ]
     )
@@ -1353,7 +1435,9 @@ VariableDeclaration(
           RightArrow: Token(RArrow, ">")
           ArgumentsList: [
             PrimitiveType(
+              TypeArguments: null
               Kind: Number
+              Width: null
             )
           ]
         )
@@ -1504,7 +1588,9 @@ VariableDeclaration(
       LeftParen: Token(LParen, "(")
       RightParen: Token(RParen, ")")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Number
+        Width: null
       )
     )
   )

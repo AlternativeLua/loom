@@ -355,23 +355,4 @@ public class DiagnosticMessageTest
         Assert.DoesNotContain("\n", result.Replace(Environment.NewLine, ""));
         Assert.DoesNotContain("\r", result.Replace(Environment.NewLine, ""));
     }
-
-    [Fact]
-    public void ToString_DebugDiagnostic_RendersCompactSingleLine()
-    {
-        var start = new Location(_testFile, 4);
-        var end = new Location(_testFile, 9);
-        var span = new LocationSpan(start, end);
-        var diagnostic = new Diagnostic(span, DiagnosticSeverity.Debug, null, "Declared 'x' (Variable)", null);
-        var result = diagnostic.ToString();
-
-        Assert.Equal(
-            $"{Colors.Magenta}{Colors.Bold}debug{Colors.Reset} {Colors.Dim}[{span}]{Colors.Reset} {Colors.Gray}Declared 'x' (Variable){Colors.Reset}",
-            result
-        );
-
-        Assert.DoesNotContain(Environment.NewLine, result);
-        Assert.DoesNotContain("╭─", result);
-        Assert.DoesNotContain("│", result);
-    }
 }

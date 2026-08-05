@@ -37,7 +37,9 @@ Declare(
     ReturnType: ColonTypeClause(
       ColonToken: Token(Colon, ":")
       Type: PrimitiveType(
+        TypeArguments: null
         Kind: Void
+        Width: null
       )
     )
     Attributes: null

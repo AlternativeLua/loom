@@ -22,7 +22,9 @@ InterfaceDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         Attributes: null
@@ -33,7 +35,9 @@ InterfaceDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         Attributes: null
@@ -57,7 +61,9 @@ InterfaceDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         Attributes: null
@@ -81,12 +87,16 @@ InterfaceDeclaration(
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         IndexType: PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: String
+            Width: null
           )
         )
       )
@@ -108,12 +118,16 @@ InterfaceDeclaration(
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         IndexType: PrimitiveType(
+          TypeArguments: null
           Kind: String
+          Width: null
         )
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
       )
@@ -135,7 +149,9 @@ InterfaceDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         Attributes: null
@@ -146,12 +162,16 @@ InterfaceDeclaration(
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         IndexType: PrimitiveType(
+          TypeArguments: null
           Kind: Number
+          Width: null
         )
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Bool
+            Width: null
           )
         )
       )
@@ -230,7 +250,9 @@ InterfaceDeclaration(
         ColonTypeClause(
           ColonToken: Token(Colon, ":")
           Type: PrimitiveType(
+            TypeArguments: null
             Kind: Number
+            Width: null
           )
         )
         EqualsTypeClause: null
