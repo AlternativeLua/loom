@@ -90,6 +90,7 @@ ExpressionStatement(
 )
 ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: Identifier(
@@ -100,16 +101,20 @@ ExpressionStatement(
       Token(NumberLiteral, "0")
       Value: 0
     )
+    IsOptional: False
   )
 )
 ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: ElementAccess(
+        QuestionMark: null
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         Expression: Identifier(
@@ -120,21 +125,25 @@ ExpressionStatement(
           Token(NumberLiteral, "0")
           Value: 0
         )
+        IsOptional: False
       )
       IndexExpression: Literal(
         Token(NumberLiteral, "1")
         Value: 1
       )
+      IsOptional: False
     )
     IndexExpression: Literal(
       Token(NumberLiteral, "2")
       Value: 2
     )
+    IsOptional: False
   )
 )
 ExpressionStatement(
   Expression: PropertyAccess(
     Expression: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: Identifier(
@@ -145,6 +154,7 @@ ExpressionStatement(
         Token(NumberLiteral, "0")
         Value: 0
       )
+      IsOptional: False
     )
     Names: [
       DotName(
@@ -157,6 +167,7 @@ ExpressionStatement(
 )
 ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: QualifiedName(
@@ -177,11 +188,13 @@ ExpressionStatement(
       Token(NumberLiteral, "0")
       Value: 0
     )
+    IsOptional: False
   )
 )
 ExpressionStatement(
   Expression: PropertyAccess(
     Expression: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: QualifiedName(
@@ -202,6 +215,7 @@ ExpressionStatement(
         Token(NumberLiteral, "0")
         Value: 0
       )
+      IsOptional: False
     )
     Names: [
       DotName(
@@ -238,6 +252,7 @@ ExpressionStatement(
 ExpressionStatement(
   Expression: Invocation(
     Expression: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: Identifier(
@@ -248,6 +263,7 @@ ExpressionStatement(
         Token(NumberLiteral, "0")
         Value: 0
       )
+      IsOptional: False
     )
     TypeArguments: null
     Arguments(
@@ -261,6 +277,7 @@ ExpressionStatement(
   Expression: PropertyAccess(
     Expression: Invocation(
       Expression: ElementAccess(
+        QuestionMark: null
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         Expression: Identifier(
@@ -271,6 +288,7 @@ ExpressionStatement(
           Token(NumberLiteral, "0")
           Value: 0
         )
+        IsOptional: False
       )
       TypeArguments: null
       Arguments(
@@ -292,6 +310,7 @@ ExpressionStatement(
   Expression: Invocation(
     Expression: PropertyAccess(
       Expression: ElementAccess(
+        QuestionMark: null
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         Expression: PropertyAccess(
@@ -329,6 +348,7 @@ ExpressionStatement(
           Token(NumberLiteral, "0")
           Value: 0
         )
+        IsOptional: False
       )
       Names: [
         DotName(

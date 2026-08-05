@@ -95,7 +95,9 @@ public sealed partial class Parser
             if (AtInvocationStart())
                 expression = ParseInvocation(expression);
             else if (Match(out var leftBracket, SyntaxKind.LBracket))
-                expression = ParseElementAccess(leftBracket, expression);
+                expression = ParseElementAccess(null, leftBracket, expression);
+            else if (AtOptionalElementAccessStart())
+                expression = ParseElementAccess(Advance(), Expect(SyntaxKind.LBracket), expression);
             else if (Match(out var dot, SyntaxKind.Dot, SyntaxKind.QuestionDot))
                 expression = ParseNamedAccess(dot, expression);
             else if (Current().Kind == SyntaxKind.Bang && IsOnSameLine(expression.Tokens[^1], Current()))
@@ -108,13 +110,23 @@ public sealed partial class Parser
 
     private bool AtInvocationStart() => Current() is { Kind: SyntaxKind.LParen or SyntaxKind.ColonColonLArrow };
 
+    // '?' and '[' stay separate tokens (unlike '?.') because 'T?[]' already means "array of optional T"
+    // in type position, so a dedicated '?[' token would collide with that. Disambiguating 'a?[b]'
+    // (optional indexing) from a ternary whose then-branch is an array literal, e.g. 'a ? [b] : c', means
+    // looking past the closing ']' for a ':' - if one follows, this is the ternary's '?' and '[b]' is its
+    // then-branch; otherwise it's an optional element access.
+    private bool AtOptionalElementAccessStart() =>
+        Current().Kind == SyntaxKind.Question
+        && OffsetAfterBrackets(1) is { } closeOffset
+        && PeekKind(closeOffset + 1) != SyntaxKind.Colon;
+
     private static bool IsOnSameLine(Token previous, Token next) => previous.GetLocation().End.Line == next.GetLocation().Start.Line;
 
-    private ElementAccess ParseElementAccess(Token leftBracket, Expression expression)
+    private ElementAccess ParseElementAccess(Token? questionMark, Token leftBracket, Expression expression)
     {
         var indexExpression = ParseExpression();
         var rightBracket = Expect(SyntaxKind.RBracket);
-        return new ElementAccess(leftBracket, rightBracket, expression, indexExpression);
+        return new ElementAccess(questionMark, leftBracket, rightBracket, expression, indexExpression);
     }
 
     private AssignmentTarget ParseNamedAccess(Token dot, Expression expression)

@@ -2336,6 +2336,126 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_OptionalElementAccess_SingleAccess()
+    {
+        var luauTree = Utility.GetLuauAST("a?[0]");
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        var resultLocal = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
+        Assert.Equal("_optionalResult", resultLocal.Name);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[1]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("a", Assert.IsType<Identifier>(condition.Left).Name);
+        Assert.Equal("~=", condition.Operator);
+        Assert.IsType<NilLiteral>(condition.Right);
+
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
+        Assert.Equal("_optionalResult", Assert.IsType<Identifier>(thenAssignment.Left).Name);
+        var thenAccess = Assert.IsType<ElementAccess>(thenAssignment.Right);
+        Assert.Equal("a", Assert.IsType<Identifier>(thenAccess.Target).Name);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(thenAccess.Index).Value);
+
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(elseAssignment.Right);
+    }
+
+    [Fact]
+    public void Generates_OptionalElementAccess_Nested()
+    {
+        // Unlike a dot chain (whose `?.` links share one PropertyAccess node with a Names list), each
+        // `?[` is parsed as its own ElementAccess node wrapping the previous one - so 'a?[0]?[1]' is two
+        // independent optional-chain units, not one recursive chain: the first's `_optionalResult` local
+        // becomes the receiver the second caches and nil-checks, rather than a nested cached link inside
+        // a single guarded branch.
+        var luauTree = Utility.GetLuauAST("a?[0]?[1]");
+        Assert.Equal(5, luauTree.Statements.Count);
+
+        var firstIf = Assert.IsType<IfStatement>(luauTree.Statements[1]);
+        var firstCondition = Assert.IsType<BinaryOperator>(firstIf.Condition);
+        Assert.Equal("a", Assert.IsType<Identifier>(firstCondition.Left).Name);
+
+        var firstThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(firstIf.ThenBranch.Statements[0]).Expression);
+        var firstResult = Assert.IsType<Identifier>(firstThenAssignment.Left).Name;
+        var firstAccess = Assert.IsType<ElementAccess>(firstThenAssignment.Right);
+        Assert.Equal("a", Assert.IsType<Identifier>(firstAccess.Target).Name);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(firstAccess.Index).Value);
+
+        var secondIf = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var secondCondition = Assert.IsType<BinaryOperator>(secondIf.Condition);
+        Assert.Equal(firstResult, Assert.IsType<Identifier>(secondCondition.Left).Name);
+
+        var secondThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(secondIf.ThenBranch.Statements[0]).Expression);
+        var secondAccess = Assert.IsType<ElementAccess>(secondThenAssignment.Right);
+        Assert.Equal(firstResult, Assert.IsType<Identifier>(secondAccess.Target).Name);
+        Assert.Equal(1, Assert.IsType<NumberLiteral>(secondAccess.Index).Value);
+    }
+
+    [Fact]
+    public void Generates_OptionalElementAccess_Invocation_PlacesCallInsideShortCircuit()
+    {
+        var luauTree = Utility.GetLuauAST("a?[0]()");
+        Assert.Equal(3, luauTree.Statements.Count);
+
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[1]);
+        var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
+        Assert.Equal("a", Assert.IsType<Identifier>(condition.Left).Name);
+
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(elseAssignment.Right);
+
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
+        var call = Assert.IsType<Call>(thenAssignment.Right);
+        var callee = Assert.IsType<ElementAccess>(call.Callee);
+        Assert.Equal("a", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal(0, Assert.IsType<NumberLiteral>(callee.Index).Value);
+    }
+
+    [Fact]
+    public void Generates_OptionalElementAccess_ComposesWithOptionalPropertyAccess()
+    {
+        var luauTree = Utility.GetLuauAST("a?.b?[0]");
+        Assert.Equal(5, luauTree.Statements.Count);
+
+        var outerIf = Assert.IsType<IfStatement>(luauTree.Statements[1]);
+        var outerCondition = Assert.IsType<BinaryOperator>(outerIf.Condition);
+        Assert.Equal("a", Assert.IsType<Identifier>(outerCondition.Left).Name);
+
+        var outerThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(outerIf.ThenBranch.Statements[0]).Expression);
+        var firstResult = Assert.IsType<Identifier>(outerThenAssignment.Left).Name;
+        var propAccess = Assert.IsType<PropertyAccess>(outerThenAssignment.Right);
+        Assert.Equal(["b"], propAccess.Names);
+
+        // The dot chain's result lands in its own `_optionalResult` local, which the element-access
+        // chain then reuses directly as its receiver (PushToVariable no-ops on a plain identifier)
+        // rather than re-deriving `a.b`.
+        var innerIf = Assert.IsType<IfStatement>(luauTree.Statements[3]);
+        var innerCondition = Assert.IsType<BinaryOperator>(innerIf.Condition);
+        Assert.Equal(firstResult, Assert.IsType<Identifier>(innerCondition.Left).Name);
+
+        var innerThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ThenBranch.Statements[0]).Expression);
+        var access = Assert.IsType<ElementAccess>(innerThenAssignment.Right);
+        Assert.Equal(firstResult, Assert.IsType<Identifier>(access.Target).Name);
+    }
+
+    [Theory]
+    [InlineData("a ? [0] : [1]")]
+    [InlineData("a?[0]:[1]")]
+    public void Generates_OptionalElementAccess_DoesNotHijackTernaryWithArrayLiteral(string source)
+    {
+        // Disambiguation looks past the closing ']' for a ':' rather than checking for whitespace, so
+        // this stays a ternary whether or not it's spaced like 'a?[0]:[1]' - only the absence of a
+        // trailing ':' after the bracket makes '?[' read as optional element access.
+        var luauTree = Utility.GetLuauAST(source);
+        Assert.Single(luauTree.Statements);
+
+        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.First());
+        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
+        Assert.IsType<Table>(ifExpression.ThenBranch);
+        Assert.IsType<Table>(ifExpression.ElseBranch);
+    }
+
+    [Fact]
     public void Generates_PropertyAccess_OnRangeLiteral()
     {
         var luauTree = Utility.GetLuauAST("(1..10).minimum");

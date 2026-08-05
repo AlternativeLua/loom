@@ -33,6 +33,7 @@
           Statements: [
             Return(
               Expression: ElementAccess(
+                QuestionMark: null
                 LeftBracket: Token(LBracket, "[")
                 RightBracket: Token(RBracket, "]")
                 Expression: SelfExpression(
@@ -42,6 +43,7 @@
                   Name: Token(Identifier, "key")
                   Token(Identifier, "key")
                 )
+                IsOptional: False
               )
             )
           ]

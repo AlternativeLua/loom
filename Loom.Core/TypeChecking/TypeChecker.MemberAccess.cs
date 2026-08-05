@@ -18,16 +18,28 @@ public sealed partial class TypeChecker
             return BindType(elementAccess, narrowedType);
 
         var type = Visit(elementAccess.Expression);
+        if (elementAccess.IsOptional)
+            type = type.NonNullable();
+
         var indexType = Visit(elementAccess.IndexExpression);
+        var result = GetElementAccessType(elementAccess, type, indexType);
+        if (elementAccess.IsOptional && !Type.IsNever(result))
+            result = TypeSimplifier.Simplify(new Types.UnionType([result, Types.PrimitiveType.None]));
+
+        return BindType(elementAccess, result);
+    }
+
+    private Type GetElementAccessType(ElementAccess elementAccess, Type type, Type indexType)
+    {
         switch (type)
         {
             case Types.TypeParameter { Constraint: ObjectType or InterfaceType or InstantiatedType } parameter:
-                return BindType(elementAccess, new Types.IndexedType(parameter, indexType));
+                return new Types.IndexedType(parameter, indexType);
             case Types.ArrayType when indexType.IsAssignableTo(Intrinsics.Range):
                 CheckInvalidAccessAssignment(elementAccess, type, indexType);
-                return BindType(elementAccess, type);
+                return type;
             case Types.TupleType tupleType when indexType is Types.LiteralType { Value: long or int }:
-                return BindTupleElementAccess(elementAccess, tupleType, indexType);
+                return GetTupleElementAccessType(elementAccess, tupleType, indexType);
         }
 
         var indexIsRangeOrNumber = indexType.IsAssignableTo(Intrinsics.Range) || indexType.IsAssignableTo(Types.PrimitiveType.Number);
@@ -35,10 +47,10 @@ public sealed partial class TypeChecker
             return IndexType(elementAccess, type, indexType, $"Cannot index value of type '{type}'.");
 
         CheckInvalidAccessAssignment(elementAccess, type, indexType);
-        return BindType(elementAccess, Types.PrimitiveType.String);
+        return Types.PrimitiveType.String;
     }
 
-    private Type BindTupleElementAccess(ElementAccess elementAccess, Types.TupleType tupleType, Type indexType)
+    private Type GetTupleElementAccessType(ElementAccess elementAccess, Types.TupleType tupleType, Type indexType)
     {
         var index = Convert.ToInt32(((Types.LiteralType)indexType).Value);
         if (index < 1 || index > tupleType.ElementTypes.Count)
@@ -49,10 +61,10 @@ public sealed partial class TypeChecker
                 $"Index {index} is out of range for tuple type '{tupleType}' with {tupleType.ElementTypes.Count} element(s)."
             );
 
-            return BindType(elementAccess, Types.PrimitiveType.Never);
+            return Types.PrimitiveType.Never;
         }
 
-        return BindType(elementAccess, tupleType.ElementTypes[index - 1]);
+        return tupleType.ElementTypes[index - 1];
     }
 
     private Type IndexType(Node node, Type type, Type indexType, string errorMessage)

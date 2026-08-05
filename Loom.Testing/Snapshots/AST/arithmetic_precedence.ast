@@ -359,6 +359,7 @@ ExpressionStatement(
               )
             )
             Right: ElementAccess(
+              QuestionMark: null
               LeftBracket: Token(LBracket, "[")
               RightBracket: Token(RBracket, "]")
               Expression: Identifier(
@@ -369,6 +370,7 @@ ExpressionStatement(
                 Token(NumberLiteral, "0")
                 Value: 0
               )
+              IsOptional: False
             )
           )
           Right: Identifier(
@@ -549,6 +551,7 @@ ExpressionStatement(
         )
       )
       Right: ElementAccess(
+        QuestionMark: null
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         Expression: Identifier(
@@ -559,6 +562,7 @@ ExpressionStatement(
           Token(NumberLiteral, "0")
           Value: 0
         )
+        IsOptional: False
       )
     )
     Right: PropertyAccess(

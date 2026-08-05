@@ -42,6 +42,7 @@ ExpressionStatement(
 ExpressionStatement(
   Expression: Invocation(
     Expression: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: Identifier(
@@ -52,6 +53,7 @@ ExpressionStatement(
         Token(NumberLiteral, "0")
         Value: 0
       )
+      IsOptional: False
     )
     TypeArguments: null
     Arguments(

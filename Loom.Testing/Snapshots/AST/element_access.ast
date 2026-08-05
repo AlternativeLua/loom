@@ -1,5 +1,6 @@
 ﻿ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: Identifier(
@@ -10,10 +11,12 @@
       Token(NumberLiteral, "0")
       Value: 0
     )
+    IsOptional: False
   )
 )
 ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: Identifier(
@@ -31,16 +34,20 @@ ExpressionStatement(
         Value: 1
       )
     )
+    IsOptional: False
   )
 )
 ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: ElementAccess(
+        QuestionMark: null
         LeftBracket: Token(LBracket, "[")
         RightBracket: Token(RBracket, "]")
         Expression: Identifier(
@@ -51,22 +58,26 @@ ExpressionStatement(
           Token(NumberLiteral, "1")
           Value: 1
         )
+        IsOptional: False
       )
       IndexExpression: Literal(
         Token(NumberLiteral, "2")
         Value: 2
       )
+      IsOptional: False
     )
     IndexExpression: Literal(
       Token(NumberLiteral, "3")
       Value: 3
     )
+    IsOptional: False
   )
 )
 ExpressionStatement(
   Expression: AssignmentOperator(
     Operator: Token(Equals, "=")
     Left: ElementAccess(
+      QuestionMark: null
       LeftBracket: Token(LBracket, "[")
       RightBracket: Token(RBracket, "]")
       Expression: Identifier(
@@ -77,6 +88,7 @@ ExpressionStatement(
         Token(NumberLiteral, "1")
         Value: 1
       )
+      IsOptional: False
     )
     Right: Literal(
       Token(NumberLiteral, "42")
@@ -86,6 +98,7 @@ ExpressionStatement(
 )
 ExpressionStatement(
   Expression: ElementAccess(
+    QuestionMark: null
     LeftBracket: Token(LBracket, "[")
     RightBracket: Token(RBracket, "]")
     Expression: Invocation(
@@ -104,5 +117,6 @@ ExpressionStatement(
       Token(NumberLiteral, "1")
       Value: 1
     )
+    IsOptional: False
   )
 )

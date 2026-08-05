@@ -1,0 +1,4 @@
+interface Inner { value: number }
+
+let a: Inner[]?[]? = none
+let x = a?[0]?[0]

@@ -37,6 +37,7 @@ ExpressionStatement(
       RightParen: Token(RParen, ")")
       ArgumentList: [
         ElementAccess(
+          QuestionMark: null
           LeftBracket: Token(LBracket, "[")
           RightBracket: Token(RBracket, "]")
           Expression: Identifier(
@@ -47,6 +48,7 @@ ExpressionStatement(
             Token(NumberLiteral, "1")
             Value: 1
           )
+          IsOptional: False
         )
       ]
     )
@@ -64,6 +66,7 @@ ExpressionStatement(
       RightParen: Token(RParen, ")")
       ArgumentList: [
         ElementAccess(
+          QuestionMark: null
           LeftBracket: Token(LBracket, "[")
           RightBracket: Token(RBracket, "]")
           Expression: Identifier(
@@ -74,6 +77,7 @@ ExpressionStatement(
             Token(NumberLiteral, "2")
             Value: 2
           )
+          IsOptional: False
         )
       ]
     )

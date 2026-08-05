@@ -3819,6 +3819,50 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Checks_OptionalElementAccess_SingleAccess()
+    {
+        var type = Utility.GetLastStatementType("let x: number[]? = none; x?[0]");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_OptionalElementAccess_Nested()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            let a: number[]?[]? = none
+            a?[0]?[0]
+            """
+        );
+
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_OptionalElementAccess_OnNonOptionalTarget()
+    {
+        var type = Utility.GetLastStatementType("let x: number[] = []; x?[0]");
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
+    public void Checks_OptionalElementAccess_InvocationThroughOptionalCallee()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            let x: (fn: number)[]? = none;
+            x?[0]()
+            """
+        );
+
+        var optional = Assert.IsType<OptionalType>(type);
+        Assert.Equal(PrimitiveType.Number, optional.NonNullableType);
+    }
+
+    [Fact]
     public void Checks_After_PropagatesBodyType()
     {
         var type = Utility.GetLastStatementType("after 1 { 42 }");

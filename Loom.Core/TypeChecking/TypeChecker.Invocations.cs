@@ -57,6 +57,7 @@ public sealed partial class TypeChecker
         {
             QualifiedName qualifiedName => qualifiedName.Names.Exists(n => n.IsOptional),
             PropertyAccess propertyAccess => propertyAccess.Names.Exists(n => n.IsOptional),
+            ElementAccess elementAccess => elementAccess.IsOptional,
             _ => false
         };
 

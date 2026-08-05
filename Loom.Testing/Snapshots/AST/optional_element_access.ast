@@ -1,0 +1,209 @@
+﻿ExpressionStatement(
+  Expression: ElementAccess(
+    QuestionMark: Token(Question, "?")
+    LeftBracket: Token(LBracket, "[")
+    RightBracket: Token(RBracket, "]")
+    Expression: Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    IndexExpression: Literal(
+      Token(NumberLiteral, "0")
+      Value: 0
+    )
+    IsOptional: True
+  )
+)
+ExpressionStatement(
+  Expression: ElementAccess(
+    QuestionMark: Token(Question, "?")
+    LeftBracket: Token(LBracket, "[")
+    RightBracket: Token(RBracket, "]")
+    Expression: ElementAccess(
+      QuestionMark: Token(Question, "?")
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expression: Identifier(
+        Name: Token(Identifier, "a")
+        Token(Identifier, "a")
+      )
+      IndexExpression: Literal(
+        Token(NumberLiteral, "0")
+        Value: 0
+      )
+      IsOptional: True
+    )
+    IndexExpression: Literal(
+      Token(NumberLiteral, "1")
+      Value: 1
+    )
+    IsOptional: True
+  )
+)
+ExpressionStatement(
+  Expression: ElementAccess(
+    QuestionMark: null
+    LeftBracket: Token(LBracket, "[")
+    RightBracket: Token(RBracket, "]")
+    Expression: ElementAccess(
+      QuestionMark: Token(Question, "?")
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expression: Identifier(
+        Name: Token(Identifier, "a")
+        Token(Identifier, "a")
+      )
+      IndexExpression: Literal(
+        Token(NumberLiteral, "0")
+        Value: 0
+      )
+      IsOptional: True
+    )
+    IndexExpression: Literal(
+      Token(NumberLiteral, "1")
+      Value: 1
+    )
+    IsOptional: False
+  )
+)
+ExpressionStatement(
+  Expression: ElementAccess(
+    QuestionMark: Token(Question, "?")
+    LeftBracket: Token(LBracket, "[")
+    RightBracket: Token(RBracket, "]")
+    Expression: ElementAccess(
+      QuestionMark: null
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expression: Identifier(
+        Name: Token(Identifier, "a")
+        Token(Identifier, "a")
+      )
+      IndexExpression: Literal(
+        Token(NumberLiteral, "0")
+        Value: 0
+      )
+      IsOptional: False
+    )
+    IndexExpression: Literal(
+      Token(NumberLiteral, "1")
+      Value: 1
+    )
+    IsOptional: True
+  )
+)
+ExpressionStatement(
+  Expression: ElementAccess(
+    QuestionMark: Token(Question, "?")
+    LeftBracket: Token(LBracket, "[")
+    RightBracket: Token(RBracket, "]")
+    Expression: QualifiedName(
+      Identifier(
+        Name: Token(Identifier, "a")
+        Token(Identifier, "a")
+      )
+      Names: [
+        DotName(
+          Dot: Token(QuestionDot, "?.")
+          Name: Token(Identifier, "b")
+          IsOptional: True
+        )
+      ]
+      Token(Identifier, "a")
+    )
+    IndexExpression: Literal(
+      Token(NumberLiteral, "0")
+      Value: 0
+    )
+    IsOptional: True
+  )
+)
+ExpressionStatement(
+  Expression: PropertyAccess(
+    Expression: ElementAccess(
+      QuestionMark: Token(Question, "?")
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expression: Identifier(
+        Name: Token(Identifier, "a")
+        Token(Identifier, "a")
+      )
+      IndexExpression: Literal(
+        Token(NumberLiteral, "0")
+        Value: 0
+      )
+      IsOptional: True
+    )
+    Names: [
+      DotName(
+        Dot: Token(QuestionDot, "?.")
+        Name: Token(Identifier, "b")
+        IsOptional: True
+      )
+    ]
+  )
+)
+ExpressionStatement(
+  Expression: TernaryOperator(
+    Question: Token(Question, "?")
+    Colon: Token(Colon, ":")
+    Condition: Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    ThenBranch: ArrayLiteral(
+      MutKeyword: null
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expressions: [
+        Literal(
+          Token(NumberLiteral, "0")
+          Value: 0
+        )
+      ]
+    )
+    ElseBranch: ArrayLiteral(
+      MutKeyword: null
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expressions: [
+        Literal(
+          Token(NumberLiteral, "1")
+          Value: 1
+        )
+      ]
+    )
+  )
+)
+ExpressionStatement(
+  Expression: TernaryOperator(
+    Question: Token(Question, "?")
+    Colon: Token(Colon, ":")
+    Condition: Identifier(
+      Name: Token(Identifier, "a")
+      Token(Identifier, "a")
+    )
+    ThenBranch: ArrayLiteral(
+      MutKeyword: null
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expressions: [
+        Literal(
+          Token(NumberLiteral, "0")
+          Value: 0
+        )
+      ]
+    )
+    ElseBranch: ArrayLiteral(
+      MutKeyword: null
+      LeftBracket: Token(LBracket, "[")
+      RightBracket: Token(RBracket, "]")
+      Expressions: [
+        Literal(
+          Token(NumberLiteral, "1")
+          Value: 1
+        )
+      ]
+    )
+  )
+)
