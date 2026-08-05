@@ -13,7 +13,7 @@
             <Link>.editorconfig</Link>
         </Content>
         <Content Include="..\.gitignore">
-          <Link>.gitignore</Link>
+            <Link>.gitignore</Link>
         </Content>
         <Content Include="..\CLAUDE.md">
             <Link>CLAUDE.md</Link>
@@ -38,6 +38,37 @@
     <ItemGroup>
         <ProjectReference Include="..\Loom.Config\Loom.Config.csproj"/>
         <ProjectReference Include="..\Loom.Luau\Loom.Luau.csproj"/>
+    </ItemGroup>
+
+    <!--
+        Intrinsic .loom sources are embedded rather than read off disk at runtime: Intrinsics.cs
+        used to resolve a path relative to AppContext.BaseDirectory and scan it with
+        Directory.GetFiles, which silently returns nothing in sandboxed hosts with no real
+        filesystem (e.g. the Blazor WebAssembly playground), leaving every intrinsic unavailable.
+        LogicalNames are listed explicitly (not globbed with %(RecursiveDir)) so the resource name
+        always uses '/' regardless of the OS running the build - %(RecursiveDir) emits '\' on
+        Windows, which Intrinsics.cs' Path.GetFileName lookup would then fail to split on under
+        WASM's Unix-style path semantics.
+    -->
+    <ItemGroup>
+        <EmbeddedResource Include="TypeChecking\Intrinsic\loom.loom">
+            <LogicalName>Intrinsic/loom.loom</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="TypeChecking\Intrinsic\math.loom">
+            <LogicalName>Intrinsic/math.loom</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="TypeChecking\Intrinsic\buffer.loom">
+            <LogicalName>Intrinsic/buffer.loom</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="TypeChecking\Intrinsic\runtime.loom">
+            <LogicalName>Intrinsic/runtime.loom</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="TypeChecking\Intrinsic\generated\None.loom">
+            <LogicalName>Intrinsic/generated/None.loom</LogicalName>
+        </EmbeddedResource>
+        <EmbeddedResource Include="TypeChecking\Intrinsic\generated\PluginSecurity.loom">
+            <LogicalName>Intrinsic/generated/PluginSecurity.loom</LogicalName>
+        </EmbeddedResource>
     </ItemGroup>
 
 </Project>

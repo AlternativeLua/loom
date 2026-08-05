@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Reflection;
 using Loom.Config;
 using Loom.Core.Pipeline;
 using Loom.Core.Resolving;
@@ -15,6 +16,7 @@ public static class Intrinsics
     private const string CoreFileName = "loom.loom";
     private const string PluginSecurityFileName = "PluginSecurity.loom";
     private const string NonPluginRuntimeFileName = "None.loom";
+    private const string IntrinsicResourcePrefix = "Intrinsic/";
 
     [ThreadStatic] private static bool _isBootstrapping;
     private static readonly ConcurrentDictionary<ProjectType, HashSet<(Symbol, Type)>> _cache = new();
@@ -95,15 +97,36 @@ public static class Intrinsics
         }
     }
 
+    /// <summary>
+    ///     Intrinsic sources are embedded resources rather than a disk directory: reading them via
+    ///     <see cref="FileManager.LoadDirectory" /> and a path relative to <see cref="AppContext.BaseDirectory" />
+    ///     silently returns nothing in hosts with no real filesystem, such as the Blazor WebAssembly
+    ///     playground, which left every intrinsic unavailable there.
+    /// </summary>
     private static CompilationUnit CreateCompilationUnit()
     {
-        var repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../.."));
         var config = new LoomConfig
         {
-            ProjectType = ProjectType.Library, NoEmit = true, Files = new FilesConfig { SourceDirectory = $"{repositoryRoot}/Loom.Core/TypeChecking/Intrinsic" }
+            ProjectType = ProjectType.Library, NoEmit = true, Files = new FilesConfig { SourceDirectory = "Intrinsic" }
         };
 
-        return new CompilationUnit(config);
+        var compilationUnit = new CompilationUnit(config);
+        compilationUnit.SourceFiles.AddRange(LoadEmbeddedIntrinsicFiles());
+        return compilationUnit;
+    }
+
+    private static IEnumerable<SourceFile> LoadEmbeddedIntrinsicFiles()
+    {
+        var assembly = typeof(Intrinsics).Assembly;
+        foreach (var resourceName in assembly.GetManifestResourceNames())
+        {
+            if (!resourceName.StartsWith(IntrinsicResourcePrefix, StringComparison.Ordinal))
+                continue;
+
+            using var stream = assembly.GetManifestResourceStream(resourceName)!;
+            using var reader = new StreamReader(stream);
+            yield return new SourceFile(resourceName, reader.ReadToEnd());
+        }
     }
 
     private static bool IsIncludedFor(SourceFile file, ProjectType projectType) =>
