@@ -27,9 +27,13 @@ public sealed partial class Parser
     private List<DeclareFunctionSignature> ParseTraitMembers()
     {
         var members = new List<Statement>();
-        while (Match(out var fnKeyword, SyntaxKind.FnKeyword))
+        while (!IsEof() && Current() is not { Kind: SyntaxKind.RBrace })
         {
-            members.Add(ParseDeclareFunctionSignature(fnKeyword));
+            var attributes = Match(out var leftBracket, SyntaxKind.LBracket) ? ParseAttributes(leftBracket) : null;
+            if (!Match(out var fnKeyword, SyntaxKind.FnKeyword))
+                break;
+
+            members.Add(ParseDeclareFunctionSignature(fnKeyword, attributes));
             Match(SyntaxKind.Comma, SyntaxKind.Semicolon);
         }
 
