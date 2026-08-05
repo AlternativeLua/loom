@@ -76,18 +76,21 @@ public sealed partial class LuauGenerator
         return new Function(functionDeclaration.Name.Text, typeParameters, parameters, returnType, new Chunk([new Luau.AST.Return(call)]));
     }
 
+    // Each decorator (and, for a factory like `log("info")`, the factory invocation that produces it) must
+    // run exactly once, at the point the function is declared - not on every call. So the attribute
+    // expression is hoisted into a local ahead of the function statement (PushToVariable no-ops for a
+    // bare decorator reference like `[log]`, since re-reading a name costs nothing to redo per call) and
+    // only that cached reference is embedded in the wrapper body that actually runs per-call.
     private LuauExpression ApplyDecorators(Attributes attributes, Chunk originalBody, string name)
     {
         var nonIntrinsicAttributes = attributes.AttributeList.Where(a => !IsIntrinsicAttribute(a)).ToList();
-        LuauExpression value = new Call(
-            Visit<LuauExpression>(nonIntrinsicAttributes[0]),
-            [new AnonymousFunction(null, [], null, originalBody), new StringLiteral(name)]
-        );
+        var decorators = nonIntrinsicAttributes.ConvertAll(attribute => _state.PushToVariable($"_{name}_decorator", Visit<LuauExpression>(attribute)));
 
-        foreach (var attribute in nonIntrinsicAttributes.Skip(1))
+        LuauExpression value = new Call(decorators[0], [new AnonymousFunction(null, [], null, originalBody), new StringLiteral(name)]);
+        foreach (var decorator in decorators.Skip(1))
         {
             var thunk = new AnonymousFunction(null, [], null, new Chunk([new Luau.AST.Return(value)]));
-            value = new Call(Visit<LuauExpression>(attribute), [thunk, new StringLiteral(name)]);
+            value = new Call(decorator, [thunk, new StringLiteral(name)]);
         }
 
         return value;

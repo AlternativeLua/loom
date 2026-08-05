@@ -5057,6 +5057,44 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_ChainedDecoratorFactories_EachHoistsToItsOwnDeclarationTimeLocal()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            fn a(ctx: string) -> fn(f: fn(): void, name: string): void {
+                f();
+            };
+            fn b(ctx: string) -> fn(f: fn(): void, name: string): void {
+                f();
+            };
+            [a("x"), b("y")]
+            fn do_something() { }
+            """,
+            true
+        );
+
+        var decoratorA = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
+        Assert.Equal("_do_something_decorator", decoratorA.Name);
+        var aCall = Assert.IsType<Call>(decoratorA.Initializer);
+        Assert.Equal("a", Assert.IsType<Identifier>(aCall.Callee).Name);
+
+        var decoratorB = Assert.IsType<ConstVariable>(luauTree.Statements[3]);
+        Assert.Equal("_do_something_decorator_1", decoratorB.Name);
+        var bCall = Assert.IsType<Call>(decoratorB.Initializer);
+        Assert.Equal("b", Assert.IsType<Identifier>(bCall.Callee).Name);
+
+        var wrapper = luauTree.Statements.OfType<Function>().Single(f => f.Name == "do_something");
+        var returnStatement = Assert.IsType<Return>(Assert.Single(wrapper.Body.Statements));
+        var outerCall = Assert.IsType<Call>(returnStatement.Expression);
+        Assert.Equal("_do_something_decorator_1", Assert.IsType<Identifier>(outerCall.Callee).Name);
+
+        var innerThunk = Assert.IsType<AnonymousFunction>(outerCall.Arguments[0]);
+        var innerReturn = Assert.IsType<Return>(Assert.Single(innerThunk.Body.Statements));
+        var innerCall = Assert.IsType<Call>(innerReturn.Expression);
+        Assert.Equal("_do_something_decorator", Assert.IsType<Identifier>(innerCall.Callee).Name);
+    }
+
+    [Fact]
     public void Generates_DecoratorFactory_MatchesIssueExample()
     {
         var rendered = Utility.GetLuauAST(
@@ -5072,10 +5110,38 @@ public class LuauGeneratorTest
             true
         ).Render();
 
+        // The factory invocation must run exactly once, at declaration time - not on every call to
+        // do_something() - so it's hoisted into its own local ahead of the wrapper function (#156).
+        Assert.Contains("const _do_something_decorator = log(\"info\")", rendered);
         Assert.Contains("const function do_something()", rendered);
-        Assert.Contains("return log(\"info\")(function()", rendered);
+        Assert.Contains("return _do_something_decorator(function()", rendered);
         Assert.Contains("return print(\"did something!\")", rendered);
         Assert.DoesNotContain("_do_something_impl", rendered);
+        Assert.DoesNotContain("log(\"info\")(function()", rendered);
+    }
+
+    [Fact]
+    public void Generates_DecoratorFactory_EvaluatesOnceAcrossMultipleCalls()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            fn log(ctx: string) -> fn<T>(f: fn(): T, name: string): T {
+                let result = f();
+                return result;
+            };
+
+            [log("info")]
+            fn do_something -> print("did something!");
+
+            do_something();
+            do_something();
+            """,
+            true
+        ).Render();
+
+        // 'log("info")' produces the decorator; that construction is call-independent, so it must appear
+        // exactly once in the output regardless of how many times do_something() is actually called.
+        Assert.Equal(1, rendered.Split("log(\"info\")").Length - 1);
     }
 
     [Fact]
