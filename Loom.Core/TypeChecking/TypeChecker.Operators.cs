@@ -199,6 +199,11 @@ public sealed partial class TypeChecker
         return BindType(binaryOperator, Types.PrimitiveType.Never);
     }
 
+    // Deliberately checked with a direct IsAssignableTo rather than TypeSolver.AddConstraint: the operand
+    // types here are frequently self-referential (e.g. 'add: fn(other: Point): Point'), and unlike
+    // IsAssignableTo - which guards against exactly that recursion via GuardedAssignableTo - the solver's
+    // Unify walks the same cyclic type graph with only a reference-identity visited-set, which two
+    // structurally-equal-but-distinct 'Point' instances can walk past forever.
     private bool TryBindOperatorOverload(BinaryOperator binaryOperator, Type leftType, Type rightType, out Type resultType)
     {
         resultType = Types.PrimitiveType.Never;
@@ -208,10 +213,10 @@ public sealed partial class TypeChecker
         if (leftType is not InterfaceType interfaceType || !interfaceType.Metamethods.TryGetValue(metamethodName, out var methodName))
             return false;
 
-        if (interfaceType.GetProperty(methodName)?.ValueType is not Types.FunctionType { ParameterTypes: [var parameterType] } functionType)
+        if (interfaceType.GetProperty(methodName)?.ValueType is not Types.FunctionType { ParameterTypes: [var parameterType] } functionType
+            || !rightType.IsAssignableTo(parameterType))
             return false;
 
-        _semanticModel.TypeSolver.AddConstraint(rightType, parameterType, binaryOperator.Right);
         resultType = functionType.ReturnType;
         return true;
     }
