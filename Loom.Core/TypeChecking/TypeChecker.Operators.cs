@@ -169,6 +169,9 @@ public sealed partial class TypeChecker
             return BindType(binaryOperator, rule.ReturnType);
         }
 
+        if (TryBindOperatorOverload(binaryOperator, leftType, rightType, out var overloadType))
+            return BindType(binaryOperator, overloadType);
+
         switch (binaryOperator.Operator.Kind)
         {
             case SyntaxKind.QuestionQuestion or SyntaxKind.QuestionQuestionEquals:
@@ -194,6 +197,23 @@ public sealed partial class TypeChecker
         );
 
         return BindType(binaryOperator, Types.PrimitiveType.Never);
+    }
+
+    private bool TryBindOperatorOverload(BinaryOperator binaryOperator, Type leftType, Type rightType, out Type resultType)
+    {
+        resultType = Types.PrimitiveType.Never;
+        if (BinaryOperatorBinder.GetMetamethodName(binaryOperator.Operator.Kind) is not { } metamethodName)
+            return false;
+
+        if (leftType is not InterfaceType interfaceType || !interfaceType.Metamethods.TryGetValue(metamethodName, out var methodName))
+            return false;
+
+        if (interfaceType.GetProperty(methodName)?.ValueType is not Types.FunctionType { ParameterTypes: [var parameterType] } functionType)
+            return false;
+
+        _semanticModel.TypeSolver.AddConstraint(rightType, parameterType, binaryOperator.Right);
+        resultType = functionType.ReturnType;
+        return true;
     }
 
     public override Type VisitUnaryOperator(UnaryOperator unaryOperator)
