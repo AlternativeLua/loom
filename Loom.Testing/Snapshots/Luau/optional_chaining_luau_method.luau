@@ -5,15 +5,11 @@ type Bar = {
   read foo: Foo?,
 }
 const bar = (nil :: never) :: Bar?
-local _optionalResult
+local _result
 if bar ~= nil then
-  const _optional = bar.foo
-  if _optional ~= nil then
-    _optionalResult = _optional:DoFoo()
-  else
-    _optionalResult = nil
+  const _target = bar.foo
+  if _target ~= nil then
+    _result = _target:DoFoo()
   end
-else
-  _optionalResult = nil
 end
-const _ = _optionalResult
+const _ = _result

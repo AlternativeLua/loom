@@ -2278,7 +2278,7 @@ public class LuauGeneratorTest
         Assert.Equal(3, luauTree.Statements.Count);
 
         var resultLocal = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_optionalResult", resultLocal.Name);
+        Assert.Equal("_result", resultLocal.Name);
         Assert.Null(resultLocal.Initializer);
 
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[1]);
@@ -2289,16 +2289,13 @@ public class LuauGeneratorTest
         Assert.IsType<NilLiteral>(condition.Right);
 
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
-        Assert.Equal("_optionalResult", Assert.IsType<Identifier>(thenAssignment.Left).Name);
+        Assert.Equal("_result", Assert.IsType<Identifier>(thenAssignment.Left).Name);
         var thenAccess = Assert.IsType<PropertyAccess>(thenAssignment.Right);
         Assert.Single(thenAccess.Names);
         Assert.Equal("b", thenAccess.Names[0]);
 
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
         var wrapper = Assert.IsType<ConstVariable>(luauTree.Statements[2]);
-        Assert.Equal("_optionalResult", Assert.IsType<Identifier>(wrapper.Initializer).Name);
+        Assert.Equal("_result", Assert.IsType<Identifier>(wrapper.Initializer).Name);
     }
 
     [Fact]
@@ -2311,14 +2308,9 @@ public class LuauGeneratorTest
         var outerCondition = Assert.IsType<BinaryOperator>(outerIf.Condition);
         var outerTarget = Assert.IsType<Identifier>(outerCondition.Left);
         Assert.Equal("a", outerTarget.Name);
-
-        var outerElseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(outerIf.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(outerElseAssignment.Right);
-
-        // The already-accessed `a.b` link is cached into a local before the inner chain reuses it for
-        // both its nil-check and the final access, instead of re-emitting `a.b` at each use.
+        
         var cachedLink = Assert.IsType<ConstVariable>(outerIf.ThenBranch.Statements[0]);
-        Assert.Equal("_optional", cachedLink.Name);
+        Assert.Equal("_target", cachedLink.Name);
         var cachedLinkAccess = Assert.IsType<PropertyAccess>(cachedLink.Initializer);
         Assert.Single(cachedLinkAccess.Names);
         Assert.Equal("b", cachedLinkAccess.Names[0]);
@@ -2326,16 +2318,13 @@ public class LuauGeneratorTest
 
         var innerIf = Assert.IsType<IfStatement>(outerIf.ThenBranch.Statements[1]);
         var innerCondition = Assert.IsType<BinaryOperator>(innerIf.Condition);
-        Assert.Equal("_optional", Assert.IsType<Identifier>(innerCondition.Left).Name);
-
-        var innerElseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(innerElseAssignment.Right);
+        Assert.Equal("_target", Assert.IsType<Identifier>(innerCondition.Left).Name);
 
         var innerThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ThenBranch.Statements[0]).Expression);
         var finalAccess = Assert.IsType<PropertyAccess>(innerThenAssignment.Right);
         Assert.Single(finalAccess.Names);
         Assert.Equal("c", finalAccess.Names[0]);
-        Assert.Equal("_optional", Assert.IsType<Identifier>(finalAccess.Target).Name);
+        Assert.Equal("_target", Assert.IsType<Identifier>(finalAccess.Target).Name);
     }
 
     [Fact]
@@ -2364,10 +2353,7 @@ public class LuauGeneratorTest
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[1]);
         var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
         Assert.Equal("a", Assert.IsType<Identifier>(condition.Left).Name);
-
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
+        
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
         var call = Assert.IsType<Call>(thenAssignment.Right);
         Assert.False(call.IsMethod);
@@ -2419,7 +2405,7 @@ public class LuauGeneratorTest
         var outerIf = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
 
         var cachedLink = Assert.IsType<ConstVariable>(outerIf.ThenBranch.Statements[0]);
-        Assert.Equal("_optional", cachedLink.Name);
+        Assert.Equal("_target", cachedLink.Name);
         Assert.Equal(["foo"], Assert.IsType<PropertyAccess>(cachedLink.Initializer).Names);
 
         var innerIf = Assert.IsType<IfStatement>(outerIf.ThenBranch.Statements[1]);
@@ -2430,7 +2416,7 @@ public class LuauGeneratorTest
         var callee = Assert.IsType<PropertyAccess>(call.Callee);
         Assert.Single(callee.Names);
         Assert.Equal("DoFoo", callee.Names[0]);
-        Assert.Equal("_optional", Assert.IsType<Identifier>(callee.Target).Name);
+        Assert.Equal("_target", Assert.IsType<Identifier>(callee.Target).Name);
     }
 
     [Fact]
@@ -2440,7 +2426,7 @@ public class LuauGeneratorTest
         Assert.Equal(3, luauTree.Statements.Count);
 
         var resultLocal = Assert.IsType<LocalVariable>(luauTree.Statements[0]);
-        Assert.Equal("_optionalResult", resultLocal.Name);
+        Assert.Equal("_result", resultLocal.Name);
 
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[1]);
         var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
@@ -2449,23 +2435,15 @@ public class LuauGeneratorTest
         Assert.IsType<NilLiteral>(condition.Right);
 
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
-        Assert.Equal("_optionalResult", Assert.IsType<Identifier>(thenAssignment.Left).Name);
+        Assert.Equal("_result", Assert.IsType<Identifier>(thenAssignment.Left).Name);
         var thenAccess = Assert.IsType<ElementAccess>(thenAssignment.Right);
         Assert.Equal("a", Assert.IsType<Identifier>(thenAccess.Target).Name);
         Assert.Equal(0, Assert.IsType<NumberLiteral>(thenAccess.Index).Value);
-
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
     }
 
     [Fact]
     public void Generates_OptionalElementAccess_Nested()
     {
-        // Unlike a dot chain (whose `?.` links share one PropertyAccess node with a Names list), each
-        // `?[` is parsed as its own ElementAccess node wrapping the previous one - so 'a?[0]?[1]' is two
-        // independent optional-chain units, not one recursive chain: the first's `_optionalResult` local
-        // becomes the receiver the second caches and nil-checks, rather than a nested cached link inside
-        // a single guarded branch.
         var luauTree = Utility.GetLuauAST("a?[0]?[1]");
         Assert.Equal(5, luauTree.Statements.Count);
 
@@ -2499,9 +2477,6 @@ public class LuauGeneratorTest
         var condition = Assert.IsType<BinaryOperator>(ifStatement.Condition);
         Assert.Equal("a", Assert.IsType<Identifier>(condition.Left).Name);
 
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
         var call = Assert.IsType<Call>(thenAssignment.Right);
         var callee = Assert.IsType<ElementAccess>(call.Callee);
@@ -2523,10 +2498,7 @@ public class LuauGeneratorTest
         var firstResult = Assert.IsType<Identifier>(outerThenAssignment.Left).Name;
         var propAccess = Assert.IsType<PropertyAccess>(outerThenAssignment.Right);
         Assert.Equal(["b"], propAccess.Names);
-
-        // The dot chain's result lands in its own `_optionalResult` local, which the element-access
-        // chain then reuses directly as its receiver (PushToVariable no-ops on a plain identifier)
-        // rather than re-deriving `a.b`.
+        
         var innerIf = Assert.IsType<IfStatement>(luauTree.Statements[3]);
         var innerCondition = Assert.IsType<BinaryOperator>(innerIf.Condition);
         Assert.Equal(firstResult, Assert.IsType<Identifier>(innerCondition.Left).Name);

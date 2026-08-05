@@ -1,9 +1,5 @@
-[serializable, packed]
-interface User {
-  id: u8;
-  name: string<u8>;
-  is_admin: bool;
-}
+interface Inner { c: number }
+interface Outer { b: Inner? }
 
-let user = new User { id: 69, name: "Shan", is_admin: true};
-let serialized = serialize_binary(user);
+let a: Outer? = none
+let x = a?.b?.c

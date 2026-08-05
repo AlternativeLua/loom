@@ -2,19 +2,15 @@ const collection_service = game:GetService("CollectionService")
 for _, obj in collection_service:GetTagged("Lava") do
   if not (typeof(obj) == "Instance" and obj:IsA("BasePart")) then continue end
   obj.Touched:Connect(function(hit)
-    local _optionalResult
-    const _optional = hit.parent
-    if _optional ~= nil then
-      _optionalResult = _optional:FindFirstChildOfClass("Humanoid")
-    else
-      _optionalResult = nil
+    local _result
+    const _target = hit.parent
+    if _target ~= nil then
+      _result = _target:FindFirstChildOfClass("Humanoid")
     end
-    local _optionalResult_1
-    if _optionalResult ~= nil then
-      _optionalResult_1 = _optionalResult:TakeDamage(100)
-    else
-      _optionalResult_1 = nil
+    local _result_1
+    if _result ~= nil then
+      _result_1 = _result:TakeDamage(100)
     end
-    return _optionalResult_1
+    return _result_1
   end)
 end

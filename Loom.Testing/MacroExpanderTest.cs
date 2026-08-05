@@ -569,9 +569,6 @@ public class MacroExpanderTest
         Assert.Equal(4, luauTree.Statements.Count);
 
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
         var unaryOperator = Assert.IsType<UnaryOperator>(thenAssignment.Right);
         Assert.Equal("#", unaryOperator.Operator);
@@ -587,9 +584,6 @@ public class MacroExpanderTest
         Assert.Equal(4, luauTree.Statements.Count);
 
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
         var tableCall = Assert.IsType<Call>(thenAssignment.Right);
         var callee = Assert.IsType<PropertyAccess>(tableCall.Callee);
@@ -613,31 +607,23 @@ public class MacroExpanderTest
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
         var outerIf = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
-
-        // `foo.bar` is the already-accessed link the nested `?.length` reuses, so it's cached into a
-        // local rather than re-emitted for both the nil-check and the final access.
+        
         var cachedLink = Assert.IsType<ConstVariable>(outerIf.ThenBranch.Statements[0]);
-        Assert.Equal("_optional", cachedLink.Name);
+        Assert.Equal("_target", cachedLink.Name);
         var cachedLinkAccess = Assert.IsType<PropertyAccess>(cachedLink.Initializer);
         Assert.Equal("bar", Assert.Single(cachedLinkAccess.Names));
         Assert.Equal("foo", Assert.IsType<Identifier>(cachedLinkAccess.Target).Name);
 
         var innerIf = Assert.IsType<IfStatement>(outerIf.ThenBranch.Statements[1]);
-        var innerElseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(innerElseAssignment.Right);
-
         var innerThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ThenBranch.Statements[0]).Expression);
         var unaryOperator = Assert.IsType<UnaryOperator>(innerThenAssignment.Right);
         Assert.Equal("#", unaryOperator.Operator);
-        Assert.Equal("_optional", Assert.IsType<Identifier>(unaryOperator.Operand).Name);
+        Assert.Equal("_target", Assert.IsType<Identifier>(unaryOperator.Operand).Name);
     }
 
     [Fact]
     public void Generates_Array_Length_ThroughOptionalChain_MixedWithPlainAccess()
     {
-        // Unlike the nested case above, 'bar' itself is non-optional here - only 'foo' can be nil - so
-        // once 'foo?.' has been satisfied, the plain '.length' that follows is genuinely safe rather than
-        // exploiting the gap this shape used to test.
         const string source = """
             interface Foo {
                 mut bar: number[];
@@ -650,9 +636,6 @@ public class MacroExpanderTest
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
         var unaryOperator = Assert.IsType<UnaryOperator>(thenAssignment.Right);
         Assert.Equal("#", unaryOperator.Operator);
@@ -677,9 +660,6 @@ public class MacroExpanderTest
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
-        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
-        Assert.IsType<NilLiteral>(elseAssignment.Right);
-
         var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
         var access = Assert.IsType<PropertyAccess>(thenAssignment.Right);
         Assert.Equal("name", Assert.Single(access.Names));

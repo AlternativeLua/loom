@@ -5,15 +5,11 @@ type Outer = {
   read b: Inner?,
 }
 const a: Outer? = nil
-local _optionalResult
+local _result
 if a ~= nil then
-  const _optional = a.b
-  if _optional ~= nil then
-    _optionalResult = _optional.c
-  else
-    _optionalResult = nil
+  const _target = a.b
+  if _target ~= nil then
+    _result = _target.c
   end
-else
-  _optionalResult = nil
 end
-const x = _optionalResult
+const x = _result

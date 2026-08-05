@@ -2,16 +2,12 @@ type Inner = {
   read value: number,
 }
 const a: { { Inner }? }? = nil
-local _optionalResult
+local _result
 if a ~= nil then
-  _optionalResult = a[0]
-else
-  _optionalResult = nil
+  _result = a[0]
 end
-local _optionalResult_1
-if _optionalResult ~= nil then
-  _optionalResult_1 = _optionalResult[0]
-else
-  _optionalResult_1 = nil
+local _result_1
+if _result ~= nil then
+  _result_1 = _result[0]
 end
-const x = _optionalResult_1
+const x = _result_1
