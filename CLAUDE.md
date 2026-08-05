@@ -39,7 +39,9 @@ before claiming done.
       support modules
 - `Loom.Luau/` — Luau output AST + renderer (`LuauFactory`, `RenderState`, `AST/`)
 - `Loom.Config/` — `loom-config.toml` reader (Tomlyn). `ProjectType` (default `game`), `Debug` (default `false`, for emitting debug diagnostics) `FilesConfig`:
-  `SourceDirectory` (default `src`) → `OutputDirectory` (default `dist`)
+  `SourceDirectory` (default `src`) → `OutputDirectory` (default `dist`). Package identity lives here too: `[package]` (`PackageConfig`, with `PackageName` and
+  semver `Version` value types, plus `Realm`), `[dependencies]` (`Dependency`), `[registry]` (`RegistryConfig`). `ConfigReader` never throws on a manifest
+  problem — malformed manifests come back as `null` plus `ConfigDiagnostic`s out of `LocateFromDirectory`
 - `Loom.CLI/` — entry point; locates config, compiles unit, prints debug info. `Include/loom_runtime.luau` = runtime support emitted alongside output
 - `Loom.TypeGenerator/` — Loom code generator to define types for the Roblox API; tests depend on these types to be generated to pass
 - `Loom.Tools/` — dev tooling (AST dump, snapshot generation)
@@ -88,4 +90,6 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
   ([FileManager.cs:19](Loom.Core/Pipeline/FileManager.cs)).
 - `Loom.TypeGenerator` generates intrinsic types from the Roblox API that the test suite relies on to pass. The intrinsics are stored in
   `Loom.Core/TypeChecking/Intrinsics`.
+- A Tomlyn `TomlConverter` may only read a *scalar* value. One that consumes a table (inline or not) desynchronizes the reader and silently swallows the
+  table that follows it — which is why `[dependencies]` binds as `Dictionary<string, object>` and is read in `ConfigReader` instead of by a converter.
 - PRs target `master`; open an issue before writing code (CONTRIBUTING.md).
