@@ -635,9 +635,12 @@ public class MacroExpanderTest
     [Fact]
     public void Generates_Array_Length_ThroughOptionalChain_MixedWithPlainAccess()
     {
+        // Unlike the nested case above, 'bar' itself is non-optional here - only 'foo' can be nil - so
+        // once 'foo?.' has been satisfied, the plain '.length' that follows is genuinely safe rather than
+        // exploiting the gap this shape used to test.
         const string source = """
             interface Foo {
-                mut bar: number[]?;
+                mut bar: number[];
             }
             let foo: Foo? = none as never as Foo?;
             foo?.bar.length

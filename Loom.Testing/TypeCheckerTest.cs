@@ -3863,6 +3863,51 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void ThrowsFor_PropertyAccess_OnOptionalTarget_WithoutOptionalChaining()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("interface Foo { bar: number } let x: Foo? = none; x.bar");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.PossiblyNoneAccess, "'Foo?' is possibly 'none'. Use '?.' to access 'bar'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_ElementAccess_OnOptionalTarget_WithoutOptionalChaining()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x: number[]? = none; x[0]");
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.PossiblyNoneAccess, "'number[]?' is possibly 'none'. Use '?[' to index a value that might be 'none'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_PlainAccess_AfterOptionalChain_WhenLinkIsStillNilable()
+    {
+        // 'a?.b' unwraps 'a', but 'b' is itself declared 'Inner?' - so the plain '.c' that follows is
+        // indexing a value that can still be none, and needs its own '?.' just as much as the first link.
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Inner { c: number }
+            interface Outer { b: Inner? }
+            let a: Outer? = none
+            a?.b.c
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.PossiblyNoneAccess, "'Inner?' is possibly 'none'. Use '?.' to access 'c'.");
+    }
+
+    [Fact]
+    public void DoesNotThrowFor_PropertyAccess_OnOptionalTarget_WithOptionalChaining()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("interface Foo { bar: number } let x: Foo? = none; x?.bar");
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void DoesNotThrowFor_ElementAccess_OnOptionalTarget_WithOptionalChaining()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics("let x: number[]? = none; x?[0]");
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
     public void Checks_After_PropagatesBodyType()
     {
         var type = Utility.GetLastStatementType("after 1 { 42 }");

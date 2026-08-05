@@ -124,6 +124,7 @@ public static class InternalCodes
     public const string RecursiveSerializableType = "L399";
     public const string AmbiguousSerializableUnion = "L39A";
     public const string InvalidSerializationRange = "L39B";
+    public const string PossiblyNoneAccess = "L39C";
 
     public const string SimplifiableCode = "L400";
 }

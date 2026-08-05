@@ -18,12 +18,21 @@ public sealed partial class TypeChecker
             return BindType(elementAccess, narrowedType);
 
         var type = Visit(elementAccess.Expression);
+        var isOptionalChain = elementAccess.IsOptional;
         if (elementAccess.IsOptional)
+        {
             type = type.NonNullable();
+        }
+        else if (Type.IsOptional(type))
+        {
+            _diagnostics.Error(elementAccess, InternalCodes.PossiblyNoneAccess, $"'{type}' is possibly 'none'. Use '?[' to index a value that might be 'none'.");
+            isOptionalChain = true;
+            type = type.NonNullable();
+        }
 
         var indexType = Visit(elementAccess.IndexExpression);
         var result = GetElementAccessType(elementAccess, type, indexType);
-        if (elementAccess.IsOptional && !Type.IsNever(result))
+        if (isOptionalChain && !Type.IsNever(result))
             result = TypeSimplifier.Simplify(new Types.UnionType([result, Types.PrimitiveType.None]));
 
         return BindType(elementAccess, result);
@@ -126,6 +135,12 @@ public sealed partial class TypeChecker
         {
             if (name.IsOptional)
             {
+                isOptionalChain = true;
+                type = type.NonNullable();
+            }
+            else if (Type.IsOptional(type))
+            {
+                _diagnostics.Error(accessExpression, InternalCodes.PossiblyNoneAccess, $"'{type}' is possibly 'none'. Use '?.' to access '{name.Name.Text}'.");
                 isOptionalChain = true;
                 type = type.NonNullable();
             }
