@@ -9,7 +9,7 @@ namespace Loom.Core.Generation;
 ///     recursively into structs, unions, optionals, array elements and map entries rather than resending a
 ///     field wholesale. Reuses the ordinary per-field writer (<see cref="EmitValueWrite" />) wherever a
 ///     branch decides to resend something in full, so this file is purely the "did it change, and if not,
-///     dig deeper" orchestration on top of machinery <see cref="SerializationEmitter.Serializer" /> already
+///     dig deeper" orchestration on top of machinery the serializer already
 ///     has to get right.
 /// </summary>
 internal sealed partial class SerializationEmitter
@@ -58,7 +58,7 @@ internal sealed partial class SerializationEmitter
     }
 
     /// <summary>
-    ///     Allocates a scratch buffer of <paramref name="size" /> bytes and hands it to the write helper
+    ///     Allocates a scratch buffer of <c>size</c> bytes and hands it to the write helper
     ///     under <c>pcall</c>; a buffer that turned out too small throws, which is caught here and retried
     ///     at double the size. Converges in at most a couple of attempts even when the initial estimate is
     ///     badly off, and never in the common case where it wasn't.
@@ -135,10 +135,7 @@ internal sealed partial class SerializationEmitter
             return new Function(
                 DiffName(schema.Interface.Name),
                 null,
-                [
-                    new Parameter(BaselineParameter, new TypeName(schema.Interface.Name)),
-                    new Parameter(ValueParameter, new TypeName(schema.Interface.Name))
-                ],
+                [new Parameter(BaselineParameter, new TypeName(schema.Interface.Name)), new Parameter(ValueParameter, new TypeName(schema.Interface.Name))],
                 LuauFactory.QualifyRuntimeType(new TypeName("Serialized")),
                 new Chunk([new Return(Table.Empty)])
             );
@@ -197,10 +194,7 @@ internal sealed partial class SerializationEmitter
         return new Function(
             DiffName(schema.Interface.Name),
             null,
-            [
-                new Parameter(BaselineParameter, new TypeName(schema.Interface.Name)),
-                new Parameter(ValueParameter, new TypeName(schema.Interface.Name))
-            ],
+            [new Parameter(BaselineParameter, new TypeName(schema.Interface.Name)), new Parameter(ValueParameter, new TypeName(schema.Interface.Name))],
             LuauFactory.QualifyRuntimeType(new TypeName("Serialized")),
             new Chunk(body)
         );
@@ -352,6 +346,7 @@ internal sealed partial class SerializationEmitter
         body.Add(
             new ConstVariable(changed, null, new BinaryOperator(new Parenthesized(IsPresent(baselineValue)), "~=", new Parenthesized(IsPresent(currentValue))))
         );
+
         body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), _one, [], _zero))));
 
         var startBit = cursor.BitOffset;
@@ -497,6 +492,7 @@ internal sealed partial class SerializationEmitter
                 )
             )
         };
+
         body.Add(new ForStatement([currentKey, currentEntry], currentValue, new Chunk(classifyCurrent)));
 
         var baselineKey = ReserveLocal(leaf + "_baseline_key");
@@ -509,11 +505,38 @@ internal sealed partial class SerializationEmitter
                 null
             )
         };
+
         body.Add(new ForStatement([baselineKey], baselineValue, new Chunk(classifyBaseline)));
 
-        WriteMapKeyRun(map, removed, cursor, body, includeValue: false, recurseValue: false);
-        WriteMapKeyRun(map, added, cursor, body, includeValue: true, recurseValue: false, currentValue: currentValue);
-        WriteMapKeyRun(map, changed, cursor, body, includeValue: true, recurseValue: true, baselineValue: baselineValue, currentValue: currentValue);
+        WriteMapKeyRun(
+            map,
+            removed,
+            cursor,
+            body,
+            includeValue: false,
+            recurseValue: false
+        );
+
+        WriteMapKeyRun(
+            map,
+            added,
+            cursor,
+            body,
+            includeValue: true,
+            recurseValue: false,
+            currentValue: currentValue
+        );
+
+        WriteMapKeyRun(
+            map,
+            changed,
+            cursor,
+            body,
+            includeValue: true,
+            recurseValue: true,
+            baselineValue: baselineValue,
+            currentValue: currentValue
+        );
     }
 
     /// <summary>One of a map diff's three count-prefixed sections: a run of keys, optionally paired with a value.</summary>
@@ -554,6 +577,7 @@ internal sealed partial class SerializationEmitter
                 cursor,
                 loopBody
             );
+
             restore();
         }
 

@@ -90,7 +90,6 @@ public static partial class ConfigReader
         }
 
         ReadDependencies(config, diagnostics);
-
         if (config.Registry != null && !IsFetchableUrl(config.Registry.Index))
             diagnostics.Add(new ConfigDiagnostic($"invalid registry index '{config.Registry.Index}'; expected an http or https URL."));
     }
@@ -106,8 +105,7 @@ public static partial class ConfigReader
             }
 
             var dependency = ReadDependency(name, source, diagnostics);
-            if (dependency == null)
-                continue;
+            if (dependency == null) continue;
 
             // specifiers differing only in case name the same package, so one of them has to go.
             if (!config.Dependencies.TryAdd(name, dependency))
@@ -117,21 +115,16 @@ public static partial class ConfigReader
 
     private static Dependency? ReadDependency(PackageName name, object source, List<ConfigDiagnostic> diagnostics)
     {
-        switch (source)
+        return source switch
         {
-            case string requirement:
-                return IsVersionRequirement(requirement)
-                    ? new Dependency(name, requirement)
-                    : Reject(name, $"invalid version requirement '{requirement}'; expected something like \"^1.2\" or \">=0.4.0\".");
+            string requirement => IsVersionRequirement(requirement)
+                ? new Dependency(name, requirement)
+                : reject(name, $"invalid version requirement '{requirement}'; expected something like \"^1.2\" or \">=0.4.0\"."),
+            TomlTable table => ReadDependencyTable(name, table, diagnostics),
+            _ => reject(name, $"must be a version requirement string or a table with a '{VersionKey}' key.")
+        };
 
-            case TomlTable table:
-                return ReadDependencyTable(name, table, diagnostics);
-
-            default:
-                return Reject(name, $"must be a version requirement string or a table with a '{VersionKey}' key.");
-        }
-
-        Dependency? Reject(PackageName dependencyName, string message)
+        Dependency? reject(PackageName dependencyName, string message)
         {
             diagnostics.Add(new ConfigDiagnostic($"dependency '{dependencyName}' {message}"));
             return null;
@@ -141,8 +134,10 @@ public static partial class ConfigReader
     private static Dependency? ReadDependencyTable(PackageName name, TomlTable table, List<ConfigDiagnostic> diagnostics)
     {
         var reported = diagnostics.Count;
-        foreach (var key in table.Keys.Where(key => key is not (VersionKey or DevelopmentKey)))
-            diagnostics.Add(new ConfigDiagnostic($"dependency '{name}' has an unknown key '{key}'; expected '{VersionKey}' or '{DevelopmentKey}'."));
+        diagnostics.AddRange(
+            table.Keys.Where(key => key is not (VersionKey or DevelopmentKey))
+                .Select(key => new ConfigDiagnostic($"dependency '{name}' has an unknown key '{key}'; expected '{VersionKey}' or '{DevelopmentKey}'."))
+        );
 
         var isDevelopmentOnly = false;
         if (table.TryGetValue(DevelopmentKey, out var development))
@@ -177,6 +172,5 @@ public static partial class ConfigReader
 
     private static bool IsEdition(string edition) => edition.Length == EditionLength && edition.All(char.IsAsciiDigit);
 
-    private static bool IsFetchableUrl(string url) =>
-        Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
+    private static bool IsFetchableUrl(string url) => Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
 }

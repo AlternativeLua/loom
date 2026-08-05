@@ -2,6 +2,7 @@ using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Resolving;
 using Loom.Core.Resolving.Symbols;
+// ReSharper disable InvalidXmlDocComment
 
 namespace Loom.Core.TypeChecking.Serialization;
 

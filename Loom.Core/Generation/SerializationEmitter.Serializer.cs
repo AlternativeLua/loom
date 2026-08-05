@@ -7,6 +7,8 @@ namespace Loom.Core.Generation;
 /// <summary>Writing: size computation, the sentinel and union prologue, and per-field writes.</summary>
 internal sealed partial class SerializationEmitter
 {
+    private static readonly List<string> _cframeSentinels = ["CFrame.identity"];
+
     public Function EmitSerializer()
     {
         _locals.Clear();
@@ -64,11 +66,7 @@ internal sealed partial class SerializationEmitter
             {
                 var condition = new BinaryOperator(new Identifier(valueLocal), "==", new Identifier(sentinels[index]));
                 var assign = new Chunk(
-                    [
-                        new ExpressionStatement(
-                            new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "=", new NumberLiteral(index + 1))
-                        )
-                    ]
+                    [new ExpressionStatement(new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "=", new NumberLiteral(index + 1)))]
                 );
 
                 if (index == 0)
@@ -84,7 +82,7 @@ internal sealed partial class SerializationEmitter
         serializationField switch
         {
             DatatypeField { UseSentinels: true } datatypeField => datatypeField.Datatype.Sentinels,
-            CFrameField { UseSentinels: true } => CFrameSentinels,
+            CFrameField { UseSentinels: true } => _cframeSentinels,
             _ => null
         };
 
@@ -290,10 +288,7 @@ internal sealed partial class SerializationEmitter
 
             var keyLocal = ReserveLocal(LeafName(mapField.Key.Path));
             var valueLocal = ReserveLocal(LeafName(mapField.Value.Path));
-            var pairStatements = new List<LuauStatement>
-            {
-                new ExpressionStatement(new BinaryOperator(new Identifier(countLocal), "+=", _one))
-            };
+            var pairStatements = new List<LuauStatement> { new ExpressionStatement(new BinaryOperator(new Identifier(countLocal), "+=", _one)) };
 
             MeasureField(mapField.Key, new Identifier(keyLocal), pairStatements);
             MeasureField(mapField.Value, new Identifier(valueLocal), pairStatements);
@@ -350,19 +345,17 @@ internal sealed partial class SerializationEmitter
         statements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(SizeLocal), "+=", amount)));
     }
 
-    private static readonly List<string> CFrameSentinels = ["CFrame.identity"];
-
     /// <summary>Bytes a sentinelled field writes when nothing matched and its components go out in full.</summary>
     private static int SentinelComponentBytes(SerializationField serializationField) =>
         serializationField switch
         {
             DatatypeField datatypeField => datatypeField.Datatype.Components.Count * datatypeField.NumberType.ByteCount(),
+
             // Position components plus, for Compressed, the packed rotation now living in the body.
             CFrameField cframeField => cframeField.ComponentCount * cframeField.NumberType.ByteCount()
                 + (cframeField.Encoding == CFrameEncoding.Compressed ? sizeof(uint) : 0),
             _ => 0
         };
-
 
     /// <summary>
     ///     Reserves the bit block a collection's entries share, returning its origin in bits, or null when
@@ -394,7 +387,9 @@ internal sealed partial class SerializationEmitter
     private static Action EnterElement(Cursor cursor, LuauExpression? bitBase, int bitsPerElement, string loopLocal)
     {
         if (bitBase == null)
-            return () => { };
+            return () =>
+            {
+            };
 
         var previousBase = cursor.BitBase;
         var previousOffset = cursor.BitOffset;
@@ -418,11 +413,11 @@ internal sealed partial class SerializationEmitter
                 new NumberLiteral(8)
             );
 
-    private static BinaryOperator FloorDivide(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "//", right);
+    private static BinaryOperator FloorDivide(LuauExpression left, LuauExpression right) => new(left, "//", right);
 
-    private static UnaryOperator Length(LuauExpression value) => new UnaryOperator("#", value);
+    private static UnaryOperator Length(LuauExpression value) => new("#", value);
 
-    private static BinaryOperator IsPresent(LuauExpression value) => new BinaryOperator(value, "~=", new NilLiteral());
+    private static BinaryOperator IsPresent(LuauExpression value) => new(value, "~=", new NilLiteral());
 
     /// <summary>
     ///     An all-zero-width type sends no buffer, and a type with no blob fields sends no blobs array.
@@ -452,8 +447,7 @@ internal sealed partial class SerializationEmitter
         switch (serializationField)
         {
             // Pinned by its type - the reader rebuilds it as a constant, so nothing goes on the wire.
-            case ConstantField:
-                return;
+            case ConstantField: return;
 
             case BoolField:
                 body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(value, _one, [], _zero))));
@@ -495,6 +489,7 @@ internal sealed partial class SerializationEmitter
                 var present = new List<LuauStatement>();
                 foreach (var (inner, innerValue) in ChildrenOf(optionalField, value))
                     EmitValueWrite(inner, innerValue, cursor, present);
+
                 body.Add(new IfStatement(IsPresent(value), new Chunk(present), [], null));
 
                 return;
@@ -584,7 +579,7 @@ internal sealed partial class SerializationEmitter
                 return;
             }
 
-            case DatatypeField datatypeField when !datatypeField.UseSentinels:
+            case DatatypeField { UseSentinels: false } datatypeField:
             {
                 var bound = BindIfReused(value, datatypeField.Datatype.Components.Count, LeafName(datatypeField.Path), body);
                 foreach (var component in datatypeField.Datatype.Components)

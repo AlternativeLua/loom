@@ -511,13 +511,7 @@ public class TypeCheckerTest
     }
 
     [Fact]
-    public void Allows_ForLoop_OverRange()
-    {
-        // Regression guard for a fix adjacent to the interface-vs-object mismatch above: checking that a
-        // for-loop's collection is at least object-shaped unifies an interface against the literally empty
-        // object type in whichever argument order the two happened to arrive in. Getting that order backwards
-        // makes the empty side look like it's missing every one of the populated side's properties, since an
-        // interface's own properties are never assignable *to* the specific properties of an empty object.
+    public void Allows_ForLoop_OverRange() =>
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(
                 """
@@ -527,7 +521,6 @@ public class TypeCheckerTest
                 """
             )
         );
-    }
 
     [Fact]
     public void ThrowsFor_FunctionCall_IncorrectGenericArity()

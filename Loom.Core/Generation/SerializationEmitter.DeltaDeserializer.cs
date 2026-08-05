@@ -5,7 +5,7 @@ using Loom.Luau.AST;
 namespace Loom.Core.Generation;
 
 /// <summary>
-///     Reading a delta: mirrors <see cref="SerializationEmitter.DeltaSerializer" /> field for field, reusing
+///     Reading a delta: mirrors the serialization process field for field, reusing
 ///     the ordinary <see cref="EmitRead" /> wherever a branch resends something in full, and falling back to
 ///     the baseline's own value - or a further recursive read - wherever it did not.
 /// </summary>
@@ -276,26 +276,32 @@ internal sealed partial class SerializationEmitter
         Cursor cursor,
         List<LuauStatement> statements)
     {
-        if (union.Discrimination == UnionDiscrimination.LiteralValue)
-            return ToLiteral(variant.Discriminant);
-
-        if (union.Discrimination == UnionDiscrimination.RuntimeKind)
+        switch (union.Discrimination)
         {
-            if (variant.Fields is not [var onlyField])
-                return new NilLiteral();
+            case UnionDiscrimination.LiteralValue:
+                return ToLiteral(variant.Discriminant);
+            case UnionDiscrimination.RuntimeKind:
+            {
+                if (variant.Fields is not [var onlyField])
+                    return new NilLiteral();
 
-            var fieldBaseline = AccessRelative(baselineValue, onlyField.Path, union.Path);
-            return EmitFieldDiffRead(onlyField, fieldBaseline, cursor, statements);
+                var fieldBaseline = AccessRelative(baselineValue, onlyField.Path, union.Path);
+                return EmitFieldDiffRead(onlyField, fieldBaseline, cursor, statements);
+            }
+            case UnionDiscrimination.Discriminant:
+            default:
+            {
+                var initializers = new List<TableInitializer> { new PropertyTableInitializer(union.DiscriminantName!, ToLiteral(variant.Discriminant)) };
+                initializers.AddRange(
+                    (
+                        from variantField in variant.Fields
+                        let fieldBaseline = AccessRelative(baselineValue, variantField.Path, union.Path)
+                        select new PropertyTableInitializer(LeafName(variantField.Path), EmitFieldDiffRead(variantField, fieldBaseline, cursor, statements)))
+                );
+
+                return new Table(initializers);
+            }
         }
-
-        var initializers = new List<TableInitializer> { new PropertyTableInitializer(union.DiscriminantName!, ToLiteral(variant.Discriminant)) };
-        foreach (var variantField in variant.Fields)
-        {
-            var fieldBaseline = AccessRelative(baselineValue, variantField.Path, union.Path);
-            initializers.Add(new PropertyTableInitializer(LeafName(variantField.Path), EmitFieldDiffRead(variantField, fieldBaseline, cursor, statements)));
-        }
-
-        return new Table(initializers);
     }
 
     private Identifier EmitArrayDiffRead(ArrayField array, LuauExpression baselineValue, Cursor cursor, List<LuauStatement> statements)

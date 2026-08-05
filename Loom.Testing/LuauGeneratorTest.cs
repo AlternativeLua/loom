@@ -4137,22 +4137,29 @@ public class LuauGeneratorTest
         var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
 
         var typeofStrings = new List<string>();
-        void CollectTypeofStrings(LuauExpression expr)
+
+        collectTypeofStrings(ifStatement.Condition);
+        Assert.Equal(["number", "string", "boolean"], typeofStrings);
+        return;
+
+        void collectTypeofStrings(LuauExpression expr)
         {
-            switch (expr)
+            while (true)
             {
-                case BinaryOperator { Operator: "or" } or:
-                    CollectTypeofStrings(or.Left);
-                    CollectTypeofStrings(or.Right);
-                    break;
-                case BinaryOperator { Operator: "==", Right: StringLiteral literal }:
-                    typeofStrings.Add(literal.Value);
-                    break;
+                switch (expr)
+                {
+                    case BinaryOperator { Operator: "or" } or:
+                        collectTypeofStrings(or.Left);
+                        expr = or.Right;
+                        continue;
+                    case BinaryOperator { Operator: "==", Right: StringLiteral literal }:
+                        typeofStrings.Add(literal.Value);
+                        break;
+                }
+
+                break;
             }
         }
-
-        CollectTypeofStrings(ifStatement.Condition);
-        Assert.Equal(["number", "string", "boolean"], typeofStrings);
     }
 
     [Fact]
@@ -4173,22 +4180,29 @@ public class LuauGeneratorTest
         Assert.Equal("and", condition.Operator);
 
         var fieldChecks = new List<string>();
-        void CollectFieldAccesses(LuauExpression expr)
+
+        collectFieldAccesses(condition);
+        Assert.Equal(["name", "age"], fieldChecks);
+        return;
+
+        void collectFieldAccesses(LuauExpression expr)
         {
-            switch (expr)
+            while (true)
             {
-                case BinaryOperator { Operator: "and" } and:
-                    CollectFieldAccesses(and.Left);
-                    CollectFieldAccesses(and.Right);
-                    break;
-                case BinaryOperator { Operator: "~=", Left: PropertyAccess property }:
-                    fieldChecks.Add(property.Names.Single());
-                    break;
+                switch (expr)
+                {
+                    case BinaryOperator { Operator: "and" } and:
+                        collectFieldAccesses(and.Left);
+                        expr = and.Right;
+                        continue;
+                    case BinaryOperator { Operator: "~=", Left: PropertyAccess property }:
+                        fieldChecks.Add(property.Names.Single());
+                        break;
+                }
+
+                break;
             }
         }
-
-        CollectFieldAccesses(condition);
-        Assert.Equal(["name", "age"], fieldChecks);
     }
 
     [Fact]

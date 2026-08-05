@@ -1,3 +1,4 @@
+// ReSharper disable UnusedAutoPropertyAccessor.Local
 using System.Reflection;
 using Loom.Core.Debug;
 using Loom.Core.Diagnostics;
@@ -183,6 +184,7 @@ public class AstInspectorTest
     private sealed class InspectorTestType(string typeName)
         : TypeExpression([], [])
     {
+        // ReSharper disable once UnusedMember.Local
         public string TypeName { get; } = typeName;
 
         public override T Accept<T>(Visitor<T> visitor) => throw new NotImplementedException();
