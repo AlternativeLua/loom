@@ -13,3 +13,8 @@ interface Canvas {
     masks: bool[][];
     shapes: (Dot | Line)[];
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Canvas);
+    let restored = deserialize_binary::<Canvas>(payload);
+}

@@ -3,3 +3,8 @@ interface Counter {
     [number_range(0, 4294967295)]
     total: number;
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Counter);
+    let restored = deserialize_binary::<Counter>(payload);
+}

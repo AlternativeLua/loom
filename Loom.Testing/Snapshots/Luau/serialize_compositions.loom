@@ -11,3 +11,10 @@ interface Compositions {
     maybe_leaf: Leaf?;
     maybe_names: string[]?;
 }
+
+fn _trigger_usage(): void {
+    let leaf_payload = serialize_binary(none as never as Leaf);
+    let leaf_restored = deserialize_binary::<Leaf>(leaf_payload);
+    let compositions_payload = serialize_binary(none as never as Compositions);
+    let compositions_restored = deserialize_binary::<Compositions>(compositions_payload);
+}

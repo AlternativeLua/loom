@@ -5,3 +5,8 @@ interface Payload {
     extra: unknown;
     target: Instance;
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Payload);
+    let restored = deserialize_binary::<Payload>(payload);
+}

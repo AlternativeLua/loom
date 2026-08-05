@@ -55,6 +55,12 @@ public sealed partial class LuauGenerator
     public LuauGeneratorResult Generate()
     {
         var moduleImports = _moduleGenerator.GenerateImports();
+
+        // Ahead of the walk, since a call reaching an interface can appear earlier in the file than its
+        // own declaration - EmitSerializers needs the full picture already in hand by the time it decides
+        // what a given interface's codec actually needs to cover.
+        CollectSerializationUsage();
+
         var luauTree = VisitTree(_semanticModel.Tree);
 
         // Both are hoisted after the walk, because what a file needs is only known once every

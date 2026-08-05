@@ -29,6 +29,14 @@ public sealed record SemanticModel(Tree Tree, DiagnosticBag Diagnostics, SymbolT
     /// </summary>
     public List<InterfaceType> SerializerMaps { get; } = [];
 
+    /// <summary>
+    ///     Which of each <c>[serializable]</c> interface's codec pieces this file's own calls actually
+    ///     reach, collected before generation so <c>EmitSerializers</c> only emits those. An interface
+    ///     absent here has no local usage at all - not the same as <see cref="SerializationUsage.None" />,
+    ///     which would mean "checked and found nothing" rather than "never checked".
+    /// </summary>
+    public Dictionary<InterfaceSymbol, SerializationUsage> SerializationUsages { get; } = [];
+
     private Dictionary<string, List<ExportBinding>> ExportsByName { get; } = [];
 
     public List<ImportBinding> ImportBindings { get; } = [];

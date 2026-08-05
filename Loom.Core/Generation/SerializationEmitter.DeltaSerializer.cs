@@ -183,7 +183,7 @@ internal sealed partial class SerializationEmitter
             new ExpressionStatement(
                 BufferCall(
                     "copy",
-                    [new Identifier(resultLocal), Zero, new Identifier(scratchLocal), Zero, new Identifier(writtenLocal)]
+                    [new Identifier(resultLocal), _zero, new Identifier(scratchLocal), _zero, new Identifier(writtenLocal)]
                 )
             )
         );
@@ -212,7 +212,7 @@ internal sealed partial class SerializationEmitter
     private static LuauExpression BufferLenOf(string serializedLocal)
     {
         var buffer = new PropertyAccess(new Identifier(serializedLocal), ["buffer"]);
-        return new IfExpression(IsPresent(buffer), BufferLenCall(buffer), [], Zero);
+        return new IfExpression(IsPresent(buffer), BufferLenCall(buffer), [], _zero);
     }
 
     private static Call BufferLenCall(LuauExpression buffer) => new(new PropertyAccess(new Identifier("buffer"), ["len"]), [buffer]);
@@ -231,7 +231,7 @@ internal sealed partial class SerializationEmitter
         var valueLocal = ReserveLocal(preferredName + "_value");
         var tagLocal = ReserveLocal(preferredName);
         body.Add(new ConstVariable(valueLocal, null, value));
-        body.Add(new LocalVariable(tagLocal, null, Zero));
+        body.Add(new LocalVariable(tagLocal, null, _zero));
 
         var branches = new List<ElseIfBranch>();
         for (var index = 1; index < unionField.Variants.Count; index++)
@@ -302,7 +302,7 @@ internal sealed partial class SerializationEmitter
         var leaf = LeafName(field.Path);
         var changed = ReserveLocal(leaf + "_changed");
         body.Add(new ConstVariable(changed, null, new UnaryOperator("not ", DeepEqual(baselineValue, currentValue))));
-        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), One, [], Zero))));
+        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), _one, [], _zero))));
 
         var resend = new List<LuauStatement>();
         ResolveSentinel(field, currentValue, resend);
@@ -326,7 +326,7 @@ internal sealed partial class SerializationEmitter
         var valueLocal = SentinelValueLocal(field.Path);
         var indexLocal = SentinelIndexLocal(field.Path);
         body.Add(new ConstVariable(valueLocal, null, value));
-        body.Add(new LocalVariable(indexLocal, null, Zero));
+        body.Add(new LocalVariable(indexLocal, null, _zero));
 
         var branches = new List<ElseIfBranch>();
         for (var index = 0; index < sentinels.Count; index++)
@@ -352,7 +352,7 @@ internal sealed partial class SerializationEmitter
         body.Add(
             new ConstVariable(changed, null, new BinaryOperator(new Parenthesized(IsPresent(baselineValue)), "~=", new Parenthesized(IsPresent(currentValue))))
         );
-        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), One, [], Zero))));
+        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), _one, [], _zero))));
 
         var startBit = cursor.BitOffset;
         var widestBit = startBit;
@@ -387,7 +387,7 @@ internal sealed partial class SerializationEmitter
         var currentTag = ResolveUnionTag(union, currentValue, leaf + "_tag_c", body);
         var changed = ReserveLocal(leaf + "_tag_changed");
         body.Add(new ConstVariable(changed, null, new BinaryOperator(baselineTag, "~=", currentTag)));
-        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), One, [], Zero))));
+        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), _one, [], _zero))));
 
         var startBit = cursor.BitOffset;
         var widestBit = startBit;
@@ -437,7 +437,7 @@ internal sealed partial class SerializationEmitter
         var leaf = LeafName(array.Path);
         var changed = ReserveLocal(leaf + "_length_changed");
         body.Add(new ConstVariable(changed, null, new BinaryOperator(Length(baselineValue), "~=", Length(currentValue))));
-        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), One, [], Zero))));
+        body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(new Identifier(changed), _one, [], _zero))));
 
         var resend = new List<LuauStatement>();
         EmitValueWrite(array, currentValue, cursor, resend);
@@ -451,7 +451,7 @@ internal sealed partial class SerializationEmitter
         var restore = EnterElement(cursor, bitBase, array.Element.DiffHeaderBits, loop);
         EmitFieldDiffWrite(array.Element, elementBaseline, elementCurrent, cursor, elementBody);
         restore();
-        unchanged.Add(new NumericForStatement(loop, One, Length(currentValue), null, new Chunk(elementBody)));
+        unchanged.Add(new NumericForStatement(loop, _one, Length(currentValue), null, new Chunk(elementBody)));
 
         body.Add(new IfStatement(new Identifier(changed), new Chunk(resend), [], new Chunk(unchanged)));
     }
@@ -539,7 +539,7 @@ internal sealed partial class SerializationEmitter
         if (includeValue && !recurseValue)
         {
             EmitValueWrite(map.Value, new ElementAccess(currentValue!, new Identifier(boundKey)), cursor, loopBody);
-            body.Add(new NumericForStatement(loop, One, count, null, new Chunk(loopBody)));
+            body.Add(new NumericForStatement(loop, _one, count, null, new Chunk(loopBody)));
             return;
         }
 
@@ -557,6 +557,6 @@ internal sealed partial class SerializationEmitter
             restore();
         }
 
-        body.Add(new NumericForStatement(loop, One, count, null, new Chunk(loopBody)));
+        body.Add(new NumericForStatement(loop, _one, count, null, new Chunk(loopBody)));
     }
 }

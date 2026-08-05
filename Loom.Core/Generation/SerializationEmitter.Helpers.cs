@@ -7,10 +7,10 @@ namespace Loom.Core.Generation;
 /// <summary>Shared pieces: the offset cursor, local-name reservation, and expression builders.</summary>
 internal sealed partial class SerializationEmitter
 {
-    private static readonly List<string> CFramePositionComponents = ["X", "Y", "Z"];
-    private static readonly List<string> QuaternionLocals = ["qx", "qy", "qz", "qw"];
-    private static readonly NumberLiteral Zero = new(0);
-    private static readonly NumberLiteral One = new(1);
+    private static readonly List<string> _cFramePositionComponents = ["X", "Y", "Z"];
+    private static readonly List<string> _quaternionLocals = ["qx", "qy", "qz", "qw"];
+    private static readonly NumberLiteral _zero = new(0);
+    private static readonly NumberLiteral _one = new(1);
 
     /// <summary>Running header-bit and body-byte positions, both compile-time constants.</summary>
     /// <summary>
@@ -62,6 +62,13 @@ internal sealed partial class SerializationEmitter
             IsDynamic = true;
         }
     }
+
+    /// <summary>
+    ///     Whether a field ever claims header bits or body bytes on its own. A collection whose element (or
+    ///     key and value) is entirely blobs/constants writes nothing to the buffer regardless of how many
+    ///     entries it has at runtime, so the cursor never needs to leave its compile-time constant behind.
+    /// </summary>
+    private static bool NeedsBufferSpace(SerializationField field) => field.BodyBytes != 0 || field.HeaderBits != 0;
 
     /// <summary>Binds an expression to a local when it is about to be read more than once.</summary>
     private LuauExpression BindIfReused(LuauExpression value, int uses, string preferred, List<LuauStatement> body)
@@ -169,7 +176,7 @@ internal sealed partial class SerializationEmitter
     private static BinaryOperator Subtract(LuauExpression left, LuauExpression right) => new BinaryOperator(left, "-", right);
     private static LuauExpression Multiply(LuauExpression left, LuauExpression right) =>
         IsNumber(left, 0) || IsNumber(right, 0)
-            ? Zero
+            ? _zero
             : IsNumber(left, 1) ? right : IsNumber(right, 1) ? left : new BinaryOperator(left, "*", right);
 
     private static bool IsNumber(LuauExpression expression, double value) => expression is NumberLiteral literal && literal.Value.Equals(value);

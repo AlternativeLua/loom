@@ -52,7 +52,7 @@ public sealed partial class LuauGenerator
         if (IsSerializationOnlyArrayAlias(symbol) && typeName.TypeArguments?.ArgumentsList is [var elementType, ..])
             return TableType.Array(Visit(elementType));
 
-        var typeArguments = typeName.TypeArguments?.ArgumentsList.ConvertAll(Visit);
+        var typeArguments = typeName.TypeArguments?.ArgumentsList?.ConvertAll(Visit);
 
         // Vector3/Vector2/CFrame's width parameter is the same kind of Loom-only metadata - Roblox's
         // real datatype has no type parameter, so an explicit 'Vector3<i16>' still has to reach Luau as

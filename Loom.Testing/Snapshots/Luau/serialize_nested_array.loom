@@ -1,1 +1,6 @@
 [serializable] interface Grid { rows: string[][] }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Grid);
+    let restored = deserialize_binary::<Grid>(payload);
+}

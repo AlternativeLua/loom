@@ -353,7 +353,16 @@ public class SerializationSchemaTest
     [Fact]
     public void ArrayOfStrings_MeasuresByWalkingTheValue()
     {
-        var luau = Utility.GetLuauAST("[serializable] interface Names { values: string[] }", true).Render();
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Names { values: string[] }
+
+                let payload = serialize_binary(none as never as Names);
+                let restored = deserialize_binary::<Names>(payload);
+                """,
+                true
+            )
+            .Render();
 
         // A variable-width element cannot state its width as an expression, so the total is accumulated
         // by walking the value before the buffer is allocated.
@@ -371,7 +380,16 @@ public class SerializationSchemaTest
     [InlineData("value: bool[]?")]
     public void ArrayOfBitFields_PacksIntoASharedBlock(string property)
     {
-        var luau = Utility.GetLuauAST($"[serializable] interface Probe {{ {property} }}", true).Render();
+        var luau = Utility.GetLuauAST(
+                $$"""
+                [serializable] interface Probe {{{property}}}
+
+                let payload = serialize_binary(none as never as Probe);
+                let restored = deserialize_binary::<Probe>(payload);
+                """,
+                true
+            )
+            .Render();
 
         // Entries share a block reserved after the length prefix, so the bodies stay byte-aligned and
         // eight bools cost one byte rather than eight.
@@ -387,6 +405,9 @@ public class SerializationSchemaTest
                 [serializable] interface Scores {
                     values: u8[];
                 }
+
+                let payload = serialize_binary(none as never as Scores);
+                let restored = deserialize_binary::<Scores>(payload);
                 """,
                 true
             )
@@ -408,6 +429,9 @@ public class SerializationSchemaTest
                 [serializable, packed] interface Entity {
                     position: Vector3<i16>;
                 }
+
+                let payload = serialize_binary(none as never as Entity);
+                let restored = deserialize_binary::<Entity>(payload);
                 """,
                 true
             )
@@ -430,6 +454,9 @@ public class SerializationSchemaTest
                 [serializable, packed] interface Waypoint {
                     frame: CFrame<f32>;
                 }
+
+                let payload = serialize_binary(none as never as Waypoint);
+                let restored = deserialize_binary::<Waypoint>(payload);
                 """,
                 true
             )
@@ -449,6 +476,9 @@ public class SerializationSchemaTest
                 [serializable] interface Entity {
                     target: i16?;
                 }
+
+                let payload = serialize_binary(none as never as Entity);
+                let restored = deserialize_binary::<Entity>(payload);
                 """,
                 true
             )
@@ -468,6 +498,9 @@ public class SerializationSchemaTest
         }
 
         [serializable] interface Envelope { action: LogOutAction | ClickAction }
+
+        let payload = serialize_binary(none as never as Envelope);
+        let restored = deserialize_binary::<Envelope>(payload);
         """;
 
     [Fact]
@@ -498,7 +531,16 @@ public class SerializationSchemaTest
     [Fact]
     public void LiteralUnion_IsTagOnly()
     {
-        var luau = Utility.GetLuauAST("[serializable] interface Paint { color: \"red\" | \"green\" | \"blue\" }", true).Render();
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Paint { color: "red" | "green" | "blue" }
+
+                let payload = serialize_binary(none as never as Paint);
+                let restored = deserialize_binary::<Paint>(payload);
+                """,
+                true
+            )
+            .Render();
 
         // Three variants fit in two bits and the value is the tag, so nothing follows it.
         Assert.Contains("buffer_writebits(b, 0, 2, color_tag)", luau);
@@ -509,7 +551,16 @@ public class SerializationSchemaTest
     [Fact]
     public void RuntimeKindUnion_DiscriminatesWithTypeof()
     {
-        var luau = Utility.GetLuauAST("[serializable] interface Cell { content: number | string }", true).Render();
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Cell { content: number | string }
+
+                let payload = serialize_binary(none as never as Cell);
+                let restored = deserialize_binary::<Cell>(payload);
+                """,
+                true
+            )
+            .Render();
 
         Assert.Contains("if typeof(content_value) == \"string\" then", luau);
 
@@ -566,14 +617,32 @@ public class SerializationSchemaTest
     {
         // Everything is allocated before a byte is written, so a width left out of the measure leaves
         // the buffer short and the writes running off the end.
-        var luau = Utility.GetLuauAST($"[serializable] interface Probe {{ {property} }}", true).Render();
+        var luau = Utility.GetLuauAST(
+                $$"""
+                [serializable] interface Probe {{{property}}}
+
+                let payload = serialize_binary(none as never as Probe);
+                let restored = deserialize_binary::<Probe>(payload);
+                """,
+                true
+            )
+            .Render();
         Assert.Contains(expected, luau);
     }
 
     [Fact]
     public void NestedArray_MeasuresWithALoopPerLevel()
     {
-        var luau = Utility.GetLuauAST("[serializable] interface Grid { rows: string[][] }", true).Render();
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Grid { rows: string[][] }
+
+                let payload = serialize_binary(none as never as Grid);
+                let restored = deserialize_binary::<Grid>(payload);
+                """,
+                true
+            )
+            .Render();
 
         // A counter per level, or an inner loop would clobber the outer's, and a length prefix per level.
         Assert.Contains("for i = 1, #value.rows do", luau);
@@ -612,6 +681,9 @@ public class SerializationSchemaTest
                     payload: Ping | Chat;
                     owner: Part;
                 }
+
+                let sink_payload = serialize_binary(none as never as KitchenSink);
+                let sink_restored = deserialize_binary::<KitchenSink>(sink_payload);
                 """,
                 true
             )
@@ -638,6 +710,9 @@ public class SerializationSchemaTest
                 }
 
                 [serializable] interface Outer { inner: Inner }
+
+                let payload = serialize_binary(none as never as Outer);
+                let restored = deserialize_binary::<Outer>(payload);
                 """,
                 true
             )
@@ -652,7 +727,16 @@ public class SerializationSchemaTest
     [Fact]
     public void InnerRead_DoesNotShadowItsAccumulator()
     {
-        var luau = Utility.GetLuauAST("[serializable] interface Probe { nickname: string? }", true).Render();
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Probe { nickname: string? }
+
+                let payload = serialize_binary(none as never as Probe);
+                let restored = deserialize_binary::<Probe>(payload);
+                """,
+                true
+            )
+            .Render();
 
         // The optional's accumulator and the string read filling it both want the leaf name; if the
         // inner binding shadows the outer, the assignment writes to itself and the value stays nil.
@@ -668,6 +752,9 @@ public class SerializationSchemaTest
                 """
                 [serializable] interface Profile { nickname: string? }
                 [serializable] interface Account { profile: Profile }
+
+                let payload = serialize_binary(none as never as Account);
+                let restored = deserialize_binary::<Account>(payload);
                 """,
                 true
             )
@@ -705,6 +792,9 @@ public class SerializationSchemaTest
                     [number_range(0, 4294967295)]
                     total: number;
                 }
+
+                let payload = serialize_binary(none as never as Counter);
+                let restored = deserialize_binary::<Counter>(payload);
                 """,
                 true
             )
@@ -731,7 +821,16 @@ public class SerializationSchemaTest
     [Fact]
     public void Map_EncodesAsCountPrefixedPairs()
     {
-        var luau = Utility.GetLuauAST("[serializable] interface Scores { entries: Record<string, number> }", true).Render();
+        var luau = Utility.GetLuauAST(
+                """
+                [serializable] interface Scores { entries: Record<string, number> }
+
+                let payload = serialize_binary(none as never as Scores);
+                let restored = deserialize_binary::<Scores>(payload);
+                """,
+                true
+            )
+            .Render();
 
         // A map has no length operator, so both phases count by walking. The write counts its own
         // rather than reusing the measure's, which is scoped to whatever branch or loop measured it.
@@ -754,6 +853,9 @@ public class SerializationSchemaTest
                     [cframe_type(CFrameType.Compressed)]
                     aim: CFrame<f32>;
                 }
+
+                let payload = serialize_binary(none as never as Snapshot);
+                let restored = deserialize_binary::<Snapshot>(payload);
                 """,
                 true
             )
@@ -773,6 +875,9 @@ public class SerializationSchemaTest
                 interface IEvent<Kind: string> { kind: Kind }
                 [serializable] interface Hit: IEvent<"Hit"> { attacker: Player? }
                 [serializable] interface Log { events: Hit[] }
+
+                let payload = serialize_binary(none as never as Log);
+                let restored = deserialize_binary::<Log>(payload);
                 """,
                 true
             )

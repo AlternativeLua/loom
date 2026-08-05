@@ -12,3 +12,12 @@ interface Leaf {
 interface Branch {
     leaves: Leaf[];
 }
+
+fn _trigger_usage(): void {
+    let bag_payload = serialize_binary(none as never as Bag);
+    let bag_restored = deserialize_binary::<Bag>(bag_payload);
+    let leaf_payload = serialize_binary(none as never as Leaf);
+    let leaf_restored = deserialize_binary::<Leaf>(leaf_payload);
+    let branch_payload = serialize_binary(none as never as Branch);
+    let branch_restored = deserialize_binary::<Branch>(branch_payload);
+}

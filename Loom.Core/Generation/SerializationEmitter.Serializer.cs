@@ -56,7 +56,7 @@ internal sealed partial class SerializationEmitter
 
             var valueLocal = SentinelValueLocal(serializationField.Path);
             body.Add(new ConstVariable(valueLocal, null, Access(new Identifier(ValueParameter), serializationField.Path)));
-            body.Add(new LocalVariable(SentinelIndexLocal(serializationField.Path), null, Zero));
+            body.Add(new LocalVariable(SentinelIndexLocal(serializationField.Path), null, _zero));
 
             // Index zero stays reserved for "no match, components follow".
             var branches = new List<ElseIfBranch>();
@@ -102,7 +102,7 @@ internal sealed partial class SerializationEmitter
         var valueLocal = SentinelValueLocal(unionField.Path);
         var tagLocal = UnionTagLocal(unionField.Path);
         body.Add(new ConstVariable(valueLocal, null, value));
-        body.Add(new LocalVariable(tagLocal, null, Zero));
+        body.Add(new LocalVariable(tagLocal, null, _zero));
 
         var branches = new List<ElseIfBranch>();
         for (var index = 1; index < unionField.Variants.Count; index++)
@@ -194,9 +194,9 @@ internal sealed partial class SerializationEmitter
         }
 
         if (traversal.Count == 0)
-            return inline ?? Zero;
+            return inline ?? _zero;
 
-        body.Add(new LocalVariable(SizeLocal, null, inline ?? Zero));
+        body.Add(new LocalVariable(SizeLocal, null, inline ?? _zero));
         body.AddRange(traversal);
 
         return new Identifier(SizeLocal);
@@ -207,10 +207,10 @@ internal sealed partial class SerializationEmitter
     {
         if (SentinelNamesOf(serializationField) is { Count: > 0 })
             return new IfExpression(
-                new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "==", Zero),
+                new BinaryOperator(new Identifier(SentinelIndexLocal(serializationField.Path)), "==", _zero),
                 new NumberLiteral(SentinelComponentBytes(serializationField)),
                 [],
-                Zero
+                _zero
             );
 
         return serializationField switch
@@ -221,9 +221,9 @@ internal sealed partial class SerializationEmitter
                     Add(new NumberLiteral(arrayField.LengthType.ByteCount()), Multiply(Length(value), new NumberLiteral(elementBytes))),
                     ElementBitBlockSize(arrayField.Element.HeaderBits, Length(value))
                 ),
-            OptionalField { Inner.BodyBytes: 0 } => Zero,
+            OptionalField { Inner.BodyBytes: 0 } => _zero,
             OptionalField { Inner.BodyBytes: { } innerBytes } =>
-                new IfExpression(IsPresent(value), new NumberLiteral(innerBytes), [], Zero),
+                new IfExpression(IsPresent(value), new NumberLiteral(innerBytes), [], _zero),
             _ => null
         };
     }
@@ -286,13 +286,13 @@ internal sealed partial class SerializationEmitter
             // Counted here rather than by a pass of its own: a map has no length operator, and the write
             // needs the count for its prefix before the pairs go out.
             var countLocal = ReserveLocal(LeafName(mapField.Path) + "_measured");
-            statements.Add(new LocalVariable(countLocal, null, Zero));
+            statements.Add(new LocalVariable(countLocal, null, _zero));
 
             var keyLocal = ReserveLocal(LeafName(mapField.Key.Path));
             var valueLocal = ReserveLocal(LeafName(mapField.Value.Path));
             var pairStatements = new List<LuauStatement>
             {
-                new ExpressionStatement(new BinaryOperator(new Identifier(countLocal), "+=", One))
+                new ExpressionStatement(new BinaryOperator(new Identifier(countLocal), "+=", _one))
             };
 
             MeasureField(mapField.Key, new Identifier(keyLocal), pairStatements);
@@ -318,7 +318,7 @@ internal sealed partial class SerializationEmitter
         MeasureField(arrayField.Element, elementValue, elementStatements);
 
         if (elementStatements.Count > 0)
-            statements.Add(new NumericForStatement(loop, One, Length(value), null, new Chunk(elementStatements)));
+            statements.Add(new NumericForStatement(loop, _one, Length(value), null, new Chunk(elementStatements)));
     }
 
     /// <summary>Adds one field's width, inline when it can be stated as an expression.</summary>
@@ -399,7 +399,7 @@ internal sealed partial class SerializationEmitter
         var previousBase = cursor.BitBase;
         var previousOffset = cursor.BitOffset;
 
-        cursor.BitBase = Add(bitBase, Multiply(new Parenthesized(Subtract(new Identifier(loopLocal), One)), new NumberLiteral(bitsPerElement)));
+        cursor.BitBase = Add(bitBase, Multiply(new Parenthesized(Subtract(new Identifier(loopLocal), _one)), new NumberLiteral(bitsPerElement)));
         cursor.BitOffset = 0;
 
         return () =>
@@ -412,7 +412,7 @@ internal sealed partial class SerializationEmitter
     /// <summary>Whole bytes the shared bit block occupies, or zero when the entries need no bits.</summary>
     private static LuauExpression ElementBitBlockSize(int bitsPerElement, LuauExpression count) =>
         bitsPerElement == 0
-            ? Zero
+            ? _zero
             : FloorDivide(
                 new Parenthesized(Add(Multiply(count, new NumberLiteral(bitsPerElement)), new NumberLiteral(7))),
                 new NumberLiteral(8)
@@ -456,7 +456,7 @@ internal sealed partial class SerializationEmitter
                 return;
 
             case BoolField:
-                body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(value, One, [], Zero))));
+                body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(value, _one, [], _zero))));
                 return;
 
             case NumberField numberField:
@@ -486,7 +486,7 @@ internal sealed partial class SerializationEmitter
 
             case OptionalField optionalField:
             {
-                body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(IsPresent(value), One, [], Zero))));
+                body.Add(new ExpressionStatement(WriteBits(cursor, 1, new IfExpression(IsPresent(value), _one, [], _zero))));
 
                 // Offsets diverge here, so the cursor commits to a runtime position before the branch and
                 // both paths advance the same local.
@@ -509,22 +509,23 @@ internal sealed partial class SerializationEmitter
                 // branch or loop it was counted in.
                 var count = new Identifier(ReserveLocal(leaf + "_written"));
                 var counter = ReserveLocal(leaf + "_key");
-                body.Add(new LocalVariable(count.Name, null, Zero));
+                body.Add(new LocalVariable(count.Name, null, _zero));
                 body.Add(
                     new ForStatement(
                         [counter],
                         value,
-                        new Chunk([new ExpressionStatement(new BinaryOperator(count, "+=", One))])
+                        new Chunk([new ExpressionStatement(new BinaryOperator(count, "+=", _one))])
                     )
                 );
 
                 WriteNumber(cursor, mapField.LengthType, count, body);
-                cursor.GoDynamic(body);
+                if (NeedsBufferSpace(mapField.Key) || NeedsBufferSpace(mapField.Value))
+                    cursor.GoDynamic(body);
 
                 var pairBits = ReserveElementBits(mapField.EntryBits, leaf, count, cursor, body);
                 var index = ReserveLocal(leaf + "_index");
                 if (pairBits != null)
-                    body.Add(new LocalVariable(index, null, One));
+                    body.Add(new LocalVariable(index, null, _one));
 
                 var keyLocal = ReserveLocal(LeafName(mapField.Key.Path) + "_out");
                 var valueLocal = ReserveLocal(LeafName(mapField.Value.Path) + "_out");
@@ -536,7 +537,7 @@ internal sealed partial class SerializationEmitter
                 restorePair();
 
                 if (pairBits != null)
-                    pairBody.Add(new ExpressionStatement(new BinaryOperator(new Identifier(index), "+=", One)));
+                    pairBody.Add(new ExpressionStatement(new BinaryOperator(new Identifier(index), "+=", _one)));
 
                 body.Add(new ForStatement([keyLocal, valueLocal], value, new Chunk(pairBody)));
                 return;
@@ -547,7 +548,8 @@ internal sealed partial class SerializationEmitter
                 var leaf = LeafName(arrayField.Path);
                 var count = Length(value);
                 WriteNumber(cursor, arrayField.LengthType, count, body);
-                cursor.GoDynamic(body);
+                if (NeedsBufferSpace(arrayField.Element))
+                    cursor.GoDynamic(body);
 
                 // Entries needing header bits share a block reserved ahead of the bodies, so the bodies
                 // stay byte-aligned and each entry gets a slice of its own rather than overwriting the
@@ -563,7 +565,7 @@ internal sealed partial class SerializationEmitter
                 EmitValueWrite(arrayField.Element, element, cursor, elementBody);
                 restore();
 
-                body.Add(new NumericForStatement(loop, One, count, null, new Chunk(elementBody)));
+                body.Add(new NumericForStatement(loop, _one, count, null, new Chunk(elementBody)));
                 return;
             }
 
@@ -612,7 +614,7 @@ internal sealed partial class SerializationEmitter
                 else
                     EmitCFrameWrite((CFrameField)serializationField, bound, cursor, components);
 
-                body.Add(new IfStatement(new BinaryOperator(indexLocal, "==", Zero), new Chunk(components), [], null));
+                body.Add(new IfStatement(new BinaryOperator(indexLocal, "==", _zero), new Chunk(components), [], null));
                 return;
             }
 
@@ -667,7 +669,7 @@ internal sealed partial class SerializationEmitter
 
     private void EmitCFrameWrite(CFrameField cframeField, LuauExpression value, Cursor cursor, List<LuauStatement> body)
     {
-        foreach (var component in CFramePositionComponents)
+        foreach (var component in _cFramePositionComponents)
             WriteNumber(cursor, cframeField.NumberType, Access(value, component), body);
 
         var quaternion = LuauFactory.RuntimeLibraryCall(["cframe_to_quaternion"], [value]);
@@ -682,8 +684,8 @@ internal sealed partial class SerializationEmitter
             return;
         }
 
-        body.Add(new MultiConstVariable(QuaternionLocals, quaternion));
-        foreach (var local in QuaternionLocals)
+        body.Add(new MultiConstVariable(_quaternionLocals, quaternion));
+        foreach (var local in _quaternionLocals)
             WriteNumber(cursor, cframeField.NumberType, new Identifier(local), body);
     }
 

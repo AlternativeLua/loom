@@ -36,12 +36,6 @@ public static class TypeSimplifier
         return simplified;
     }
 
-    private static InterfaceType SimplifyInterface(InterfaceType interfaceType)
-    {
-        var simplifiedObject = SimplifyObject(interfaceType.ObjectType);
-        return new InterfaceType(interfaceType.Name, interfaceType.Constraints, simplifiedObject, interfaceType.TraitMethodNames);
-    }
-
     private static ObjectType SimplifyObject(ObjectType objectType) =>
         objectType.Properties.Count == 0 && objectType.Indexer != null && objectType.Indexer.KeyType.Equals(PrimitiveType.Number)
             ? new ArrayType(objectType.Indexer.ValueType, objectType.Indexer.IsMutable)

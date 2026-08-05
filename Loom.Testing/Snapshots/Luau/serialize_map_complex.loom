@@ -10,3 +10,8 @@ interface Registry {
     entries: Record<number, Entry>;
     lists: Record<string, number[]>;
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Registry);
+    let restored = deserialize_binary::<Registry>(payload);
+}

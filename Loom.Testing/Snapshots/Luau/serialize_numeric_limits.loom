@@ -9,3 +9,8 @@ interface Limits {
     f32: f32;
     f64: f64;
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Limits);
+    let restored = deserialize_binary::<Limits>(payload);
+}

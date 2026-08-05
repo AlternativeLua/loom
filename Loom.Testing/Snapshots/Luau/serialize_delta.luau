@@ -1,211 +1,34 @@
 const Loom = require("@game/ReplicatedStorage/include/loom_runtime")
 const buffer_create = buffer.create
-const buffer_writeu8 = buffer.writeu8
-const buffer_len = buffer.len
-const buffer_readu8 = buffer.readu8
-const buffer_writebits = buffer.writebits
-const buffer_copy = buffer.copy
-const buffer_readbits = buffer.readbits
-const buffer_writef32 = buffer.writef32
-const buffer_readf32 = buffer.readf32
 const buffer_writeu16 = buffer.writeu16
 const buffer_writeu32 = buffer.writeu32
 const buffer_writestring = buffer.writestring
+const buffer_writeu8 = buffer.writeu8
+const buffer_writebits = buffer.writebits
 const buffer_writei16 = buffer.writei16
+const buffer_writef32 = buffer.writef32
+const buffer_copy = buffer.copy
+const buffer_len = buffer.len
+const buffer_readbits = buffer.readbits
 const buffer_readu16 = buffer.readu16
 const buffer_readu32 = buffer.readu32
 const buffer_readstring = buffer.readstring
+const buffer_readu8 = buffer.readu8
 const buffer_readi16 = buffer.readi16
+const buffer_readf32 = buffer.readf32
 -- Exercises every branch of the delta write/read: a leaf, a flattened struct, a packed sentinelled
 -- datatype, an optional wrapping a union, an array of unions and a map whose values are structs.
 type Loadout = {
   read primary: number,
   read secondary: number,
 }
-const function Loadout_serialize_binary(value: Loadout): Loom.Serialized
-  const b = buffer_create(2)
-  buffer_writeu8(b, 0, value.primary)
-  buffer_writeu8(b, 1, value.secondary)
-  return { buffer = b }
-end
-const function Loadout_deserialize_binary(serialized: Loom.Serialized): Loom.Result<Loadout, Loom.DeserializeError>
-  const b = serialized.buffer
-  if b == nil or buffer_len(b) < 2 then
-    return { ok = false, error = { kind = "truncated", offset = 0 } }
-  end
-  return { ok = true, value = { primary = buffer_readu8(b, 0), secondary = buffer_readu8(b, 1) } }
-end
-const function Loadout_diff_binary_write(baseline: Loadout, value: Loadout, b: buffer)
-  local offset = 1
-  const primary_changed = not Loom.deep_equal(baseline.primary, value.primary)
-  buffer_writebits(b, 0, 1, if primary_changed then 1 else 0)
-  if primary_changed then
-    buffer_writeu8(b, offset, value.primary)
-    offset += 1
-  end
-  const secondary_changed = not Loom.deep_equal(baseline.secondary, value.secondary)
-  buffer_writebits(b, 1, 1, if secondary_changed then 1 else 0)
-  if secondary_changed then
-    buffer_writeu8(b, offset, value.secondary)
-    offset += 1
-  end
-  return offset
-end
-const function Loadout_diff_binary_attempt(baseline: Loadout, value: Loadout, size: number)
-  const scratch = buffer_create(size)
-  const ok, written = pcall(Loadout_diff_binary_write, baseline, value, scratch)
-  if ok then
-    return scratch, written
-  end
-  return Loadout_diff_binary_attempt(baseline, value, size * 2)
-end
-const function Loadout_diff_binary(baseline: Loadout, value: Loadout): Loom.Serialized
-  const baseline_s = Loadout_serialize_binary(baseline)
-  const value_s = Loadout_serialize_binary(value)
-  const size = (if baseline_s.buffer ~= nil then buffer.len(baseline_s.buffer) else 0) + (if value_s.buffer ~= nil then buffer.len(value_s.buffer) else 0) + 1
-  const scratch, written = Loadout_diff_binary_attempt(baseline, value, size)
-  const result = buffer_create(written)
-  buffer_copy(result, 0, scratch, 0, written)
-  return { buffer = result }
-end
-const function Loadout_apply_diff_binary_read(baseline: Loadout, diff: Loom.Serialized): Loom.Result<Loadout, Loom.DeserializeError>
-  const b = diff.buffer
-  if b == nil or buffer_len(b) < 1 then
-    return { ok = false, error = { kind = "truncated", offset = 0 } }
-  end
-  local offset = 1
-  const primary_changed = buffer_readbits(b, 0, 1) == 1
-  local primary = nil
-  if primary_changed then
-    const read_0 = buffer_readu8(b, offset)
-    offset += 1
-    primary = read_0
-  else
-    primary = baseline.primary
-  end
-  const secondary_changed = buffer_readbits(b, 1, 1) == 1
-  local secondary = nil
-  if secondary_changed then
-    const read_1 = buffer_readu8(b, offset)
-    offset += 1
-    secondary = read_1
-  else
-    secondary = baseline.secondary
-  end
-  return { ok = true, value = { primary = primary, secondary = secondary } }
-end
-const function Loadout_apply_diff_binary(baseline: Loadout, diff: Loom.Serialized): Loom.Result<Loadout, Loom.DeserializeError>
-  const ok, result = pcall(Loadout_apply_diff_binary_read, baseline, diff)
-  if ok then
-    return result
-  end
-  return { ok = false, error = { kind = "truncated" } }
-end
-const Loadout_serializer: Loom.Serializer<Loadout> = { serialize = Loadout_serialize_binary, deserialize = Loadout_deserialize_binary, diff = Loadout_diff_binary, applyDiff = Loadout_apply_diff_binary }
 type Hit = {
   read kind: "Hit",
   read amount: number,
 }
-const function Hit_serialize_binary(value: Hit): Loom.Serialized
-  const b = buffer_create(4)
-  buffer_writef32(b, 0, value.amount)
-  return { buffer = b }
-end
-const function Hit_deserialize_binary(serialized: Loom.Serialized): Loom.Result<Hit, Loom.DeserializeError>
-  const b = serialized.buffer
-  if b == nil or buffer_len(b) < 4 then
-    return { ok = false, error = { kind = "truncated", offset = 0 } }
-  end
-  return { ok = true, value = { kind = "Hit", amount = buffer_readf32(b, 0) } }
-end
-const function Hit_diff_binary_write(baseline: Hit, value: Hit, b: buffer)
-  local offset = 1
-  const amount_changed = not Loom.deep_equal(baseline.amount, value.amount)
-  buffer_writebits(b, 0, 1, if amount_changed then 1 else 0)
-  if amount_changed then
-    buffer_writef32(b, offset, value.amount)
-    offset += 4
-  end
-  return offset
-end
-const function Hit_diff_binary_attempt(baseline: Hit, value: Hit, size: number)
-  const scratch = buffer_create(size)
-  const ok, written = pcall(Hit_diff_binary_write, baseline, value, scratch)
-  if ok then
-    return scratch, written
-  end
-  return Hit_diff_binary_attempt(baseline, value, size * 2)
-end
-const function Hit_diff_binary(baseline: Hit, value: Hit): Loom.Serialized
-  const baseline_s = Hit_serialize_binary(baseline)
-  const value_s = Hit_serialize_binary(value)
-  const size = (if baseline_s.buffer ~= nil then buffer.len(baseline_s.buffer) else 0) + (if value_s.buffer ~= nil then buffer.len(value_s.buffer) else 0) + 1
-  const scratch, written = Hit_diff_binary_attempt(baseline, value, size)
-  const result = buffer_create(written)
-  buffer_copy(result, 0, scratch, 0, written)
-  return { buffer = result }
-end
-const function Hit_apply_diff_binary_read(baseline: Hit, diff: Loom.Serialized): Loom.Result<Hit, Loom.DeserializeError>
-  const b = diff.buffer
-  if b == nil or buffer_len(b) < 1 then
-    return { ok = false, error = { kind = "truncated", offset = 0 } }
-  end
-  local offset = 1
-  const amount_changed = buffer_readbits(b, 0, 1) == 1
-  local amount = nil
-  if amount_changed then
-    const read_0 = buffer_readf32(b, offset)
-    offset += 4
-    amount = read_0
-  else
-    amount = baseline.amount
-  end
-  return { ok = true, value = { kind = "Hit", amount = amount } }
-end
-const function Hit_apply_diff_binary(baseline: Hit, diff: Loom.Serialized): Loom.Result<Hit, Loom.DeserializeError>
-  const ok, result = pcall(Hit_apply_diff_binary_read, baseline, diff)
-  if ok then
-    return result
-  end
-  return { ok = false, error = { kind = "truncated" } }
-end
-const Hit_serializer: Loom.Serializer<Hit> = { serialize = Hit_serialize_binary, deserialize = Hit_deserialize_binary, diff = Hit_diff_binary, applyDiff = Hit_apply_diff_binary }
 type Miss = {
   read kind: "Miss",
 }
-const function Miss_serialize_binary(value: Miss): Loom.Serialized
-  return {}
-end
-const function Miss_deserialize_binary(serialized: Loom.Serialized): Loom.Result<Miss, Loom.DeserializeError>
-  return { ok = true, value = { kind = "Miss" } }
-end
-const function Miss_diff_binary_write(baseline: Miss, value: Miss, b: buffer)
-  local offset = 0
-  return offset
-end
-const function Miss_diff_binary_attempt(baseline: Miss, value: Miss, size: number)
-  const scratch = buffer_create(size)
-  const ok, written = pcall(Miss_diff_binary_write, baseline, value, scratch)
-  if ok then
-    return scratch, written
-  end
-  return Miss_diff_binary_attempt(baseline, value, size * 2)
-end
-const function Miss_diff_binary(baseline: Miss, value: Miss): Loom.Serialized
-  return {}
-end
-const function Miss_apply_diff_binary_read(baseline: Miss, diff: Loom.Serialized): Loom.Result<Miss, Loom.DeserializeError>
-  const b = diff.buffer
-  if b == nil or buffer_len(b) < 0 then
-    return { ok = false, error = { kind = "truncated", offset = 0 } }
-  end
-  local offset = 0
-  return { ok = true, value = { kind = "Miss" } }
-end
-const function Miss_apply_diff_binary(baseline: Miss, diff: Loom.Serialized): Loom.Result<Miss, Loom.DeserializeError>
-  return { ok = true, value = { kind = "Miss" } }
-end
-const Miss_serializer: Loom.Serializer<Miss> = { serialize = Miss_serialize_binary, deserialize = Miss_deserialize_binary, diff = Miss_diff_binary, applyDiff = Miss_apply_diff_binary }
 type PlayerState = {
   read health: number,
   read name: string,
@@ -328,119 +151,6 @@ const function PlayerState_serialize_binary(value: PlayerState): Loom.Serialized
     offset += 1
   end
   return { buffer = b }
-end
-const function PlayerState_deserialize_binary(serialized: Loom.Serialized): Loom.Result<PlayerState, Loom.DeserializeError>
-  const b = serialized.buffer
-  if b == nil or buffer_len(b) < 17 then
-    return { ok = false, error = { kind = "truncated", offset = 0 } }
-  end
-  const name_length = buffer_readu32(b, 3)
-  local offset = 7
-  if buffer_len(b) < offset + name_length then
-    return { ok = false, error = { kind = "invalid_length", field = "name" } }
-  end
-  const name = buffer_readstring(b, offset, name_length)
-  offset += name_length
-  const read_0 = buffer_readu8(b, offset)
-  offset += 1
-  const read_1 = buffer_readu8(b, offset)
-  offset += 1
-  const position_sentinel = buffer_readbits(b, 0, 3)
-  local position = nil
-  if position_sentinel == 0 then
-    if buffer_len(b) < offset + 6 then
-      return { ok = false, error = { kind = "truncated", field = "position" } }
-    end
-    const read_2 = buffer_readi16(b, offset)
-    offset += 2
-    const read_3 = buffer_readi16(b, offset)
-    offset += 2
-    const read_4 = buffer_readi16(b, offset)
-    offset += 2
-    position = Vector3.new(read_2, read_3, read_4)
-  elseif position_sentinel == 1 then
-    position = Vector3.zero
-  elseif position_sentinel == 2 then
-    position = Vector3.one
-  elseif position_sentinel == 3 then
-    position = Vector3.xAxis
-  elseif position_sentinel == 4 then
-    position = Vector3.yAxis
-  elseif position_sentinel == 5 then
-    position = Vector3.zAxis
-  else
-    return { ok = false, error = { kind = "invalid_tag", field = "position" } }
-  end
-  const last_event_present = buffer_readbits(b, 3, 1) == 1
-  local last_event = nil
-  if last_event_present then
-    const last_event_2_tag = buffer_readbits(b, 4, 1)
-    local last_event_2 = nil
-    if last_event_2_tag == 0 then
-      if buffer_len(b) < offset + 4 then
-        return { ok = false, error = { kind = "truncated", field = "last_event" } }
-      end
-      const read_5 = buffer_readf32(b, offset)
-      offset += 4
-      last_event_2 = { kind = "Hit", amount = read_5 }
-    elseif last_event_2_tag == 1 then
-      last_event_2 = { kind = "Miss" }
-    else
-      return { ok = false, error = { kind = "invalid_tag", field = "last_event" } }
-    end
-    last_event = last_event_2
-  end
-  const read_6 = buffer_readu32(b, offset)
-  offset += 4
-  const recent_count = read_6
-  const recent_bits = offset * 8
-  offset += (recent_count + 7) // 8
-  const recent = {}
-  for i = 1, recent_count do
-    const recent_element_tag = buffer_readbits(b, recent_bits + (i - 1), 1)
-    local recent_element = nil
-    if recent_element_tag == 0 then
-      if buffer_len(b) < offset + 4 then
-        return { ok = false, error = { kind = "truncated", field = "recent[]" } }
-      end
-      const read_7 = buffer_readf32(b, offset)
-      offset += 4
-      recent_element = { kind = "Hit", amount = read_7 }
-    elseif recent_element_tag == 1 then
-      recent_element = { kind = "Miss" }
-    else
-      return { ok = false, error = { kind = "invalid_tag", field = "recent[]" } }
-    end
-    recent[i] = recent_element
-  end
-  const read_8 = buffer_readu32(b, offset)
-  offset += 4
-  const scores_count = read_8
-  const scores = {}
-  for i_2 = 1, scores_count do
-    const read_9 = buffer_readu32(b, offset)
-    offset += 4
-    const scores_k_length = read_9
-    if buffer_len(b) < offset + scores_k_length then
-      return { ok = false, error = { kind = "invalid_length", field = "scores[k]" } }
-    end
-    const scores_k = buffer_readstring(b, offset, scores_k_length)
-    offset += scores_k_length
-    const read_10 = buffer_readu8(b, offset)
-    offset += 1
-    const read_11 = buffer_readu8(b, offset)
-    offset += 1
-    scores[scores_k] = { primary = read_10, secondary = read_11 }
-  end
-  return { ok = true, value = {
-    health = buffer_readu16(b, 1),
-    name = name,
-    loadout = { primary = read_0, secondary = read_1 },
-    position = position,
-    last_event = last_event,
-    recent = recent,
-    scores = scores,
-  } }
 end
 const function PlayerState_diff_binary_write(baseline: PlayerState, value: PlayerState, b: buffer)
   local offset = 2
@@ -1008,4 +718,7 @@ const function PlayerState_apply_diff_binary(baseline: PlayerState, diff: Loom.S
   end
   return { ok = false, error = { kind = "truncated" } }
 end
-const PlayerState_serializer: Loom.Serializer<PlayerState> = { serialize = PlayerState_serialize_binary, deserialize = PlayerState_deserialize_binary, diff = PlayerState_diff_binary, applyDiff = PlayerState_apply_diff_binary }
+const function _trigger_usage(): ()
+  const diff = PlayerState_diff_binary((nil :: never) :: PlayerState, (nil :: never) :: PlayerState)
+  const applied = PlayerState_apply_diff_binary((nil :: never) :: PlayerState, diff)
+end

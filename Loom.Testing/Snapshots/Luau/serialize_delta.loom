@@ -23,3 +23,8 @@ interface PlayerState {
     recent: (Hit | Miss)[];
     scores: Record<string, Loadout>;
 }
+
+fn _trigger_usage(): void {
+    let diff = diff_binary(none as never as PlayerState, none as never as PlayerState);
+    let applied = apply_diff_binary(none as never as PlayerState, diff);
+}

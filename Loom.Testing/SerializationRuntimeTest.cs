@@ -19,10 +19,10 @@ namespace Loom.Testing;
 [Collection("Assembly")]
 public class SerializationRuntimeTest
 {
-    private static readonly string RuntimeDirectory = $"..{Path.DirectorySeparatorChar}..{Path.DirectorySeparatorChar}..{Path.DirectorySeparatorChar}Runtime";
+    private static readonly string _runtimeDirectory = $"..{Path.DirectorySeparatorChar}..{Path.DirectorySeparatorChar}..{Path.DirectorySeparatorChar}Runtime";
 
     public static IEnumerable<TheoryDataRow<string>> Cases =>
-        Directory.EnumerateFiles(RuntimeDirectory, "serialize_*.luau")
+        Directory.EnumerateFiles(_runtimeDirectory, "serialize_*.luau")
             .Select(path => new TheoryDataRow<string>(Path.GetFileNameWithoutExtension(path)));
 
     [Theory]
@@ -30,7 +30,7 @@ public class SerializationRuntimeTest
     public void RoundTrips(string caseName)
     {
         var emitted = File.ReadAllText(Path.Combine(AssemblyFixture.Snapshots, "Luau", $"{caseName}.luau"));
-        var assertions = File.ReadAllText(Path.Combine(RuntimeDirectory, $"{caseName}.luau"));
+        var assertions = File.ReadAllText(Path.Combine(_runtimeDirectory, $"{caseName}.luau"));
 
         using var state = LuauState.Create();
         state.OpenLibraries();
@@ -66,7 +66,7 @@ public class SerializationRuntimeTest
                 .Where(line => line.TrimEnd() != "}")
         );
 
-        var prelude = File.ReadAllText(Path.Combine(RuntimeDirectory, "prelude.luau"));
+        var prelude = File.ReadAllText(Path.Combine(_runtimeDirectory, "prelude.luau"));
         return $"{prelude}\n-- emitted\n{body}\n-- assertions\n{assertions}\n".Replace("const ", "local ");
     }
 }

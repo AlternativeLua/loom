@@ -121,7 +121,8 @@ public sealed partial class LuauGenerator
     /// <summary>
     ///     Emits a <c>[serializable]</c> interface's serializer pair after its type alias, the same way an
     ///     <c>implement</c> block trails its metatable. They live in the declaring file so a consumer in
-    ///     another module reaches them through the ordinary export path.
+    ///     another module reaches them through the ordinary export path. Only the pieces this file's calls
+    ///     (or an export, conservatively) actually need are emitted - see <see cref="ResolveSerializationUsage" />.
     /// </summary>
     private void EmitSerializers(InterfaceSymbol interfaceSymbol)
     {
@@ -136,26 +137,148 @@ public sealed partial class LuauGenerator
         if (!CheckSchemaIsEmittable(interfaceSymbol, schema))
             return;
 
+        var usage = ResolveSerializationUsage(interfaceSymbol);
+        if (usage == SerializationUsage.None)
+            return;
+
         // The emitted signatures name Loom.Serialized and Loom.Result even when the source never
         // mentions a runtime type, so the import has to be requested explicitly.
         _semanticModel.RuntimeReferences += 1;
 
         var emitter = new SerializationEmitter(schema, _bufferMembers);
-        _state.Postreq(emitter.EmitSerializer());
-        _state.Postreq(emitter.EmitDeserializer());
+        if (usage.HasFlag(SerializationUsage.Serialize))
+            _state.Postreq(emitter.EmitSerializer());
 
-        // A fresh instance rather than reusing the one above: EmitSerializer already primed
-        // _prologueTags/_locals for that function's own body, and a delta write walks unions and
-        // sentinels in a different order, so it needs to resolve them itself rather than finding
-        // stale bookkeeping left over from a sibling function.
-        var deltaEmitter = new SerializationEmitter(schema, _bufferMembers);
-        _state.Postreq(deltaEmitter.EmitDeltaWriteHelper());
-        _state.Postreq(deltaEmitter.EmitDeltaAttempt());
-        _state.Postreq(deltaEmitter.EmitDeltaSerializer());
-        _state.Postreq(deltaEmitter.EmitDeltaReadHelper());
-        _state.Postreq(deltaEmitter.EmitDeltaDeserializer());
+        if (usage.HasFlag(SerializationUsage.Deserialize))
+            _state.Postreq(emitter.EmitDeserializer());
 
-        _state.Postreq(emitter.EmitSerializerObject());
+        if (usage.HasFlag(SerializationUsage.Delta))
+        {
+            // A fresh instance rather than reusing the one above: EmitSerializer already primed
+            // _prologueTags/_locals for that function's own body, and a delta write walks unions and
+            // sentinels in a different order, so it needs to resolve them itself rather than finding
+            // stale bookkeeping left over from a sibling function.
+            var deltaEmitter = new SerializationEmitter(schema, _bufferMembers);
+            _state.Postreq(deltaEmitter.EmitDeltaWriteHelper());
+            _state.Postreq(deltaEmitter.EmitDeltaAttempt());
+            _state.Postreq(deltaEmitter.EmitDeltaSerializer());
+            _state.Postreq(deltaEmitter.EmitDeltaReadHelper());
+            _state.Postreq(deltaEmitter.EmitDeltaDeserializer());
+        }
+
+        if (usage.HasFlag(SerializationUsage.SerializerObject))
+            _state.Postreq(emitter.EmitSerializerObject());
+    }
+
+    /// <summary>
+    ///     What this interface's codec actually needs to cover. An exported interface assumes everything:
+    ///     a cross-module consumer always calls through the codec object rather than a bare function name,
+    ///     and files compile in dependency order, so a declaring file's own codegen runs before anything
+    ///     that later imports it is even analyzed - there is no "wait and see" available. A non-exported
+    ///     interface is scoped to <see cref="Resolving.SemanticModel.SerializationUsages" />, collected by
+    ///     <see cref="CollectSerializationUsage" /> before generation starts; requesting the codec object
+    ///     itself still widens to everything, since the object bundles all four callbacks by name.
+    /// </summary>
+    private SerializationUsage ResolveSerializationUsage(InterfaceSymbol interfaceSymbol)
+    {
+        if (_semanticModel.Exports.Any(export => export.Symbol == interfaceSymbol))
+            return SerializationUsage.All;
+
+        var usage = _semanticModel.SerializationUsages.GetValueOrDefault(interfaceSymbol);
+        if (usage.HasFlag(SerializationUsage.SerializerObject))
+            return SerializationUsage.All;
+
+        // diff_binary's own body estimates a scratch buffer's size by calling serialize_binary directly
+        // by name (see EmitDeltaSerializer) - Delta on its own would leave that call dangling.
+        // apply_diff_binary has no equivalent dependency on deserialize_binary.
+        if (usage.HasFlag(SerializationUsage.Delta))
+            usage |= SerializationUsage.Serialize;
+
+        return usage;
+    }
+
+    /// <summary>
+    ///     Scans every call this file makes to <c>serialize_binary</c>/<c>deserialize_binary</c>/
+    ///     <c>serializer</c>/<c>diff_binary</c>/<c>apply_diff_binary</c>/<c>serializer_of</c> before the
+    ///     main tree walk, so <see cref="EmitSerializers" /> already knows what each interface needs
+    ///     regardless of whether the declaration or the call comes first in the file. Best-effort: a
+    ///     malformed call is left for the macro expander (which runs during the real walk) to diagnose
+    ///     properly, so anything that does not resolve cleanly here is simply skipped rather than reported.
+    /// </summary>
+    private void CollectSerializationUsage()
+    {
+        foreach (var invocation in _semanticModel.Tree.GetDescendants<Invocation>())
+        {
+            if (invocation.Expression is not Parsing.AST.Identifier identifier
+                || _semanticModel.GetSymbol(identifier) is not { IsIntrinsic: true } symbol)
+                continue;
+
+            if (symbol.Name == "serializer_of")
+            {
+                MarkSerializerMapTargets(invocation);
+                continue;
+            }
+
+            var usage = symbol.Name switch
+            {
+                "serialize_binary" => SerializationUsage.Serialize,
+                "deserialize_binary" => SerializationUsage.Deserialize,
+                "serializer" => SerializationUsage.SerializerObject,
+                "diff_binary" or "apply_diff_binary" => SerializationUsage.Delta,
+                _ => SerializationUsage.None
+            };
+
+            if (usage == SerializationUsage.None)
+                continue;
+
+            // deserialize_binary/serializer have nothing to infer from, so the interface is a type
+            // argument instead of the first value argument the other three take.
+            Node? subject = symbol.Name is "deserialize_binary" or "serializer"
+                ? invocation.TypeArguments?.ArgumentsList.FirstOrDefault()
+                : invocation.Arguments.ArgumentList.FirstOrDefault();
+
+            if (subject != null)
+                MarkUsage(subject, usage);
+        }
+    }
+
+    /// <summary>
+    ///     'serializer_of::&lt;MessageData, K&gt;(key)' never names the value interfaces it might return
+    ///     directly - only the mapping interface. Every property and indexer value type the mapping
+    ///     interface carries is a codec the emitted dispatch table can hand back, so each one needs its
+    ///     object emitted the same as a direct 'serializer::&lt;T&gt;()' call would.
+    /// </summary>
+    private void MarkSerializerMapTargets(Invocation invocation)
+    {
+        if (invocation.TypeArguments?.ArgumentsList.FirstOrDefault() is not { } mapArgument
+            || _semanticModel.GetType(mapArgument) is not InterfaceType mapType)
+            return;
+
+        foreach (var property in mapType.Properties)
+            MarkSerializerObjectUsage(property.ValueType);
+
+        foreach (var indexer in mapType.Indexers)
+            MarkSerializerObjectUsage(indexer.ValueType);
+    }
+
+    private void MarkSerializerObjectUsage(TypeChecking.Types.Type valueType)
+    {
+        if (valueType is InterfaceType interfaceType)
+            MarkUsage(interfaceType, SerializationUsage.SerializerObject);
+    }
+
+    private void MarkUsage(Node subject, SerializationUsage usage)
+    {
+        if (_semanticModel.GetType(subject) is InterfaceType interfaceType)
+            MarkUsage(interfaceType, usage);
+    }
+
+    private void MarkUsage(InterfaceType interfaceType, SerializationUsage usage)
+    {
+        if (_semanticModel.SerializationSchemas.Keys.FirstOrDefault(s => s.Name == interfaceType.Name) is not { } interfaceSymbol)
+            return;
+
+        _semanticModel.SerializationUsages[interfaceSymbol] = _semanticModel.SerializationUsages.GetValueOrDefault(interfaceSymbol) | usage;
     }
 
     /// <summary>

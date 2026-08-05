@@ -3,3 +3,8 @@ interface MyData {
     id: u8;
     position: Vector3<i16>;
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as MyData);
+    let restored = deserialize_binary::<MyData>(payload);
+}

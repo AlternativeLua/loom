@@ -35,7 +35,7 @@ internal sealed partial class SerializationEmitter
                 )
             );
 
-            body.Add(new LocalVariable(BlobIndexLocal, null, One));
+            body.Add(new LocalVariable(BlobIndexLocal, null, _one));
         }
 
         foreach (var serializationField in schema.Fields)
@@ -130,7 +130,7 @@ internal sealed partial class SerializationEmitter
         serializationField switch
         {
             ConstantField constant => ToLiteral(constant.Value),
-            BoolField => new BinaryOperator(ReadBits(cursor, 1), "==", One),
+            BoolField => new BinaryOperator(ReadBits(cursor, 1), "==", _one),
             NumberField numberField => ReadNumber(cursor, numberField.NumberType, statements),
             RangedNumberField ranged => EmitRangedRead(ranged, cursor),
             BlobField blobField => EmitBlobRead(blobField, statements),
@@ -177,7 +177,7 @@ internal sealed partial class SerializationEmitter
         var slot = new ElementAccess(new Identifier(BlobsLocal), new Identifier(BlobIndexLocal));
         var local = ReserveLocal(LeafName(blobField.Path) + "_blob");
         statements.Add(new ConstVariable(local, null, slot));
-        statements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(BlobIndexLocal), "+=", One)));
+        statements.Add(new ExpressionStatement(new BinaryOperator(new Identifier(BlobIndexLocal), "+=", _one)));
 
         // A truncated blobs array and a wrong-typed one are different failures, so they are reported
         // separately rather than collapsed into a single guard.
@@ -230,7 +230,8 @@ internal sealed partial class SerializationEmitter
         var leaf = ReserveLocal(LeafName(mapField.Path));
         var countLocal = ReserveLocal(leaf + "_count");
         statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, mapField.LengthType, statements)));
-        cursor.GoDynamic(statements);
+        if (NeedsBufferSpace(mapField.Key) || NeedsBufferSpace(mapField.Value))
+            cursor.GoDynamic(statements);
 
         var pairBits = ReserveElementBits(mapField.EntryBits, leaf, new Identifier(countLocal), cursor, statements);
         statements.Add(new ConstVariable(leaf, null, Table.Empty));
@@ -243,7 +244,7 @@ internal sealed partial class SerializationEmitter
         restorePair();
 
         pairBody.Add(new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), key), "=", value)));
-        statements.Add(new NumericForStatement(loop, One, new Identifier(countLocal), null, new Chunk(pairBody)));
+        statements.Add(new NumericForStatement(loop, _one, new Identifier(countLocal), null, new Chunk(pairBody)));
 
         return new Identifier(leaf);
     }
@@ -253,7 +254,8 @@ internal sealed partial class SerializationEmitter
         var leaf = ReserveLocal(LeafName(arrayField.Path));
         var countLocal = ReserveLocal(leaf + "_count");
         statements.Add(new ConstVariable(countLocal, null, ReadNumber(cursor, arrayField.LengthType, statements)));
-        cursor.GoDynamic(statements);
+        if (NeedsBufferSpace(arrayField.Element))
+            cursor.GoDynamic(statements);
 
         // Zero-width elements consume no buffer, so there is nothing for a bounds check to prove.
         if (arrayField.Element.BodyBytes is > 0 and { } elementBytes)
@@ -285,7 +287,7 @@ internal sealed partial class SerializationEmitter
             new ExpressionStatement(new BinaryOperator(new ElementAccess(new Identifier(leaf), new Identifier(loop)), "=", element))
         );
 
-        statements.Add(new NumericForStatement(loop, One, new Identifier(countLocal), null, new Chunk(elementBody)));
+        statements.Add(new NumericForStatement(loop, _one, new Identifier(countLocal), null, new Chunk(elementBody)));
         return new Identifier(leaf);
     }
 
@@ -417,7 +419,7 @@ internal sealed partial class SerializationEmitter
 
         statements.Add(
             new IfStatement(
-                new BinaryOperator(new Identifier(indexLocal), "==", Zero),
+                new BinaryOperator(new Identifier(indexLocal), "==", _zero),
                 new Chunk(componentBody),
                 branches,
                 new Chunk([new Return(BuildErrorTable("invalid_tag", serializationField.Path, null))])
@@ -435,7 +437,7 @@ internal sealed partial class SerializationEmitter
     {
         var leaf = ReserveLocal(LeafName(optionalField.Path));
         var presentLocal = ReserveLocal(leaf + "_present");
-        statements.Add(new ConstVariable(presentLocal, null, new BinaryOperator(ReadBits(cursor, 1), "==", One)));
+        statements.Add(new ConstVariable(presentLocal, null, new BinaryOperator(ReadBits(cursor, 1), "==", _one)));
         statements.Add(new LocalVariable(leaf, null, new NilLiteral()));
         cursor.GoDynamic(statements);
 
@@ -484,7 +486,7 @@ internal sealed partial class SerializationEmitter
 
     private Call EmitCFrameRead(CFrameField cframeField, Cursor cursor, List<LuauStatement> statements)
     {
-        var arguments = CFramePositionComponents.ConvertAll(_ => ReadNumber(cursor, cframeField.NumberType, statements));
+        var arguments = _cFramePositionComponents.ConvertAll(_ => ReadNumber(cursor, cframeField.NumberType, statements));
         if (cframeField.Encoding == CFrameEncoding.Compressed)
         {
             var packed = cframeField.UseSentinels

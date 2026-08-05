@@ -13,3 +13,8 @@ interface Envelope {
     action: LogOutAction | ClickAction;
     color: "red" | "green" | "blue";
 }
+
+fn _trigger_usage(): void {
+    let payload = serialize_binary(none as never as Envelope);
+    let restored = deserialize_binary::<Envelope>(payload);
+}

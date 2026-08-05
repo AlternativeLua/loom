@@ -41,7 +41,7 @@ public sealed partial class TypeChecker
             return;
         }
 
-        var thunkType = new Types.FunctionType([], [], valueType, false);
+        var thunkType = new Types.FunctionType([], [], valueType);
         var nameType = new Types.LiteralType(valueName);
         var argumentTypes = new List<Type> { thunkType, nameType };
 

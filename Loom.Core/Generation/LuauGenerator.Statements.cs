@@ -236,9 +236,9 @@ public sealed partial class LuauGenerator
         condition switch
         {
             Is isExpression => _isPreludes.GetValueOrDefault(isExpression, []),
-            Loom.Core.Parsing.AST.BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand } and =>
+            Parsing.AST.BinaryOperator { Operator.Kind: SyntaxKind.AmpersandAmpersand } and =>
                 [..CollectIsPreludes(and.Left), ..CollectIsPreludes(and.Right)],
-            Loom.Core.Parsing.AST.Parenthesized parenthesized => CollectIsPreludes(parenthesized.Expression),
+            Parsing.AST.Parenthesized parenthesized => CollectIsPreludes(parenthesized.Expression),
             _ => []
         };
 }
