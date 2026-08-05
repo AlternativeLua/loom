@@ -566,13 +566,14 @@ public class MacroExpanderTest
         const string source = "let a: number[]? = [1, 2, 3]; a?.length";
         var luauTree = Utility.GetLuauAST(source, true);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
-        Assert.Equal(2, luauTree.Statements.Count);
+        Assert.Equal(4, luauTree.Statements.Count);
 
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
-        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(elseAssignment.Right);
 
-        var unaryOperator = Assert.IsType<UnaryOperator>(ifExpression.ThenBranch);
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
+        var unaryOperator = Assert.IsType<UnaryOperator>(thenAssignment.Right);
         Assert.Equal("#", unaryOperator.Operator);
         Assert.Equal("a", Assert.IsType<Identifier>(unaryOperator.Operand).Name);
     }
@@ -583,13 +584,14 @@ public class MacroExpanderTest
         const string source = "let a: number[mut]? = mut [1, 2, 3]; a?.push(4)";
         var luauTree = Utility.GetLuauAST(source, true);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
-        Assert.Equal(2, luauTree.Statements.Count);
+        Assert.Equal(4, luauTree.Statements.Count);
 
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
-        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[2]);
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(elseAssignment.Right);
 
-        var tableCall = Assert.IsType<Call>(ifExpression.ThenBranch);
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
+        var tableCall = Assert.IsType<Call>(thenAssignment.Right);
         var callee = Assert.IsType<PropertyAccess>(tableCall.Callee);
         Assert.Equal("table", Assert.IsType<Identifier>(callee.Target).Name);
         Assert.Equal("insert", Assert.Single(callee.Names));
@@ -610,17 +612,24 @@ public class MacroExpanderTest
         var luauTree = Utility.GetLuauAST(source, true);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        var outerIf = Assert.IsType<IfExpression>(variable.Initializer);
-        var innerIf = Assert.IsType<IfExpression>(outerIf.ThenBranch);
-        Assert.IsType<NilLiteral>(innerIf.ElseBranch);
+        var outerIf = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
 
-        var unaryOperator = Assert.IsType<UnaryOperator>(innerIf.ThenBranch);
+        // `foo.bar` is the already-accessed link the nested `?.length` reuses, so it's cached into a
+        // local rather than re-emitted for both the nil-check and the final access.
+        var cachedLink = Assert.IsType<ConstVariable>(outerIf.ThenBranch.Statements[0]);
+        Assert.Equal("_optional", cachedLink.Name);
+        var cachedLinkAccess = Assert.IsType<PropertyAccess>(cachedLink.Initializer);
+        Assert.Equal("bar", Assert.Single(cachedLinkAccess.Names));
+        Assert.Equal("foo", Assert.IsType<Identifier>(cachedLinkAccess.Target).Name);
+
+        var innerIf = Assert.IsType<IfStatement>(outerIf.ThenBranch.Statements[1]);
+        var innerElseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(innerElseAssignment.Right);
+
+        var innerThenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(innerIf.ThenBranch.Statements[0]).Expression);
+        var unaryOperator = Assert.IsType<UnaryOperator>(innerThenAssignment.Right);
         Assert.Equal("#", unaryOperator.Operator);
-
-        var operand = Assert.IsType<PropertyAccess>(unaryOperator.Operand);
-        Assert.Equal("bar", Assert.Single(operand.Names));
-        Assert.Equal("foo", Assert.IsType<Identifier>(operand.Target).Name);
+        Assert.Equal("_optional", Assert.IsType<Identifier>(unaryOperator.Operand).Name);
     }
 
     [Fact]
@@ -637,11 +646,12 @@ public class MacroExpanderTest
         var luauTree = Utility.GetLuauAST(source, true);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
-        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(elseAssignment.Right);
 
-        var unaryOperator = Assert.IsType<UnaryOperator>(ifExpression.ThenBranch);
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
+        var unaryOperator = Assert.IsType<UnaryOperator>(thenAssignment.Right);
         Assert.Equal("#", unaryOperator.Operator);
 
         var operand = Assert.IsType<PropertyAccess>(unaryOperator.Operand);
@@ -663,11 +673,12 @@ public class MacroExpanderTest
         var luauTree = Utility.GetLuauAST(source, true);
         Utility.AssertNoErrors(Utility.GetGeneratorDiagnostics(source, true));
 
-        var variable = Assert.IsType<ConstVariable>(luauTree.Statements.Last());
-        var ifExpression = Assert.IsType<IfExpression>(variable.Initializer);
-        Assert.IsType<NilLiteral>(ifExpression.ElseBranch);
+        var ifStatement = Assert.IsType<IfStatement>(luauTree.Statements[^2]);
+        var elseAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ElseBranch!.Statements[0]).Expression);
+        Assert.IsType<NilLiteral>(elseAssignment.Right);
 
-        var access = Assert.IsType<PropertyAccess>(ifExpression.ThenBranch);
+        var thenAssignment = Assert.IsType<BinaryOperator>(Assert.IsType<ExpressionStatement>(ifStatement.ThenBranch.Statements[0]).Expression);
+        var access = Assert.IsType<PropertyAccess>(thenAssignment.Right);
         Assert.Equal("name", Assert.Single(access.Names));
         Assert.Equal("b", Assert.IsType<Identifier>(access.Target).Name);
     }

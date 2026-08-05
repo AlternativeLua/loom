@@ -95,22 +95,44 @@ public sealed partial class LuauGenerator
         return _macroExpander.TryGetOptionalChainMemberMacro(access, rootExpression, names, receiver, out var replacement) ? replacement : target;
     }
 
-    // a?.b?.c => if a ~= nil then if a.b ~= nil then a.b.c else nil else nil
-    // finalize lets an enclosing invocation (a?.b() -> if a ~= nil then a.b() else nil) place the
-    // call inside the short-circuit instead of calling the (possibly nil) chain result afterward.
+    // a?.b?.c => local _optional = a
+    //            local _optionalResult
+    //            if _optional ~= nil then
+    //              local _optional_1 = _optional.b
+    //              if _optional_1 ~= nil then _optionalResult = _optional_1.c else _optionalResult = nil end
+    //            else _optionalResult = nil end
+    // Every already-computed link that a subsequent `?.` needs to both nil-check and re-index is cached
+    // into a local first (PushToVariable is a no-op for a plain identifier), so a receiver with side
+    // effects - a function call, a metamethod-backed Roblox property - is only ever evaluated once no
+    // matter how many optional segments follow it. This has to be a statement (an IfStatement, hoisted
+    // as a prereq) rather than the leaner IfExpression it used to be: Luau's if-expression only allows a
+    // single expression per branch, so there's nowhere to put the intermediate locals a guarded, deeper
+    // access needs.
+    // finalize lets an enclosing invocation (a?.b() -> ... _optionalResult = a.b() ...) place the call
+    // inside the short-circuit instead of calling the (possibly nil) chain result afterward.
     private LuauExpression GenerateOptionalChain(Expression accessExpression, LuauExpression target, List<DotName> names, Func<LuauExpression, LuauExpression>? finalize = null)
     {
         var segments = names.ConvertAll(name => (Name: name.Name.Text, name.IsOptional));
         if (_semanticModel.TryGetIntrinsicAttribute(accessExpression, "luau_name", out var attr) && ValidateLuauNameAttribute(attr, out var nameLiteral))
             segments[^1] = (nameLiteral.Value, segments[^1].IsOptional);
 
-        return BuildOptionalChain(target, segments, 0, finalize ?? (expression => expression));
+        var resultName = _state.Scope.AddIdentifier("_optionalResult");
+        var resultIdentifier = new Luau.AST.Identifier(resultName);
+        _state.Prereq(new LocalVariable(resultName, null, null));
+        _state.Prereq(BuildOptionalChain(target, segments, 0, finalize ?? (expression => expression), resultIdentifier));
+
+        return resultIdentifier;
     }
 
-    private static LuauExpression BuildOptionalChain(LuauExpression target, List<(string Name, bool IsOptional)> segments, int index, Func<LuauExpression, LuauExpression> finalize)
+    private LuauStatement BuildOptionalChain(
+        LuauExpression target,
+        List<(string Name, bool IsOptional)> segments,
+        int index,
+        Func<LuauExpression, LuauExpression> finalize,
+        Luau.AST.Identifier result)
     {
         if (index >= segments.Count)
-            return finalize(target);
+            return new ExpressionStatement(new Luau.AST.BinaryOperator(result, "=", finalize(target)));
 
         if (!segments[index].IsOptional)
         {
@@ -122,13 +144,19 @@ public sealed partial class LuauGenerator
                 i++;
             }
 
-            return BuildOptionalChain(new Luau.AST.PropertyAccess(target, plainNames), segments, i, finalize);
+            return BuildOptionalChain(new Luau.AST.PropertyAccess(target, plainNames), segments, i, finalize, result);
         }
 
-        var condition = new Luau.AST.BinaryOperator(target, "~=", new NilLiteral());
-        var nextTarget = new Luau.AST.PropertyAccess(target, [segments[index].Name]);
-        var thenBranch = BuildOptionalChain(nextTarget, segments, index + 1, finalize);
-        return new IfExpression(condition, thenBranch, [], new NilLiteral());
+        var cachedTarget = _state.PushToVariable("_optional", target);
+        var condition = new Luau.AST.BinaryOperator(cachedTarget, "~=", new NilLiteral());
+        var nextTarget = new Luau.AST.PropertyAccess(cachedTarget, [segments[index].Name]);
+
+        var (thenStatement, thenScope) = _state.Capture(() => BuildOptionalChain(nextTarget, segments, index + 1, finalize, result));
+        var thenStatements = new List<LuauStatement>();
+        ApplyPrereqAndPostreq(thenStatements, thenScope, thenStatement);
+
+        var elseBranch = new Chunk([new ExpressionStatement(new Luau.AST.BinaryOperator(result, "=", new NilLiteral()))]);
+        return new IfStatement(condition, new Chunk(thenStatements), [], elseBranch);
     }
 
     public override LuauNode VisitElementAccess(ElementAccess elementAccess)
