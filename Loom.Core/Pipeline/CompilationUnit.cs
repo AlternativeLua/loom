@@ -10,9 +10,24 @@ using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Pipeline;
 
-public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
+public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diagnosticOptions = null)
 {
-    public LoomConfig Config { get; } = config;
+    /// <summary>A unit spanning one project, <paramref name="config" />'s source directory being its only root.</summary>
+    public CompilationUnit(LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
+        : this(new SourceRootSet(new SourceRoot(config)), diagnosticOptions)
+    {
+    }
+
+    /// <summary>Every project this unit compiles, the entry project first.</summary>
+    public SourceRootSet Roots { get; } = roots;
+
+    /// <summary>
+    ///     The entry project's config, which governs what the unit decides once for every root: its project
+    ///     type, and the Rojo project modules are named through. Anything decided per file — its output path,
+    ///     whether it is written at all, the module boundary its imports may not cross — goes through
+    ///     <see cref="Roots" /> instead, since a dependency root has a config of its own.
+    /// </summary>
+    public LoomConfig Config => Roots.Entry.Config;
 
     /// <summary>
     ///     Reporting behavior handed to every <see cref="DiagnosticBag" /> the unit's stages create. Defaults
@@ -20,9 +35,16 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     /// </summary>
     public DiagnosticOptions DiagnosticOptions { get; } = diagnosticOptions ?? DiagnosticOptions.Default;
 
-    public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
+    /// <summary>Every root's files, entry project first.</summary>
+    public IEnumerable<SourceFile> SourceFiles => Roots.Files;
+
     public Dictionary<Symbol, Type> Globals { get; } = [];
-    public RuntimeImport RuntimeImport { get; } = RuntimeImport.Resolve(config);
+
+    /// <summary>
+    ///     Where the runtime library lives in the instance tree. One per unit, resolved from the entry
+    ///     project: the compiled output of every root, dependencies included, runs against that one runtime.
+    /// </summary>
+    public RuntimeImport RuntimeImport { get; } = RuntimeImport.Resolve(roots.Entry.Config);
 
     /// <summary>
     ///     Semantic models of files already analyzed in this unit, keyed by source file. Because analysis
@@ -32,7 +54,7 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     public Dictionary<SourceFile, SemanticModel> AnalyzedModules { get; } = [];
 
     /// <summary>Names modules for the requires the generator emits, through the unit's Rojo project.</summary>
-    public ModuleRequirePathResolver ModuleRequirePaths { get; } = new(config);
+    public ModuleRequirePathResolver ModuleRequirePaths { get; } = new(roots);
 
     /// <summary>
     ///     Import dependency graph of the unit, built between the two compilation phases. The resolver reads
@@ -83,8 +105,8 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
             DiagnosticOptions
         );
 
-        if (!diagnostics.ContainsErrors() && !Config.NoEmit)
-            compiledFiles.ForEach(file => FileManager.WriteCompiledFile(file));
+        if (!diagnostics.ContainsErrors())
+            Emit(compiledFiles);
 
         return new CompilationResult(compiledFiles, diagnostics)
         {
@@ -120,15 +142,8 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     private CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths, Func<string, string?> resolveContent)
     {
         foreach (var path in changedAbsolutePaths)
-        {
-            var content = resolveContent(path);
-            if (content == null)
-                continue;
-
-            var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
-            if (index >= 0)
-                SourceFiles[index] = new SourceFile(path, content);
-        }
+            if (resolveContent(path) is { } content)
+                Roots.Replace(new SourceFile(path, content));
 
         if (_compiledByPath.Count == 0
             || changedAbsolutePaths.Any(path => !_parsedByPath.ContainsKey(path) || (resolveContent(path) == null && !File.Exists(path))))
@@ -142,9 +157,7 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         foreach (var path in changedAbsolutePaths)
         {
             var file = new SourceFile(path, resolveContent(path));
-            var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
-            if (index >= 0)
-                SourceFiles[index] = file;
+            Roots.Replace(file);
 
             var compiler = new Compiler(this, file);
             if (compiler.Parse() is { } parsedFile)
@@ -185,10 +198,8 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
             DiagnosticOptions
         );
 
-        if (!diagnostics.ContainsErrors() && !Config.NoEmit)
-            foreach (var file in compiledFiles)
-                if (reanalyzed.Contains(file.SourceFile))
-                    FileManager.WriteCompiledFile(file);
+        if (!diagnostics.ContainsErrors())
+            Emit(compiledFiles.Where(file => reanalyzed.Contains(file.SourceFile)));
 
         return new CompilationResult(compiledFiles, diagnostics)
         {
@@ -229,6 +240,18 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
 
             return files;
         }
+    }
+
+    /// <summary>
+    ///     Writes every file whose own project asked for output. <see cref="LoomConfig.NoEmit" /> is a
+    ///     per-project setting, so a unit can emit its entry project while leaving the output of a dependency
+    ///     it only compiled to type-check against exactly as it found it.
+    /// </summary>
+    private static void Emit(IEnumerable<CompiledFile> compiledFiles)
+    {
+        foreach (var file in compiledFiles)
+            if (!file.Root.Config.NoEmit)
+                FileManager.WriteCompiledFile(file);
     }
 
     private CompiledFile? AnalyzeAndCache(Compiler compiler, ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics, List<FailedFile> failures)
@@ -298,7 +321,7 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     {
         try
         {
-            return ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Config, DiagnosticOptions);
+            return ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Roots, DiagnosticOptions);
         }
         catch (Exception e)
         {
@@ -323,7 +346,7 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     /// </summary>
     private List<(Compiler Compiler, ParsedFile ParsedFile)> ParseAll(List<FailedFile> failures)
     {
-        var parsedFiles = new List<(Compiler, ParsedFile)>(SourceFiles.Count);
+        var parsedFiles = new List<(Compiler, ParsedFile)>();
         foreach (var compiler in SourceFiles.Select(file => new Compiler(this, file)))
             if (compiler.Parse() is { } parsedFile)
                 parsedFiles.Add((compiler, parsedFile));

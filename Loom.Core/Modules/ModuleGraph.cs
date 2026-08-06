@@ -1,4 +1,3 @@
-using Loom.Config;
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
 using Loom.Core.Pipeline;
@@ -69,9 +68,9 @@ public sealed class ModuleGraph
     /// <summary>Module diagnostics belonging to <paramref name="file" />, reported at its import sites.</summary>
     public DiagnosticBag? GetDiagnostics(SourceFile file) => _diagnostics.Get(file);
 
-    public static ModuleGraph Build(List<ParsedFile> parsedFiles, LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
+    public static ModuleGraph Build(List<ParsedFile> parsedFiles, SourceRootSet roots, DiagnosticOptions? diagnosticOptions = null)
     {
-        var resolver = new ModuleResolver(parsedFiles.ConvertAll(parsedFile => parsedFile.File), config.Files.SourceDirectory);
+        var resolver = new ModuleResolver(parsedFiles.ConvertAll(parsedFile => parsedFile.File), roots);
         var parsedFilesByFile = new Dictionary<SourceFile, ParsedFile>();
         foreach (var parsedFile in parsedFiles)
             parsedFilesByFile.TryAdd(parsedFile.File, parsedFile);
@@ -104,7 +103,7 @@ public sealed class ModuleGraph
             dependencies[parsedFile.File] = edges;
         }
 
-        var order = Sort(parsedFiles, dependencies, config, diagnostics);
+        var order = Sort(parsedFiles, dependencies, roots, diagnostics);
         var dependents = new Dictionary<SourceFile, List<SourceFile>>();
         foreach (var (file, edges) in dependencies)
             foreach (var edge in edges)
@@ -233,7 +232,7 @@ public sealed class ModuleGraph
     private static List<ParsedFile> Sort(
         List<ParsedFile> parsedFiles,
         Dictionary<SourceFile, List<ModuleEdge>> dependencies,
-        LoomConfig config,
+        SourceRootSet roots,
         ModuleDiagnostics diagnostics)
     {
         var order = new List<ParsedFile>(parsedFiles.Count);
@@ -261,7 +260,7 @@ public sealed class ModuleGraph
                         parsedFile.File,
                         edge.ModuleReference,
                         InternalCodes.CircularModuleDependency,
-                        $"Circular module dependency: {DescribeCycle(path, edge.Target.File, config)}.",
+                        $"Circular module dependency: {DescribeCycle(path, edge.Target.File, roots)}.",
                         "Luau requires cannot be cyclic; move the shared code into a third module"
                     );
 
@@ -277,11 +276,12 @@ public sealed class ModuleGraph
         }
     }
 
-    private static string DescribeCycle(List<SourceFile> path, SourceFile target, LoomConfig config)
+    /// <summary>Each file named by its own root, so a cycle running through a dependency reads as one.</summary>
+    private static string DescribeCycle(List<SourceFile> path, SourceFile target, SourceRootSet roots)
     {
         var start = path.IndexOf(target);
         var cycle = path.Skip(start < 0 ? 0 : start).Append(target);
-        return string.Join(" → ", cycle.Select(file => file.RelativePath(config.Files.SourceDirectory)));
+        return string.Join(" → ", cycle.Select(file => roots.Of(file).Describe(file)));
     }
 
     private static void Report(
