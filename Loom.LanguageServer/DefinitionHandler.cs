@@ -12,19 +12,26 @@ public sealed class DefinitionHandler(DocumentStore documents) : DefinitionHandl
         if (!documents.TryGetState(request.TextDocument.Uri, out var state))
             return Task.FromResult<LocationOrLocationLinks?>(null);
 
-        var offset = IncrementalText.ToOffset(state.File.SourceFile.SourceText, request.Position);
-        var node = NodeFinder.FindAt(state.File.Tree, offset);
-        var symbol = node == null ? null : state.File.SemanticModel.GetSymbol(node) ?? state.File.SemanticModel.GetDeclarationSymbol(node);
-        if (symbol == null || !File.Exists(symbol.Declaration.File.AbsolutePath))
-            return Task.FromResult<LocationOrLocationLinks?>(null);
-
-        var location = new Location
+        try
         {
-            Uri = DocumentUri.FromFileSystemPath(symbol.Declaration.File.AbsolutePath),
-            Range = Conversion.ToRange(symbol.Declaration.LocationSpan)
-        };
+            var offset = IncrementalText.ToOffset(state.File.SourceFile.SourceText, request.Position);
+            var node = NodeFinder.FindAt(state.File.Tree, offset);
+            var symbol = node == null ? null : state.File.SemanticModel.GetSymbol(node) ?? state.File.SemanticModel.GetDeclarationSymbol(node);
+            if (symbol == null || !File.Exists(symbol.Declaration.File.AbsolutePath))
+                return Task.FromResult<LocationOrLocationLinks?>(null);
 
-        return Task.FromResult<LocationOrLocationLinks?>(new LocationOrLocationLinks(new LocationOrLocationLink(location)));
+            var location = new Location
+            {
+                Uri = DocumentUri.FromFileSystemPath(symbol.Declaration.File.AbsolutePath),
+                Range = Conversion.ToRange(symbol.Declaration.LocationSpan)
+            };
+
+            return Task.FromResult<LocationOrLocationLinks?>(new LocationOrLocationLinks(new LocationOrLocationLink(location)));
+        }
+        catch (Exception)
+        {
+            return Task.FromResult<LocationOrLocationLinks?>(null);
+        }
     }
 
     protected override DefinitionRegistrationOptions CreateRegistrationOptions(DefinitionCapability capability, ClientCapabilities clientCapabilities) =>

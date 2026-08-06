@@ -12,22 +12,29 @@ public sealed class HoverHandler(DocumentStore documents) : HoverHandlerBase
         if (!documents.TryGetState(request.TextDocument.Uri, out var state))
             return Task.FromResult<Hover?>(null);
 
-        var offset = IncrementalText.ToOffset(state.File.SourceFile.SourceText, request.Position);
-        var node = NodeFinder.FindAt(state.File.Tree, offset);
-        if (node == null)
-            return Task.FromResult<Hover?>(null);
-
-        var type = state.File.SemanticModel.GetType(node);
-        if (type is TypeVariable)
-            return Task.FromResult<Hover?>(null);
-
-        var hover = new Hover
+        try
         {
-            Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = $"```loom\n{type}\n```" }),
-            Range = Conversion.ToRange(node.LocationSpan)
-        };
+            var offset = IncrementalText.ToOffset(state.File.SourceFile.SourceText, request.Position);
+            var node = NodeFinder.FindAt(state.File.Tree, offset);
+            if (node == null)
+                return Task.FromResult<Hover?>(null);
 
-        return Task.FromResult<Hover?>(hover);
+            var type = state.File.SemanticModel.GetType(node);
+            if (type is TypeVariable)
+                return Task.FromResult<Hover?>(null);
+
+            var hover = new Hover
+            {
+                Contents = new MarkedStringsOrMarkupContent(new MarkupContent { Kind = MarkupKind.Markdown, Value = $"```loom\n{type}\n```" }),
+                Range = Conversion.ToRange(node.LocationSpan)
+            };
+
+            return Task.FromResult<Hover?>(hover);
+        }
+        catch (Exception)
+        {
+            return Task.FromResult<Hover?>(null);
+        }
     }
 
     protected override HoverRegistrationOptions CreateRegistrationOptions(HoverCapability capability, ClientCapabilities clientCapabilities) =>

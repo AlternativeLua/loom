@@ -44,15 +44,22 @@ public sealed class DocumentStore
             return null;
 
         var path = Path.GetFullPath(rawPath);
-        if (GetOrCreateUnit(path) is not { } unit)
+        try
+        {
+            if (GetOrCreateUnit(path) is not { } unit)
+                return null;
+
+            var result = unit.Recompile(new Dictionary<string, string> { [path] = text });
+            var file = result.Files.Find(f => f.SourceFile.AbsolutePath == path);
+            if (file != null)
+                _state[uri] = new DocumentState(file, unit);
+
+            return result;
+        }
+        catch (Exception)
+        {
             return null;
-
-        var result = unit.Recompile(new Dictionary<string, string> { [path] = text });
-        var file = result.Files.Find(f => f.SourceFile.AbsolutePath == path);
-        if (file != null)
-            _state[uri] = new DocumentState(file, unit);
-
-        return result;
+        }
     }
 
     private CompilationUnit? GetOrCreateUnit(string absolutePath)

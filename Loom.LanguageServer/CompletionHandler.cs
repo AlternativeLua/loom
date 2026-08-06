@@ -12,14 +12,21 @@ public sealed class CompletionHandler(DocumentStore documents) : CompletionHandl
         if (!documents.TryGetState(request.TextDocument.Uri, out var state))
             return Task.FromResult(new CompletionList());
 
-        var symbols = state.File.SemanticModel.Declarations.Values
-            .SelectMany(list => list)
-            .Concat(state.Unit.Globals.Keys)
-            .GroupBy(symbol => symbol.Name)
-            .Select(group => group.First());
+        try
+        {
+            var symbols = state.File.SemanticModel.Declarations.Values
+                .SelectMany(list => list)
+                .Concat(state.Unit.Globals.Keys)
+                .GroupBy(symbol => symbol.Name)
+                .Select(group => group.First());
 
-        var items = symbols.Select(symbol => new CompletionItem { Label = symbol.Name, Kind = ToCompletionItemKind(symbol.Kind) });
-        return Task.FromResult(new CompletionList(items));
+            var items = symbols.Select(symbol => new CompletionItem { Label = symbol.Name, Kind = ToCompletionItemKind(symbol.Kind) });
+            return Task.FromResult(new CompletionList(items));
+        }
+        catch (Exception)
+        {
+            return Task.FromResult(new CompletionList());
+        }
     }
 
     public override Task<CompletionItem> Handle(CompletionItem request, CancellationToken cancellationToken) => Task.FromResult(request);
