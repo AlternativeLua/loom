@@ -6,6 +6,7 @@ using Loom.Core.Resolving;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
 using Loom.Core.TypeChecking.Types;
+using IWithAttributes = Loom.Core.Parsing.AST.IWithAttributes;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
 using Type = Loom.Core.TypeChecking.Types.Type;
 
@@ -165,9 +166,25 @@ public static class Intrinsics
             {
                 symbol.IsIntrinsic = true;
                 symbol.IsGlobal = true;
+                symbol.AttributeUsageFlags = ResolveAttributeUsageFlags(compiledFile.SemanticModel, symbol);
                 intrinsicSymbols.Add((symbol, compiledFile.SemanticModel.GetType(symbol.Declaration)));
             }
 
         return intrinsicSymbols;
+    }
+
+    private static int? ResolveAttributeUsageFlags(SemanticModel semanticModel, Symbol symbol)
+    {
+        if (symbol.Declaration is not IWithAttributes { Attributes: { } declaredAttributes })
+            return null;
+
+        var usageAttribute = declaredAttributes.AttributeList.Find(
+            a => a.Expression.Tokens.LastOrDefault(t => t.Kind == SyntaxKind.Identifier)?.Text == "attribute_usage"
+        );
+
+        if (usageAttribute?.Arguments.ArgumentList is not [var flagsExpression] || semanticModel.GetConstantValue(flagsExpression) is not double flagsValue)
+            return null;
+
+        return (int)flagsValue;
     }
 }

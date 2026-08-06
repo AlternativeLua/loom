@@ -8587,6 +8587,32 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void ThrowsFor_AttributeUsage_DisallowedOnFunctionDecorator_ForIntrinsicDecorator()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [serializable]
+            fn foo(): void {}
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AttributeTargetNotAllowed, "Attribute 'serializable' is not valid on Function.");
+    }
+
+    [Fact]
+    public void ThrowsFor_AttributeUsage_DisallowedOnInterfaceDecorator_ForIntrinsicDecorator()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [metadata_only]
+            interface Foo {}
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.AttributeTargetNotAllowed, "Attribute 'metadata_only' is not valid on Interface.");
+    }
+
+    [Fact]
     public void Checks_IntrinsicAttribute_OnEvent_NotTreatedAsDecorator() =>
         Utility.AssertNoErrors(
             Utility.GetTypeCheckerDiagnostics(

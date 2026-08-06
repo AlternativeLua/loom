@@ -13,6 +13,7 @@ public class Symbol(Node declaration, SymbolKind kind, string name, bool isMutab
     public bool IsAmbient { get; internal set; }
     public bool IsIntrinsic { get; internal set; }
     public bool IsGlobal { get; internal set; }
+    public int? AttributeUsageFlags { get; internal set; }
     public bool IsTypeSymbol { get; } = IsTypeKind(kind);
     public bool IsValueSymbol { get; } = IsValueKind(kind);
 

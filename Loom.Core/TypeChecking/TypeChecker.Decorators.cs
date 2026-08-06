@@ -1,5 +1,6 @@
 using Loom.Core.Diagnostics;
 using Loom.Core.Parsing.AST;
+using Loom.Core.Text;
 using Attribute = Loom.Core.Parsing.AST.Attribute;
 
 namespace Loom.Core.TypeChecking;
@@ -21,7 +22,7 @@ public sealed partial class TypeChecker
 
     private bool IsMetadataOnlyDecorator(Attribute attribute) =>
         _semanticModel.GetSymbol(attribute.Expression)?.Declaration is IWithAttributes { Attributes: { } declaredAttributes }
-        && declaredAttributes.AttributeList.Exists(a => _semanticModel.GetSymbol(a.Expression) is { Name: "metadata_only", IsIntrinsic: true });
+        && declaredAttributes.AttributeList.Exists(a => a.Expression.Tokens.LastOrDefault(t => t.Kind == SyntaxKind.Identifier)?.Text == "metadata_only");
 
     private void CheckDecoratorAttribute(Attribute attribute, string valueName, Type valueType)
     {
@@ -110,17 +111,29 @@ public sealed partial class TypeChecker
             return;
         }
 
-        if (referencedSymbol.Declaration is not IWithAttributes { Attributes: { } declaredAttributes })
+        int? allowedFlagsValue;
+        if (referencedSymbol.IsIntrinsic)
+        {
+            allowedFlagsValue = referencedSymbol.AttributeUsageFlags;
+        }
+        else
+        {
+            if (referencedSymbol.Declaration is not IWithAttributes { Attributes: { } declaredAttributes })
+                return;
+
+            var usageAttribute = declaredAttributes.AttributeList.Find(
+                a => a.Expression.Tokens.LastOrDefault(t => t.Kind == SyntaxKind.Identifier)?.Text == "attribute_usage"
+            );
+
+            allowedFlagsValue = usageAttribute?.Arguments.ArgumentList is [var flagsExpression] && _semanticModel.GetConstantValue(flagsExpression) is double flagsValue
+                ? (int)flagsValue
+                : null;
+        }
+
+        if (allowedFlagsValue is not { } flags)
             return;
 
-        var usageAttribute = declaredAttributes.AttributeList.Find(a => _semanticModel.GetSymbol(a.Expression) is { Name: "attribute_usage", IsIntrinsic: true });
-        if (usageAttribute == null)
-            return;
-
-        if (usageAttribute.Arguments.ArgumentList is not [var flagsExpression] || _semanticModel.GetConstantValue(flagsExpression) is not double flagsValue)
-            return;
-
-        var allowedFlags = (AttributeTargetsFlag)(int)flagsValue;
+        var allowedFlags = (AttributeTargetsFlag)flags;
         if ((allowedFlags & currentTarget) != 0)
             return;
 

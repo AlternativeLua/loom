@@ -102,7 +102,7 @@ public sealed partial class LuauGenerator
 
     private bool IsMetadataOnlyDecorator(Attribute attribute) =>
         _semanticModel.GetSymbol(attribute.Expression)?.Declaration is IWithAttributes { Attributes: { } declaredAttributes }
-        && declaredAttributes.AttributeList.Exists(a => _semanticModel.GetSymbol(a.Expression) is { Name: "metadata_only", IsIntrinsic: true });
+        && declaredAttributes.AttributeList.Exists(a => a.Expression.Tokens.LastOrDefault(t => t.Kind == SyntaxKind.Identifier)?.Text == "metadata_only");
 
     public override LuauNode VisitFunctionExpression(FunctionExpression functionExpression)
     {
