@@ -2,7 +2,6 @@ namespace Loom.Core.Diagnostics;
 
 public static class InternalCodes
 {
-    public const string Unknown = "L???";
     public const string NotImplemented = "L000";
     public const string CompilerError = "L001";
 
@@ -122,15 +121,15 @@ public static class InternalCodes
     public const string InvalidAttributeTargetType = "L397";
     public const string NotSerializable = "L398";
     public const string RecursiveSerializableType = "L399";
-    public const string AmbiguousSerializableUnion = "L39A";
-    public const string InvalidSerializationRange = "L39B";
-    public const string PossiblyNoneAccess = "L39C";
-    public const string ErrorPropagationOutsideFunction = "L39D";
-    public const string ErrorPropagationInAfter = "L39E";
-    public const string ErrorPropagationRequiresResultType = "L39F";
-    public const string ErrorPropagationOutsideResultFunction = "L3A0";
-    public const string ErrorPropagationErrorTypeMismatch = "L3A1";
-    public const string InvalidMetamethodAttribute = "L3A2";
+    public const string AmbiguousSerializableUnion = "L400";
+    public const string InvalidSerializationRange = "L401";
+    public const string PossiblyNoneAccess = "L402";
+    public const string ErrorPropagationOutsideFunction = "L403";
+    public const string ErrorPropagationInAfter = "L404";
+    public const string ErrorPropagationRequiresResultType = "L405";
+    public const string ErrorPropagationOutsideResultFunction = "L406";
+    public const string ErrorPropagationErrorTypeMismatch = "L407";
+    public const string InvalidMetamethodAttribute = "L408";
 
-    public const string SimplifiableCode = "L400";
+    public const string SimplifiableCode = "L500";
 }
