@@ -339,7 +339,7 @@ public class CompilationUnitTest
     public void Recompile_AfterInvalidThenFixedContent_ClearsDiagnostics() =>
         Utility.WithTempProject(
             [("main.loom", "let x = 1;")],
-            (unit, first) =>
+            (unit, _) =>
             {
                 var mainFile = unit.SourceFiles.Find(f => f.Name == "main.loom")!;
 

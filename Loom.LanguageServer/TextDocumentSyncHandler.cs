@@ -49,7 +49,7 @@ public sealed class TextDocumentSyncHandler(ILanguageServerFacade server, Docume
         try
         {
             var rawPath = uri.GetFileSystemPath();
-            var diagnostics = rawPath == null
+            var diagnostics = string.IsNullOrEmpty(rawPath)
                 ? []
                 : result.Diagnostics.Set.Where(d => d.Span.File.AbsolutePath == Path.GetFullPath(rawPath)).Select(Conversion.ToDiagnostic).ToArray();
 
@@ -57,6 +57,7 @@ public sealed class TextDocumentSyncHandler(ILanguageServerFacade server, Docume
         }
         catch (Exception)
         {
+            // ignored
         }
     }
 }
