@@ -112,7 +112,7 @@ public static class Intrinsics
         };
 
         var compilationUnit = new CompilationUnit(config);
-        compilationUnit.SourceFiles.AddRange(LoadEmbeddedIntrinsicFiles());
+        compilationUnit.Roots.Entry.Files.AddRange(LoadEmbeddedIntrinsicFiles());
         return compilationUnit;
     }
 

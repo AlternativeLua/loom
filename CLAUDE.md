@@ -35,8 +35,10 @@ before claiming done.
     - `Modules/` — import/export graphing, resolution, and Luau require() path resolution
     - `Diagnostics/` — `DiagnosticBag`, severities, `InternalCodes.cs`. Errors flow through diagnostics, never exceptions (top-level `Compiler.Compile` catch =
       compiler bug path).
-    - `Pipeline/` — `Compiler.cs` pipeline orchestration; `CompilationUnit.cs` multi-file compile driven by `LoomConfig` and two-phase parse-analyze step to
-      support modules
+    - `Pipeline/` — `Compiler.cs` pipeline orchestration; `CompilationUnit.cs` multi-file compile with a two-phase parse-analyze step to support modules.
+      A unit spans a `SourceRootSet`: one `SourceRoot` (a `LoomConfig` plus the files under its source directory) per project it compiles — the entry
+      project, plus one per source-distributed dependency. Output path, `no_emit` and the boundary a relative import may not cross come from
+      `Roots.Of(file)`, never from the unit's own `Config`
 - `Loom.Luau/` — Luau output AST + renderer (`LuauFactory`, `RenderState`, `AST/`)
 - `Loom.Config/` — `loom-config.toml` reader (Tomlyn). `ProjectType` (default `game`), `Debug` (default `false`, for emitting debug diagnostics) `FilesConfig`:
   `SourceDirectory` (default `src`) → `OutputDirectory` (default `dist`). Package identity lives here too: `[package]` (`PackageConfig`, with `PackageName` and

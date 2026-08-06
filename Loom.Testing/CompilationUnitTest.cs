@@ -268,7 +268,7 @@ public class CompilationUnitTest
             [("math.loom", "export let value: number = 1;"), ("main.loom", "import { value } from \"./math\"\nlet doubled: number = value;")],
             (unit, first) =>
             {
-                var mathFile = unit.SourceFiles.Find(f => f.Name == "math.loom")!;
+                var mathFile = unit.SourceFiles.First(f => f.Name == "math.loom");
                 var mainFileBefore = first.Files.Find(f => f.SourceFile.Name == "main.loom")!;
                 File.WriteAllText(mathFile.AbsolutePath, "export let value: number = 2;");
 
@@ -290,7 +290,7 @@ public class CompilationUnitTest
             [("math.loom", "export let value: number = 1;"), ("main.loom", "import { value } from \"./math\"\nlet doubled: number = value;")],
             (unit, first) =>
             {
-                var mathFile = unit.SourceFiles.Find(f => f.Name == "math.loom")!;
+                var mathFile = unit.SourceFiles.First(f => f.Name == "math.loom");
                 var mainFileBefore = first.Files.Find(f => f.SourceFile.Name == "main.loom")!;
                 File.WriteAllText(mathFile.AbsolutePath, "export let value: string = \"hi\";");
 
@@ -326,7 +326,7 @@ public class CompilationUnitTest
             [("main.loom", "let x = 1;")],
             (unit, first) =>
             {
-                var mainFile = unit.SourceFiles.Find(f => f.Name == "main.loom")!;
+                var mainFile = unit.SourceFiles.First(f => f.Name == "main.loom");
                 var second = unit.Recompile(new Dictionary<string, string> { [mainFile.AbsolutePath] = "let x: string = 1;" });
 
                 Assert.Equal("let x = 1;", File.ReadAllText(mainFile.AbsolutePath));
@@ -341,7 +341,7 @@ public class CompilationUnitTest
             [("main.loom", "let x = 1;")],
             (unit, first) =>
             {
-                var mainFile = unit.SourceFiles.Find(f => f.Name == "main.loom")!;
+                var mainFile = unit.SourceFiles.First(f => f.Name == "main.loom");
 
                 var broken = unit.Recompile(new Dictionary<string, string> { [mainFile.AbsolutePath] = "let" });
                 Utility.AssertDiagnostic(broken.Diagnostics, InternalCodes.MustHaveInitializer, "Immutable declarations must be initialized.");

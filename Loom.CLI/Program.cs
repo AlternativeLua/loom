@@ -56,7 +56,7 @@ int runWatchLoop(LoomConfig watchedConfig)
     // not a structural change - only a genuinely new path needs the unit rebuilt from scratch
     void onSourceCreatedOrChanged(object? _, FileSystemEventArgs e)
     {
-        if (unit.SourceFiles.Exists(file => file.AbsolutePath == e.FullPath))
+        if (unit.SourceFiles.Any(file => file.AbsolutePath == e.FullPath))
             events.Add(e.FullPath);
         else
             events.Add(null);
