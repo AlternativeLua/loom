@@ -319,5 +319,21 @@ public class CompilationUnitTest
                 Assert.Equal(TimeSpan.Zero, second.EstimatedTimeSaved);
             }
         );
+
+    [Fact]
+    public void Recompile_WithInMemoryContent_UsesGivenTextInsteadOfDisk() =>
+        Utility.WithTempProject(
+            [("main.loom", "let x = 1;")],
+            (unit, first) =>
+            {
+                var mainFile = unit.SourceFiles.Find(f => f.Name == "main.loom")!;
+                var second = unit.Recompile(new Dictionary<string, string> { [mainFile.AbsolutePath] = "let x: string = 1;" });
+
+                Assert.Equal("let x = 1;", File.ReadAllText(mainFile.AbsolutePath));
+                Utility.AssertDiagnostic(second.Diagnostics, InternalCodes.TypeMismatch, "Type '1' is not assignable to type 'string'.");
+                Assert.Contains(second.Reanalyzed, f => f.Name == "main.loom");
+                Assert.NotSame(first.Files.Single(), second.Files.Single());
+            }
+        );
     #endregion Recompile
 }

@@ -115,9 +115,15 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     ///     unit's <see cref="SourceFiles" /> is fixed at construction time, so a structural change to the file
     ///     set needs a new <see cref="CompilationUnit" />, not a recompile of this one.
     /// </summary>
-    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths)
+    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths) => Recompile(changedAbsolutePaths, static _ => null);
+
+    public CompilationResult Recompile(IReadOnlyDictionary<string, string> changedContents) =>
+        Recompile(changedContents.Keys.ToHashSet(), path => changedContents[path]);
+
+    private CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths, Func<string, string?> resolveContent)
     {
-        if (_compiledByPath.Count == 0 || changedAbsolutePaths.Any(path => !_parsedByPath.ContainsKey(path) || !File.Exists(path)))
+        if (_compiledByPath.Count == 0
+            || changedAbsolutePaths.Any(path => !_parsedByPath.ContainsKey(path) || (resolveContent(path) == null && !File.Exists(path))))
             return Compile();
 
         var stopwatch = Stopwatch.StartNew();
@@ -127,7 +133,7 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         var failures = new List<FailedFile>();
         foreach (var path in changedAbsolutePaths)
         {
-            var file = new SourceFile(path);
+            var file = new SourceFile(path, resolveContent(path));
             var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
             if (index >= 0)
                 SourceFiles[index] = file;
