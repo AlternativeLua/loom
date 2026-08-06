@@ -6,7 +6,7 @@ namespace Loom.Config;
 
 public static partial class ConfigReader
 {
-    private const string ConfigFileName = "loom-config.toml";
+    public const string ConfigFileName = "loom-config.toml";
     private const int EditionLength = 4;
     private const string VersionKey = "version";
     private const string DevelopmentKey = "dev";

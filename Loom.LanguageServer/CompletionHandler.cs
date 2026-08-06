@@ -38,14 +38,12 @@ public sealed class CompletionHandler(DocumentStore documents) : CompletionHandl
         kind switch
         {
             LoomSymbolKind.Function => CompletionItemKind.Function,
-            LoomSymbolKind.Variable => CompletionItemKind.Variable,
-            LoomSymbolKind.Parameter => CompletionItemKind.Variable,
+            LoomSymbolKind.Variable or LoomSymbolKind.Parameter => CompletionItemKind.Variable,
             LoomSymbolKind.Property => CompletionItemKind.Property,
             LoomSymbolKind.InjectedPropertyVariable => CompletionItemKind.Property,
             LoomSymbolKind.Type => CompletionItemKind.Class,
             LoomSymbolKind.EnumType => CompletionItemKind.Enum,
-            LoomSymbolKind.Interface => CompletionItemKind.Interface,
-            LoomSymbolKind.Trait => CompletionItemKind.Interface,
+            LoomSymbolKind.Interface or LoomSymbolKind.Trait => CompletionItemKind.Interface,
             LoomSymbolKind.Event => CompletionItemKind.Event,
             LoomSymbolKind.Attribute => CompletionItemKind.Function,
             _ => CompletionItemKind.Text

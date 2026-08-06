@@ -9,7 +9,7 @@ internal static class Log
     [DoesNotReturn]
     public static void Fatal(string message, int code = 1)
     {
-        Console.WriteLine($"fatal: {message}");
+        Console.Error.WriteLine($"fatal: {message}");
         Environment.Exit(code);
     }
 }

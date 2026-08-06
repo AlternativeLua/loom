@@ -455,7 +455,7 @@ internal sealed partial class SerializationEmitter
     ///     Maps are unordered and their keys are dynamic, so unlike every other shape there is no fixed set
     ///     of "fields" to gate behind bits - the diff is entirely body-driven. A classification pass splits
     ///     current's keys into added (absent from baseline) and changed (present but different, per
-    ///     <see cref="Loom.deep_equal" />), and baseline's keys not in current become removed. Three
+    ///     <c>Loom.deep_equal</c>), and baseline's keys not in current become removed. Three
     ///     count-prefixed sections follow: removed keys alone, added key-value pairs in full, and changed
     ///     keys paired with a recursive dive into the value - the only place a map's entries share a block,
     ///     sized by <see cref="MapField.DiffEntryBits" />.

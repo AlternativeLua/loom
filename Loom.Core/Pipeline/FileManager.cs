@@ -6,6 +6,20 @@ namespace Loom.Core.Pipeline;
 public static class FileManager
 {
     public const string LoomExtension = ".loom";
+    private const string IncludeFolderName = "include";
+    
+    public static void WriteIncludeFolder(string projectDirectory)
+    {
+        var source = Path.Combine(AppContext.BaseDirectory, IncludeFolderName);
+
+        if (!Directory.Exists(source))
+            throw new DirectoryNotFoundException(
+                $"Could not locate bundled '{IncludeFolderName}' directory at '{source}'.");
+
+        var destination = Path.Combine(projectDirectory, IncludeFolderName);
+
+        CopyDirectory(source, destination);
+    }
 
     /// <summary>Writes the file's rendered Luau, skipping the write entirely when it would be byte-identical to what's already on disk.</summary>
     /// <returns>Whether the file was actually written.</returns>
@@ -19,7 +33,7 @@ public static class FileManager
             Directory.CreateDirectory(directory);
 
         File.WriteAllText(file.Path, file.RenderedLuau);
-        Console.WriteLine($"[Info] Wrote {file.Path}");
+        Log.Info($"Wrote {file.Path}");
         return true;
     }
 
@@ -40,4 +54,24 @@ public static class FileManager
         !string.IsNullOrWhiteSpace(directoryPath) && Directory.Exists(directoryPath)
             ? Directory.GetFiles(directoryPath, $"*{LoomExtension}", searchOption).Select(LoadSingle).ToList()
             : [];
+    
+    private static void CopyDirectory(string source, string destination)
+    {
+        Directory.CreateDirectory(destination);
+
+        foreach (var directory in Directory.EnumerateDirectories(source, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(source, directory);
+            Directory.CreateDirectory(Path.Combine(destination, relative));
+        }
+
+        foreach (var file in Directory.EnumerateFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var relative = Path.GetRelativePath(source, file);
+            var destinationFile = Path.Combine(destination, relative);
+
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationFile)!);
+            File.Copy(file, destinationFile, overwrite: true);
+        }
+    }
 }

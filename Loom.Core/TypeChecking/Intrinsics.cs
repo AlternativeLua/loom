@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using System.Reflection;
 using Loom.Config;
 using Loom.Core.Pipeline;
 using Loom.Core.Resolving;

@@ -40,7 +40,7 @@ public sealed class DocumentStore
     private CompilationResult? Recompile(DocumentUri uri, string text)
     {
         var rawPath = uri.GetFileSystemPath();
-        if (rawPath == null)
+        if (string.IsNullOrEmpty(rawPath))
             return null;
 
         var path = Path.GetFullPath(rawPath);
