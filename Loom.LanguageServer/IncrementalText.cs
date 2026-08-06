@@ -23,7 +23,7 @@ public static class IncrementalText
         return text;
     }
 
-    private static int ToOffset(string text, Position position)
+    public static int ToOffset(string text, Position position)
     {
         var offset = 0;
         for (var line = 0; line < position.Line; line++)

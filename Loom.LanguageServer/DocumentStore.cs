@@ -5,10 +5,13 @@ using OmniSharp.Extensions.LanguageServer.Protocol.Models;
 
 namespace Loom.LanguageServer;
 
+public sealed record DocumentState(CompiledFile File, CompilationUnit Unit);
+
 public sealed class DocumentStore
 {
     private readonly Dictionary<DocumentUri, string> _documents = [];
     private readonly Dictionary<string, CompilationUnit> _unitsByProjectRoot = [];
+    private readonly Dictionary<DocumentUri, DocumentState> _state = [];
 
     public CompilationResult? Open(DocumentUri uri, string text)
     {
@@ -26,7 +29,13 @@ public sealed class DocumentStore
         return Recompile(uri, text);
     }
 
-    public void Close(DocumentUri uri) => _documents.Remove(uri);
+    public void Close(DocumentUri uri)
+    {
+        _documents.Remove(uri);
+        _state.Remove(uri);
+    }
+
+    public bool TryGetState(DocumentUri uri, out DocumentState state) => _state.TryGetValue(uri, out state!);
 
     private CompilationResult? Recompile(DocumentUri uri, string text)
     {
@@ -38,7 +47,12 @@ public sealed class DocumentStore
         if (GetOrCreateUnit(path) is not { } unit)
             return null;
 
-        return unit.Recompile(new Dictionary<string, string> { [path] = text });
+        var result = unit.Recompile(new Dictionary<string, string> { [path] = text });
+        var file = result.Files.Find(f => f.SourceFile.AbsolutePath == path);
+        if (file != null)
+            _state[uri] = new DocumentState(file, unit);
+
+        return result;
     }
 
     private CompilationUnit? GetOrCreateUnit(string absolutePath)
