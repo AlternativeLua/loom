@@ -116,9 +116,6 @@ internal record MacroContext(SemanticModel SemanticModel, LuauState State, Diagn
             return null;
 
         var instanceType = SemanticModel.GetType(typeName);
-
-        // Console.WriteLine(typeName);
-        // Console.WriteLine(instanceType);
         if (instanceType is not TypeParameter)
             return typeName.ToString();
 

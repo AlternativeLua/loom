@@ -346,7 +346,15 @@ public sealed partial class TypeChecker
                 }
 
             if (property.TryGetIntrinsicAttribute(_semanticModel, "luau_metamethod", out var metamethodAttribute))
+            {
                 ValidateMetamethodAttribute(metamethodAttribute);
+                if (valueType is FunctionType && !property.IsDescendantOf<Declare>())
+                    _diagnostics.Error(
+                        metamethodAttribute.Attribute,
+                        InternalCodes.InvalidMetamethodAttribute,
+                        "'luau_metamethod' on a function property is only allowed within a 'declare interface'."
+                    );
+            }
 
             properties.Add(new ObjectProperty(isMutable, name, valueType));
         }

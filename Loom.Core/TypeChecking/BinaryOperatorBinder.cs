@@ -7,7 +7,7 @@ namespace Loom.Core.TypeChecking;
 
 internal static class BinaryOperatorBinder
 {
-    private static readonly Dictionary<SyntaxKind, string> _metamethodNames = new()
+    private static readonly Dictionary<SyntaxKind, string> _binaryMetamethodNames = new()
     {
         [SyntaxKind.Plus] = "__add",
         [SyntaxKind.Minus] = "__sub",
@@ -15,10 +15,13 @@ internal static class BinaryOperatorBinder
         [SyntaxKind.Slash] = "__div",
         [SyntaxKind.SlashSlash] = "__idiv",
         [SyntaxKind.Percent] = "__mod",
-        [SyntaxKind.Caret] = "__pow"
+        [SyntaxKind.Caret] = "__pow",
+        [SyntaxKind.EqualsEquals] = "__eq",
+        [SyntaxKind.LArrow] = "__lt",
+        [SyntaxKind.LArrowEquals] = "__le"
     };
 
-    public static string? GetMetamethodName(SyntaxKind operatorKind) => _metamethodNames.GetValueOrDefault(operatorKind);
+    public static string? GetMetamethodName(SyntaxKind operatorKind) => _binaryMetamethodNames.GetValueOrDefault(operatorKind);
 
     private static readonly HashSet<BinaryOperatorRule> _rules =
     [

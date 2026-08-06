@@ -26,6 +26,12 @@ public sealed partial class TypeChecker
             return BindType(invocation, Types.PrimitiveType.Never);
         }
 
+        if (_semanticModel.TryGetIntrinsicAttribute(invocation.Expression, "luau_metamethod", out _))
+        {
+            _diagnostics.Error(invocation, InternalCodes.InvalidInvocation, "Cannot call a metamethod-backed property directly; use the corresponding operator instead.");
+            return BindType(invocation, Types.PrimitiveType.Never);
+        }
+
         Type resultType;
         if (type is Types.FunctionType functionType)
         {

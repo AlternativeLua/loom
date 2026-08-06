@@ -1725,6 +1725,28 @@ public class TypeCheckerTest
     }
 
     [Fact]
+    public void Allows_BinaryOperator_ViaAmbientInterfaceMetamethod_WhenInterfaceIsGeneric()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            declare sealed interface Point<T: number = f32> {
+                x: number;
+
+                [luau_metamethod("__add")]
+                add: fn(other: Point): Point;
+            }
+
+            declare let p1: Point;
+            declare let p2: Point;
+
+            let result = p1 + p2;
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
     public void ThrowsFor_BinaryOperator_OverloadedButWrongOperandType()
     {
         var diagnostics = Utility.GetTypeCheckerDiagnostics(
@@ -1780,6 +1802,53 @@ public class TypeCheckerTest
         );
 
         Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidMetamethodAttribute, "'luau_metamethod' requires a single string literal argument.");
+    }
+
+    [Fact]
+    public void ThrowsFor_LuauMetamethodAttribute_OnFunctionPropertyOutsideDeclareInterface()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Point {
+                x: number;
+
+                [luau_metamethod("__add")]
+                add: fn(other: Point): Point;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidMetamethodAttribute,
+            "'luau_metamethod' on a function property is only allowed within a 'declare interface'."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_CallingMetamethodBackedFunctionProperty()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            declare sealed interface Point {
+                x: number;
+
+                [luau_metamethod("__add")]
+                add: fn(other: Point): Point;
+            }
+
+            declare let p1: Point;
+            declare let p2: Point;
+
+            let result = p1.add(p2);
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidInvocation,
+            "Cannot call a metamethod-backed property directly; use the corresponding operator instead."
+        );
     }
 
     [Fact]

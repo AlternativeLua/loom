@@ -1,6 +1,6 @@
 ## Loom standard library
 
-interface Tuple;
+declare interface Tuple;
 
 interface Record<K, V> {
     [K]: V;
@@ -27,11 +27,26 @@ enum CFrameType {
 }
 
 declare fn attribute_usage(targets: AttributeTargets): void;
-declare fn luau_name(name: string): void;
-declare fn luau_method: void;
-declare fn override: void;
 
-[attribute_usage(AttributeTargets.Function | AttributeTargets.Property)] declare fn luau_metamethod(name: string): void;
+type LuauMetamethod = 
+    "__add"
+    | "__mul"
+    | "__div"
+    | "__idiv"
+    | "__pow"
+    | "__mod"
+    | "__eq"
+    | "__lt"
+    | "__le";
+
+[attribute_usage(AttributeTargets.Function | AttributeTargets.Property)]
+declare fn luau_metamethod(name: LuauMetamethod): void;
+[attribute_usage(AttributeTargets.Function | AttributeTargets.Event | AttributeTargets.Property)]
+declare fn luau_name(name: string): void;
+[attribute_usage(AttributeTargets.Property)]
+declare fn luau_method: void;
+[attribute_usage(AttributeTargets.Property)]
+declare fn override: void;
 
 ## Serialization attributes. See TypeChecker.Serialization.cs for the co-requirement rules
 ## these carry: 'packed' requires 'serializable', every property attribute requires its

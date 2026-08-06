@@ -153,6 +153,9 @@ public sealed partial class TypeChecker
                 rightType = Visit(binaryOperator.Right);
                 break;
         }
+        
+        if (TryBindBinaryOperatorOverload(binaryOperator, leftType, rightType, out var overloadType))
+            return BindType(binaryOperator, overloadType);
 
         var rule = BinaryOperatorBinder.GetRule(binaryOperator, leftType, rightType);
         if (rule != null)
@@ -168,9 +171,6 @@ public sealed partial class TypeChecker
 
             return BindType(binaryOperator, rule.ReturnType);
         }
-
-        if (TryBindOperatorOverload(binaryOperator, leftType, rightType, out var overloadType))
-            return BindType(binaryOperator, overloadType);
 
         switch (binaryOperator.Operator.Kind)
         {
@@ -199,28 +199,6 @@ public sealed partial class TypeChecker
         return BindType(binaryOperator, Types.PrimitiveType.Never);
     }
 
-    // Deliberately checked with a direct IsAssignableTo rather than TypeSolver.AddConstraint: the operand
-    // types here are frequently self-referential (e.g. 'add: fn(other: Point): Point'), and unlike
-    // IsAssignableTo - which guards against exactly that recursion via GuardedAssignableTo - the solver's
-    // Unify walks the same cyclic type graph with only a reference-identity visited-set, which two
-    // structurally-equal-but-distinct 'Point' instances can walk past forever.
-    private bool TryBindOperatorOverload(BinaryOperator binaryOperator, Type leftType, Type rightType, out Type resultType)
-    {
-        resultType = Types.PrimitiveType.Never;
-        if (BinaryOperatorBinder.GetMetamethodName(binaryOperator.Operator.Kind) is not { } metamethodName)
-            return false;
-
-        if (leftType is not InterfaceType interfaceType || !interfaceType.Metamethods.TryGetValue(metamethodName, out var methodName))
-            return false;
-
-        if (interfaceType.GetProperty(methodName)?.ValueType is not Types.FunctionType { ParameterTypes: [var parameterType] } functionType
-            || !rightType.IsAssignableTo(parameterType))
-            return false;
-
-        resultType = functionType.ReturnType;
-        return true;
-    }
-
     public override Type VisitUnaryOperator(UnaryOperator unaryOperator)
     {
         var operandType = Visit(unaryOperator.Operand);
@@ -233,6 +211,26 @@ public sealed partial class TypeChecker
         _diagnostics.Error(unaryOperator, InternalCodes.InvalidUnaryOp, $"No unary operation for {unaryOperator.Operator.Text}{operandType.Widen()}.", hint);
 
         return BindType(unaryOperator, Types.PrimitiveType.Never);
+    }
+    
+    private static bool TryBindBinaryOperatorOverload(BinaryOperator binaryOperator, Type leftType, Type rightType, out Type resultType)
+    {
+        resultType = Types.PrimitiveType.Never;
+        if (BinaryOperatorBinder.GetMetamethodName(binaryOperator.Operator.Kind) is not { } metamethodName)
+            return false;
+
+        if (leftType is InstantiatedType instantiated)
+            leftType = instantiated.Expand();
+
+        if (leftType is not InterfaceType interfaceType || !interfaceType.Metamethods.TryGetValue(metamethodName, out var methodName))
+            return false;
+
+        if (interfaceType.GetProperty(methodName)?.ValueType is not Types.FunctionType { ParameterTypes: [var parameterType] } functionType
+            || !rightType.IsAssignableTo(parameterType))
+            return false;
+
+        resultType = functionType.ReturnType;
+        return true;
     }
 
     private static bool IsBitwiseOperator(SyntaxKind kind) =>

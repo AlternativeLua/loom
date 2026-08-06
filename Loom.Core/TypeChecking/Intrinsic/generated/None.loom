@@ -183,6 +183,17 @@ declare sealed interface Vector2<T: number = f32> {
     [luau_name("Lerp"), luau_method] lerp: fn(goal: Vector2, alpha: number): Vector2;
     [luau_name("Max"), luau_method] max: fn(other: Vector2): Vector2;
     [luau_name("Min"), luau_method] min: fn(other: Vector2): Vector2;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector3): Vector3;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector3): Vector3;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__idiv")]
+    idiv: fn(other: Vector3 | number): Vector3;
 }
 
 declare sealed interface Vector2Static {
@@ -200,6 +211,15 @@ declare let Vector2: Vector2Static;
 declare sealed interface Vector2int16 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector2int16): Vector2int16;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector2int16): Vector2int16;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector2int16): Vector2int16;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector2int16): Vector2int16;
 }
 
 declare sealed interface Vector3<T: number = f32> {
@@ -220,6 +240,17 @@ declare sealed interface Vector3<T: number = f32> {
     [luau_name("Lerp"), luau_method] lerp: fn(goal: Vector3, alpha: number): Vector3;
     [luau_name("Max"), luau_method] max: fn(other: Vector3): Vector3;
     [luau_name("Min"), luau_method] min: fn(other: Vector3): Vector3;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector3): Vector3;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector3): Vector3;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__idiv")]
+    idiv: fn(other: Vector3 | number): Vector3;
 }
 
 declare sealed interface Vector3Static {
@@ -240,6 +271,15 @@ declare sealed interface Vector3int16 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector3int16): Vector3int16;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector3int16): Vector3int16;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector3int16): Vector3int16;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector3int16): Vector3int16;
 }
 
 declare sealed interface CFrame<T: number = f32> {
@@ -2086,6 +2126,13 @@ declare interface EnumCustomCameraMode {
 	Default: EnumItem<"CustomCameraMode">;
 	Classic: EnumItem<"CustomCameraMode">;
 	Follow: EnumItem<"CustomCameraMode">;
+}
+
+declare interface EnumDataModelChangeType {
+	Add: EnumItem<"DataModelChangeType">;
+	Remove: EnumItem<"DataModelChangeType">;
+	Modify: EnumItem<"DataModelChangeType">;
+	AddPackage: EnumItem<"DataModelChangeType">;
 }
 
 declare interface EnumDataModelExtractorFileType {
@@ -4893,6 +4940,16 @@ declare interface EnumSlimTintMode {
 	Zone: EnumItem<"SlimTintMode">;
 }
 
+declare interface EnumSlimTranscoderStatus {
+	Unknown: EnumItem<"SlimTranscoderStatus">;
+	NoHash: EnumItem<"SlimTranscoderStatus">;
+	NotUploaded: EnumItem<"SlimTranscoderStatus">;
+	Uploaded: EnumItem<"SlimTranscoderStatus">;
+	InProgress: EnumItem<"SlimTranscoderStatus">;
+	Succeeded: EnumItem<"SlimTranscoderStatus">;
+	Failed: EnumItem<"SlimTranscoderStatus">;
+}
+
 declare interface EnumSolidPrimitiveType {
 	Capsule: EnumItem<"SolidPrimitiveType">;
 	Cone: EnumItem<"SolidPrimitiveType">;
@@ -5878,6 +5935,11 @@ declare interface EnumVelocityConstraintMode {
 	Vector: EnumItem<"VelocityConstraintMode">;
 }
 
+declare interface EnumVerifiedLevel {
+	Low: EnumItem<"VerifiedLevel">;
+	High: EnumItem<"VerifiedLevel">;
+}
+
 declare interface EnumVerticalAlignment {
 	Center: EnumItem<"VerticalAlignment">;
 	Top: EnumItem<"VerticalAlignment">;
@@ -6277,6 +6339,7 @@ declare interface EnumStatic {
 	CreatorTypeFilter: EnumCreatorTypeFilter;
 	CurrencyType: EnumCurrencyType;
 	CustomCameraMode: EnumCustomCameraMode;
+	DataModelChangeType: EnumDataModelChangeType;
 	DataModelExtractorFileType: EnumDataModelExtractorFileType;
 	DataStoreRequestType: EnumDataStoreRequestType;
 	DebugBreakModeType: EnumDebugBreakModeType;
@@ -6592,6 +6655,7 @@ declare interface EnumStatic {
 	SimulationMode: EnumSimulationMode;
 	SizeConstraint: EnumSizeConstraint;
 	SlimTintMode: EnumSlimTintMode;
+	SlimTranscoderStatus: EnumSlimTranscoderStatus;
 	SolidPrimitiveType: EnumSolidPrimitiveType;
 	SolverConvergenceMetricType: EnumSolverConvergenceMetricType;
 	SolverConvergenceVisualizationMode: EnumSolverConvergenceVisualizationMode;
@@ -6702,6 +6766,7 @@ declare interface EnumStatic {
 	VRTouchpad: EnumVRTouchpad;
 	VRTouchpadMode: EnumVRTouchpadMode;
 	VelocityConstraintMode: EnumVelocityConstraintMode;
+	VerifiedLevel: EnumVerifiedLevel;
 	VerticalAlignment: EnumVerticalAlignment;
 	VerticalScrollBarPosition: EnumVerticalScrollBarPosition;
 	VibrationMotor: EnumVibrationMotor;
@@ -6891,6 +6956,7 @@ declare interface Enum {
 	CreatorTypeFilter: EnumItem<"CreatorTypeFilter">;
 	CurrencyType: EnumItem<"CurrencyType">;
 	CustomCameraMode: EnumItem<"CustomCameraMode">;
+	DataModelChangeType: EnumItem<"DataModelChangeType">;
 	DataModelExtractorFileType: EnumItem<"DataModelExtractorFileType">;
 	DataStoreRequestType: EnumItem<"DataStoreRequestType">;
 	DebugBreakModeType: EnumItem<"DebugBreakModeType">;
@@ -7206,6 +7272,7 @@ declare interface Enum {
 	SimulationMode: EnumItem<"SimulationMode">;
 	SizeConstraint: EnumItem<"SizeConstraint">;
 	SlimTintMode: EnumItem<"SlimTintMode">;
+	SlimTranscoderStatus: EnumItem<"SlimTranscoderStatus">;
 	SolidPrimitiveType: EnumItem<"SolidPrimitiveType">;
 	SolverConvergenceMetricType: EnumItem<"SolverConvergenceMetricType">;
 	SolverConvergenceVisualizationMode: EnumItem<"SolverConvergenceVisualizationMode">;
@@ -7316,6 +7383,7 @@ declare interface Enum {
 	VRTouchpad: EnumItem<"VRTouchpad">;
 	VRTouchpadMode: EnumItem<"VRTouchpadMode">;
 	VelocityConstraintMode: EnumItem<"VelocityConstraintMode">;
+	VerifiedLevel: EnumItem<"VerifiedLevel">;
 	VerticalAlignment: EnumItem<"VerticalAlignment">;
 	VerticalScrollBarPosition: EnumItem<"VerticalScrollBarPosition">;
 	VibrationMotor: EnumItem<"VibrationMotor">;
@@ -7386,6 +7454,7 @@ declare interface ConfigSnapshot: Object {
 	event update_available;
 }
 
+declare interface DataModelDiff: Object;
 declare interface EditableImage: Object {
 	[luau_name("Size")]
 	size: Vector2;
@@ -9084,8 +9153,6 @@ declare interface RootImportData: BaseImportData {
 	mut use_scene_origin_as_pivot: bool;
 	[luau_name("UsesCages")]
 	mut uses_cages: bool;
-	[luau_name("ValidateUgcBody")]
-	mut validate_ugc_body: bool;
 	[luau_name("VersionedAssetId")]
 	mut versioned_asset_id: number;
 	[luau_name("WorldForward")]
@@ -13605,6 +13672,13 @@ declare interface MaterialVariant: Instance {
 	mut studs_per_tile: number;
 }
 
+declare interface MemoryStoreDistributedCounter: Instance {
+	[luau_name("GetAsync"), luau_method]
+	get_async: fn: number;
+	[luau_name("IncrementAsync"), luau_method]
+	increment_async: fn(delta: number, expiration: number): number;
+}
+
 declare interface MemoryStoreHashMap: Instance {
 	[luau_name("GetAsync"), luau_method]
 	get_async: fn(key: string): unknown;
@@ -13631,6 +13705,8 @@ declare interface MemoryStoreQueue: Instance {
 
 declare interface MemoryStoreService: Instance {
 	_is_service: true;
+	[luau_name("GetDistributedCounter"), luau_method]
+	get_distributed_counter: fn(name: string): MemoryStoreDistributedCounter;
 	[luau_name("GetHashMap"), luau_method]
 	get_hash_map: fn(name: string): MemoryStoreHashMap;
 	[luau_name("GetQueue"), luau_method]
@@ -13887,6 +13963,8 @@ declare interface BasePart: PVInstance {
 	apply_impulse: fn(impulse: Vector3): void;
 	[luau_name("ApplyImpulseAtPosition"), luau_method]
 	apply_impulse_at_position: fn(impulse: Vector3, position: Vector3): void;
+	[luau_name("BindToCollisionSummaries"), luau_method]
+	bind_to_collision_summaries: fn(callback: fn: void): ScriptConnection;
 	[luau_name("BreakJoints"), luau_method]
 	break_joints: fn: void;
 	[luau_name("CanCollideWith"), luau_method]
@@ -14787,7 +14865,7 @@ declare interface Player: Instance {
 	[luau_name("HasAppearanceLoaded"), luau_method]
 	has_appearance_loaded: fn: bool;
 	[luau_name("IsVerified"), luau_method]
-	is_verified: fn: bool;
+	is_verified: fn(level: Enum["VerifiedLevel"]?): bool;
 	[luau_name("Kick"), luau_method]
 	kick: fn(message: string): void;
 	[luau_name("LoadBoolean"), luau_method]
@@ -17248,10 +17326,14 @@ declare interface UIShadow: UIComponent {
 	mut color: Color3;
 	[luau_name("Enabled")]
 	mut enabled: bool;
+	[luau_name("Inset")]
+	mut inset: bool;
 	[luau_name("Mode")]
 	mut mode: Enum["ApplyShadowMode"];
 	[luau_name("Offset")]
 	mut offset: UDim2;
+	[luau_name("ShowBehindParent")]
+	mut show_behind_parent: bool;
 	[luau_name("Spread")]
 	mut spread: UDim2;
 	[luau_name("Transparency")]

@@ -182,6 +182,17 @@ declare sealed interface Vector2<T: number = f32> {
     [luau_name("Lerp"), luau_method] lerp: fn(goal: Vector2, alpha: number): Vector2;
     [luau_name("Max"), luau_method] max: fn(other: Vector2): Vector2;
     [luau_name("Min"), luau_method] min: fn(other: Vector2): Vector2;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector3): Vector3;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector3): Vector3;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__idiv")]
+    idiv: fn(other: Vector3 | number): Vector3;
 }
 
 declare sealed interface Vector2Static {
@@ -199,6 +210,15 @@ declare let Vector2: Vector2Static;
 declare sealed interface Vector2int16 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector2int16): Vector2int16;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector2int16): Vector2int16;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector2int16): Vector2int16;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector2int16): Vector2int16;
 }
 
 declare sealed interface Vector3<T: number = f32> {
@@ -219,6 +239,17 @@ declare sealed interface Vector3<T: number = f32> {
     [luau_name("Lerp"), luau_method] lerp: fn(goal: Vector3, alpha: number): Vector3;
     [luau_name("Max"), luau_method] max: fn(other: Vector3): Vector3;
     [luau_name("Min"), luau_method] min: fn(other: Vector3): Vector3;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector3): Vector3;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector3): Vector3;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector3 | number): Vector3;
+    [luau_metamethod("__idiv")]
+    idiv: fn(other: Vector3 | number): Vector3;
 }
 
 declare sealed interface Vector3Static {
@@ -239,6 +270,15 @@ declare sealed interface Vector3int16 {
     [luau_name("X")] x: number;
     [luau_name("Y")] y: number;
     [luau_name("Z")] z: number;
+    
+    [luau_metamethod("__add")]
+    add: fn(other: Vector3int16): Vector3int16;
+    [luau_metamethod("__sub")]
+    sub: fn(other: Vector3int16): Vector3int16;
+    [luau_metamethod("__mul")]
+    mul: fn(other: Vector3int16): Vector3int16;
+    [luau_metamethod("__div")]
+    div: fn(other: Vector3int16): Vector3int16;
 }
 
 declare sealed interface CFrame<T: number = f32> {
