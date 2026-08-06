@@ -8,6 +8,9 @@ var server = await LanguageServer.From(options =>
         .WithOutput(Console.OpenStandardOutput())
         .WithServices(services => services.AddSingleton<DocumentStore>())
         .WithHandler<TextDocumentSyncHandler>()
+        .WithHandler<HoverHandler>()
+        .WithHandler<DefinitionHandler>()
+        .WithHandler<CompletionHandler>()
 );
 
 await server.WaitForExit;
