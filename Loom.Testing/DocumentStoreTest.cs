@@ -1,0 +1,96 @@
+using Loom.Core.Diagnostics;
+using Loom.LanguageServer;
+using OmniSharp.Extensions.LanguageServer.Protocol;
+using OmniSharp.Extensions.LanguageServer.Protocol.Models;
+using LspRange = OmniSharp.Extensions.LanguageServer.Protocol.Models.Range;
+
+namespace Loom.Testing;
+
+[Collection("Assembly")]
+public class DocumentStoreTest
+{
+    [Fact]
+    public void Open_CompilesAndReportsDiagnosticsForTheDocument()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-lsp-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            var path = Path.Combine(directory, "src", "main.loom");
+            File.WriteAllText(path, "let x = 1;");
+
+            var store = new DocumentStore();
+            var uri = DocumentUri.FromFileSystemPath(path);
+            var result = store.Open(uri, "let x: string = 1;");
+
+            Assert.NotNull(result);
+            Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.TypeMismatch, "Type '1' is not assignable to type 'string'.");
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void Change_RecompilesIncrementallyAfterOpen()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-lsp-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            var path = Path.Combine(directory, "src", "main.loom");
+            File.WriteAllText(path, "let x = 1;");
+
+            var store = new DocumentStore();
+            var uri = DocumentUri.FromFileSystemPath(path);
+            store.Open(uri, "let x = 1;");
+
+            var changed = store.Change(
+                uri,
+                [new TextDocumentContentChangeEvent { Range = new LspRange(new Position(0, 8), new Position(0, 9)), Text = "true" }]
+            );
+
+            Assert.NotNull(changed);
+            Utility.AssertNoErrors(changed);
+            var file = Assert.Single(changed.Files);
+            Assert.Contains("true", file.RenderedLuau);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+
+    [Fact]
+    public void Change_WithoutPriorOpen_ReturnsNull()
+    {
+        var store = new DocumentStore();
+        var uri = DocumentUri.FromFileSystemPath(Path.Combine(Path.GetTempPath(), "does-not-exist.loom"));
+
+        Assert.Null(store.Change(uri, [new TextDocumentContentChangeEvent { Text = "let x = 1;" }]));
+    }
+
+    [Fact]
+    public void Open_OutsideAnyProject_ReturnsNull()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-lsp-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(directory);
+        try
+        {
+            var path = Path.Combine(directory, "orphan.loom");
+            File.WriteAllText(path, "let x = 1;");
+
+            var store = new DocumentStore();
+            var uri = DocumentUri.FromFileSystemPath(path);
+
+            Assert.Null(store.Open(uri, "let x = 1;"));
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
+}
