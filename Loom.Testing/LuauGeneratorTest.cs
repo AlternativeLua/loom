@@ -41,6 +41,7 @@ public class LuauGeneratorTest
     [Theory]
     [InlineData("let x = ;", "const x = nil")]
     [InlineData("let v: Missing = 1;", "const v: unknown = 1")]
+    [InlineData("let x", "const x = nil")]
     public void Generates_APlaceholder_ForANodeItCannotGenerate(string source, string expected) =>
         Assert.Equal(expected, Utility.GetLuauAST(source).Render().Trim());
 

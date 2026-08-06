@@ -93,4 +93,41 @@ public class DocumentStoreTest
             Directory.Delete(directory, true);
         }
     }
+
+    [Fact]
+    public void Change_AfterParseFailure_RecoversOnceContentIsFixedOrDocumentIsReopened()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "loom-lsp-test-" + Guid.NewGuid());
+        Directory.CreateDirectory(Path.Combine(directory, "src"));
+        try
+        {
+            File.WriteAllText(Path.Combine(directory, "loom-config.toml"), "[files]\nsource_directory = \"src\"\noutput_directory = \"dist\"\n");
+            var path = Path.Combine(directory, "src", "main.loom");
+            File.WriteAllText(path, "let x = 1;");
+
+            var store = new DocumentStore();
+            var uri = DocumentUri.FromFileSystemPath(path);
+            store.Open(uri, "let x = 1;");
+
+            var broken = store.Change(uri, [new TextDocumentContentChangeEvent { Text = "let" }]);
+            Assert.NotNull(broken);
+
+            var fixedResult = store.Change(uri, [new TextDocumentContentChangeEvent { Text = "let x = 1;" }]);
+            Assert.NotNull(fixedResult);
+            Utility.AssertNoErrors(fixedResult);
+
+            var emptied = store.Change(uri, [new TextDocumentContentChangeEvent { Text = "" }]);
+            Assert.NotNull(emptied);
+            Utility.AssertNoErrors(emptied);
+
+            store.Close(uri);
+            var reopened = store.Open(uri, "let x = 1;");
+            Assert.NotNull(reopened);
+            Utility.AssertNoErrors(reopened);
+        }
+        finally
+        {
+            Directory.Delete(directory, true);
+        }
+    }
 }

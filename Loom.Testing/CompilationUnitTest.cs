@@ -335,5 +335,20 @@ public class CompilationUnitTest
                 Assert.NotSame(first.Files.Single(), second.Files.Single());
             }
         );
+    [Fact]
+    public void Recompile_AfterInvalidThenFixedContent_ClearsDiagnostics() =>
+        Utility.WithTempProject(
+            [("main.loom", "let x = 1;")],
+            (unit, first) =>
+            {
+                var mainFile = unit.SourceFiles.Find(f => f.Name == "main.loom")!;
+
+                var broken = unit.Recompile(new Dictionary<string, string> { [mainFile.AbsolutePath] = "let" });
+                Utility.AssertDiagnostic(broken.Diagnostics, InternalCodes.MustHaveInitializer, "Immutable declarations must be initialized.");
+
+                var fixedResult = unit.Recompile(new Dictionary<string, string> { [mainFile.AbsolutePath] = "let x = 1;" });
+                Utility.AssertNoErrors(fixedResult);
+            }
+        );
     #endregion Recompile
 }

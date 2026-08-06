@@ -42,7 +42,7 @@ public sealed partial class LuauGenerator
             initializer = LuauFactory.UnwrapParentheses(initializer);
 
         return isConst
-            ? new ConstVariable(name, type, initializer!)
+            ? new ConstVariable(name, type, initializer ?? new NilLiteral())
             : new LocalVariable(name, type, initializer);
     }
     

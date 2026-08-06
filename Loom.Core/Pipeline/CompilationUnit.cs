@@ -122,6 +122,17 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
 
     private CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths, Func<string, string?> resolveContent)
     {
+        foreach (var path in changedAbsolutePaths)
+        {
+            var content = resolveContent(path);
+            if (content == null)
+                continue;
+
+            var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
+            if (index >= 0)
+                SourceFiles[index] = new SourceFile(path, content);
+        }
+
         if (_compiledByPath.Count == 0
             || changedAbsolutePaths.Any(path => !_parsedByPath.ContainsKey(path) || (resolveContent(path) == null && !File.Exists(path))))
             return Compile();
