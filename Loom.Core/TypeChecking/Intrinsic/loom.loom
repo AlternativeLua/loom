@@ -31,6 +31,8 @@ declare fn luau_name(name: string): void;
 declare fn luau_method: void;
 declare fn override: void;
 
+[attribute_usage(AttributeTargets.Function | AttributeTargets.Property)] declare fn luau_metamethod(name: string): void;
+
 ## Serialization attributes. See TypeChecker.Serialization.cs for the co-requirement rules
 ## these carry: 'packed' requires 'serializable', every property attribute requires its
 ## containing interface to be 'serializable', and 'number_step' requires 'number_range'.

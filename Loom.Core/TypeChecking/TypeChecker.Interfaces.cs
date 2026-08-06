@@ -79,7 +79,8 @@ public sealed partial class TypeChecker
         var objectType = new ObjectType(nonGenericInterfaceType.ObjectType.Indexer, [..nonGenericInterfaceType.ObjectType.Properties, ..traitProperties]);
         var selfType = new InterfaceType(nonGenericInterfaceType.Name, nonGenericInterfaceType.Constraints, objectType)
         {
-            TraitMethodNames = traitProperties.ConvertAll(property => property.Name).ToHashSet()
+            TraitMethodNames = traitProperties.ConvertAll(property => property.Name).ToHashSet(),
+            Metamethods = nonGenericInterfaceType.Metamethods
         };
 
         return BindType(selfExpression, selfType);
@@ -111,7 +112,7 @@ public sealed partial class TypeChecker
         MaybeVisit(interfaceDeclaration.Attributes);
 
         var name = interfaceDeclaration.Name.Text;
-        if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol)
+        if (_semanticModel.GetDeclarationSymbol(interfaceDeclaration, SymbolKind.Interface) is not InterfaceSymbol interfaceSymbol)
         {
             _diagnostics.Error(interfaceDeclaration, InternalCodes.CannotFindSymbol, $"Cannot find symbol for declaration of interface '{name}'.");
             return BindType(interfaceDeclaration, PrimitiveType.Never);
@@ -126,7 +127,7 @@ public sealed partial class TypeChecker
             ?? [];
 
         var objectType = new ObjectType(null, []);
-        var interfaceType = new InterfaceType(name, constraints, objectType);
+        var interfaceType = new InterfaceType(name, constraints, objectType) { Metamethods = CollectMetamethods(interfaceSymbol) };
         Type publishedType = typeParameters == null
             ? interfaceType
             : new GenericType(interfaceDeclaration, typeParameters, interfaceType);
@@ -224,7 +225,8 @@ public sealed partial class TypeChecker
         var objectType = new ObjectType(interfaceType.ObjectType.Indexer, [..interfaceType.ObjectType.Properties, ..traitProperties]);
         var boundType = new InterfaceType(interfaceType.Name, interfaceType.Constraints, objectType)
         {
-            TraitMethodNames = traitMethodNames
+            TraitMethodNames = traitMethodNames,
+            Metamethods = interfaceType.Metamethods
         };
 
         return BindType(node, boundType);
@@ -253,12 +255,62 @@ public sealed partial class TypeChecker
         }
 
         var substitutedObject = SubstituteObjectType(node, underlying.ObjectType, substitution);
-        substituted = new InterfaceType(underlying.Name, underlying.Constraints, substitutedObject);
+        substituted = new InterfaceType(underlying.Name, underlying.Constraints, substitutedObject) { Metamethods = underlying.Metamethods };
         return true;
     }
 
-    private List<ObjectProperty> ResolveTraitProperties(List<DeclareFunctionSignature> signatures) =>
-        signatures.ConvertAll(s => new ObjectProperty(false, s.Name.Text, Visit(s)));
+    private static readonly HashSet<string> _supportedMetamethods = ["__add", "__sub", "__mul", "__div", "__idiv", "__mod", "__pow"];
+
+    private List<ObjectProperty> ResolveTraitProperties(List<DeclareFunctionSignature> signatures)
+    {
+        var properties = new List<ObjectProperty>();
+        foreach (var signature in signatures)
+        {
+            properties.Add(new ObjectProperty(false, signature.Name.Text, Visit(signature)));
+            if (signature.Attributes == null)
+                continue;
+
+            foreach (var attribute in signature.Attributes.AttributeList)
+            {
+                CheckPassiveDecorator(attribute);
+                CheckAttributeUsage(attribute, AttributeTargetsFlag.Function);
+            }
+
+            if (signature.TryGetIntrinsicAttribute(_semanticModel, "luau_metamethod", out var metamethodAttribute))
+                ValidateMetamethodAttribute(metamethodAttribute);
+        }
+
+        return properties;
+    }
+
+    private void ValidateMetamethodAttribute(AttributeSymbol attribute)
+    {
+        if (attribute.Attribute.Arguments.ArgumentList is not [Literal { Value: string metamethodName }])
+        {
+            _diagnostics.Error(attribute.Attribute, InternalCodes.InvalidMetamethodAttribute, "'luau_metamethod' requires a single string literal argument.");
+            return;
+        }
+
+        if (!_supportedMetamethods.Contains(metamethodName))
+            _diagnostics.Error(
+                attribute.Attribute,
+                InternalCodes.InvalidMetamethodAttribute,
+                $"'{metamethodName}' is not a supported metamethod. Supported metamethods: {string.Join(", ", _supportedMetamethods)}."
+            );
+    }
+
+    private static Dictionary<string, string> CollectMetamethods(InterfaceSymbol interfaceSymbol)
+    {
+        var metamethods = new Dictionary<string, string>();
+        foreach (var trait in interfaceSymbol.Implements)
+            foreach (var (metamethodName, methodName) in trait.Metamethods)
+                metamethods[metamethodName] = methodName;
+
+        foreach (var (metamethodName, methodName) in interfaceSymbol.Metamethods)
+            metamethods[metamethodName] = methodName;
+
+        return metamethods;
+    }
 
     private List<ObjectProperty> ResolveInterfaceEvents(List<EventDeclaration> eventDeclarations) =>
         eventDeclarations.ConvertAll(e =>
@@ -292,6 +344,9 @@ public sealed partial class TypeChecker
                     CheckPassiveDecorator(attribute);
                     CheckAttributeUsage(attribute, AttributeTargetsFlag.Property);
                 }
+
+            if (property.TryGetIntrinsicAttribute(_semanticModel, "luau_metamethod", out var metamethodAttribute))
+                ValidateMetamethodAttribute(metamethodAttribute);
 
             properties.Add(new ObjectProperty(isMutable, name, valueType));
         }

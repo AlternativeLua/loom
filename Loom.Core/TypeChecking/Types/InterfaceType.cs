@@ -4,7 +4,8 @@ public sealed class InterfaceType(
     string name,
     List<InterfaceType> constraints,
     ObjectType objectType,
-    HashSet<string>? traitMethodNames = null
+    HashSet<string>? traitMethodNames = null,
+    Dictionary<string, string>? metamethods = null
 ) : NativelyIndexableType
 {
     private List<ObjectProperty>? _cachedProperties;
@@ -20,6 +21,9 @@ public sealed class InterfaceType(
             : ObjectType;
 
     public HashSet<string> TraitMethodNames { get; init; } = traitMethodNames ?? [];
+
+    /// <summary>Metamethod name (e.g. "__add") to member name, merged from this interface's own properties plus every trait it implements.</summary>
+    public Dictionary<string, string> Metamethods { get; init; } = metamethods ?? [];
     public override ObjectIndexer? Indexer
     {
         get => Indexers.FirstOrDefault();

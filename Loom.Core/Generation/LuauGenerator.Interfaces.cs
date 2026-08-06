@@ -49,6 +49,14 @@ public sealed partial class LuauGenerator
             );
         }
 
+        if (_semanticModel.GetSymbol(implement.TraitName, SymbolKind.Trait) is TraitSymbol traitSymbol)
+            foreach (var (metamethodName, methodName) in traitSymbol.Metamethods)
+                _state.Postreq(
+                    new ExpressionStatement(
+                        new BinaryOperator(new PropertyAccess(identifier, [metamethodName]), "=", new PropertyAccess(identifier, [methodName]))
+                    )
+                );
+
         return variable;
     }
 

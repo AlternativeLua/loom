@@ -1423,6 +1423,28 @@ public class ParserTest
         var attribute = Assert.Single(declaration.Attributes!.AttributeList);
         Assert.True(attribute.IsInvoked);
     }
+    [Fact]
+    public void Parses_TraitMember_WithInvokedDecoratorAttribute()
+    {
+        var tree = Utility.GetAST("trait Add<T> { [luau_metamethod(\"__add\")] fn add(other: T): T; }");
+        var trait = Assert.IsType<TraitDeclaration>(Assert.Single(tree.Statements));
+        var member = Assert.Single(trait.Body.Members);
+        var attribute = Assert.Single(member.Attributes!.AttributeList);
+
+        Assert.True(attribute.IsInvoked);
+        Assert.Equal("luau_metamethod", Assert.IsType<Identifier>(attribute.Expression).Name.Text);
+        var argument = Assert.Single(attribute.Arguments.ArgumentList);
+        Assert.Equal("__add", Assert.IsType<Literal>(argument).Value);
+    }
+
+    [Fact]
+    public void Parses_TraitMember_WithoutAttribute()
+    {
+        var tree = Utility.GetAST("trait Iterator { fn next(): number; }");
+        var trait = Assert.IsType<TraitDeclaration>(Assert.Single(tree.Statements));
+        var member = Assert.Single(trait.Body.Members);
+        Assert.Null(member.Attributes);
+    }
     #endregion Decorators
     #region ExportedAttributes
     [Fact]

@@ -1678,6 +1678,111 @@ public class TypeCheckerTest
         );
 
     [Fact]
+    public void Allows_BinaryOperator_ViaTraitMetamethod()
+    {
+        var type = Utility.GetLastStatementType(
+            """
+            interface Location { position: number }
+
+            trait Add<T> {
+                [luau_metamethod("__add")]
+                fn add(other: T): T;
+            }
+
+            implement Add<Location> for Location {
+                fn add(other) -> new Location { position: position + other.position }
+            }
+
+            let start = new Location { position: 1 };
+            let finish = new Location { position: 2 };
+            start + finish
+            """
+        );
+
+        Assert.Equal("Location", type.ToString());
+    }
+
+    [Fact]
+    public void Allows_BinaryOperator_ViaAmbientInterfaceMetamethod()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            declare sealed interface Point {
+                x: number;
+
+                [luau_metamethod("__add")]
+                add: fn(other: Point): Point;
+            }
+
+            declare let p1: Point;
+            declare let p2: Point;
+
+            let result = p1 + p2;
+            """
+        );
+
+        Utility.AssertNoErrors(diagnostics);
+    }
+
+    [Fact]
+    public void ThrowsFor_BinaryOperator_OverloadedButWrongOperandType()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            interface Location { position: number }
+
+            trait Add<T> {
+                [luau_metamethod("__add")]
+                fn add(other: T): T;
+            }
+
+            implement Add<Location> for Location {
+                fn add(other) -> new Location { position: position + other.position }
+            }
+
+            let start = new Location { position: 1 };
+            start + "oops"
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidBinaryOp, "No binary operation for 'Location' + 'string'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_LuauMetamethodAttribute_UnsupportedName()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            trait Add<T> {
+                [luau_metamethod("__frobnicate")]
+                fn add(other: T): T;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(
+            diagnostics,
+            InternalCodes.InvalidMetamethodAttribute,
+            "'__frobnicate' is not a supported metamethod. Supported metamethods: __add, __sub, __mul, __div, __idiv, __mod, __pow."
+        );
+    }
+
+    [Fact]
+    public void ThrowsFor_LuauMetamethodAttribute_NonStringArgument()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            trait Add<T> {
+                [luau_metamethod(5)]
+                fn add(other: T): T;
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidMetamethodAttribute, "'luau_metamethod' requires a single string literal argument.");
+    }
+
+    [Fact]
     public void Checks_Trait_EmptyObject()
     {
         var type = Utility.GetLastStatementType("trait Empty { }");

@@ -130,6 +130,7 @@ public static class InternalCodes
     public const string ErrorPropagationRequiresResultType = "L39F";
     public const string ErrorPropagationOutsideResultFunction = "L3A0";
     public const string ErrorPropagationErrorTypeMismatch = "L3A1";
+    public const string InvalidMetamethodAttribute = "L3A2";
 
     public const string SimplifiableCode = "L400";
 }
