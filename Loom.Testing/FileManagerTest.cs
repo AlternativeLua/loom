@@ -29,4 +29,35 @@ public class FileManagerTest
         var outputPath = FileManager.GetOutputPath(file, config);
         Assert.Equal(Path.Combine(outputDirectory, "foo.luau"), outputPath);
     }
+
+    [Fact]
+    public void WriteCompiledFile_Writes_WhenContentDiffers() =>
+        Utility.WithTempProject(
+            [("main.loom", "let x = 1;")],
+            (_, result) =>
+            {
+                var file = Assert.Single(result.Files);
+                Directory.CreateDirectory(Path.GetDirectoryName(file.Path)!);
+                File.WriteAllText(file.Path, "-- stale content");
+
+                Assert.True(FileManager.WriteCompiledFile(file));
+                Assert.Equal(file.RenderedLuau, File.ReadAllText(file.Path));
+            }
+        );
+
+    [Fact]
+    public void WriteCompiledFile_SkipsWrite_WhenContentUnchanged() =>
+        Utility.WithTempProject(
+            [("main.loom", "let x = 1;")],
+            (_, result) =>
+            {
+                var file = Assert.Single(result.Files);
+                Directory.CreateDirectory(Path.GetDirectoryName(file.Path)!);
+                File.WriteAllText(file.Path, file.RenderedLuau);
+                var writtenAt = File.GetLastWriteTimeUtc(file.Path);
+
+                Assert.False(FileManager.WriteCompiledFile(file));
+                Assert.Equal(writtenAt, File.GetLastWriteTimeUtc(file.Path));
+            }
+        );
 }

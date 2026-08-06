@@ -7,14 +7,20 @@ public static class FileManager
 {
     public const string LoomExtension = ".loom";
 
-    public static void WriteCompiledFile(CompiledFile file)
+    /// <summary>Writes the file's rendered Luau, skipping the write entirely when it would be byte-identical to what's already on disk.</summary>
+    /// <returns>Whether the file was actually written.</returns>
+    public static bool WriteCompiledFile(CompiledFile file)
     {
+        if (File.Exists(file.Path) && File.ReadAllText(file.Path) == file.RenderedLuau)
+            return false;
+
         var directory = Path.GetDirectoryName(file.Path);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
 
         File.WriteAllText(file.Path, file.RenderedLuau);
         Console.WriteLine($"[Info] Wrote {file.Path}");
+        return true;
     }
 
     public static string GetOutputPath(SourceFile file, LoomConfig config)

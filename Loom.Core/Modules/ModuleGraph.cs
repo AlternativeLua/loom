@@ -49,15 +49,20 @@ public sealed class ModuleGraph
     private ModuleGraph(
         List<ParsedFile> order,
         Dictionary<NodeId, SourceFile> resolvedModules,
-        ModuleDiagnostics diagnostics)
+        ModuleDiagnostics diagnostics,
+        Dictionary<SourceFile, List<SourceFile>> dependents)
     {
         Order = order;
         _resolvedModules = resolvedModules;
         _diagnostics = diagnostics;
+        Dependents = dependents;
     }
 
     /// <summary>Every parsed file, dependencies before their importers.</summary>
     public List<ParsedFile> Order { get; }
+
+    /// <summary>Every file that imports (or re-exports from) the given file, one level - the reverse of the import graph.</summary>
+    public IReadOnlyDictionary<SourceFile, List<SourceFile>> Dependents { get; }
 
     public SourceFile? GetResolvedModule(Node moduleReference) => _resolvedModules.GetValueOrDefault(moduleReference.Id);
 
@@ -100,7 +105,17 @@ public sealed class ModuleGraph
         }
 
         var order = Sort(parsedFiles, dependencies, config, diagnostics);
-        return new ModuleGraph(order, resolvedModules, diagnostics);
+        var dependents = new Dictionary<SourceFile, List<SourceFile>>();
+        foreach (var (file, edges) in dependencies)
+            foreach (var edge in edges)
+            {
+                if (!dependents.TryGetValue(edge.Target.File, out var importers))
+                    dependents[edge.Target.File] = importers = [];
+
+                importers.Add(file);
+            }
+
+        return new ModuleGraph(order, resolvedModules, diagnostics, dependents);
     }
 
     /// <remarks>

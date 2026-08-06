@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Loom.Config;
 using Loom.Core.Diagnostics;
 using Loom.Core.Generation;
@@ -39,8 +40,15 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     /// </summary>
     public ModuleGraph? ModuleGraph { get; private set; }
 
+    /// <summary>Every file's parsed form, keyed by absolute path, from the last successful <see cref="Compile()" /> or <see cref="Recompile" />. Lets <see cref="Recompile" /> rebuild the module graph without re-parsing files that did not change.</summary>
+    private readonly Dictionary<string, (Compiler Compiler, ParsedFile Parsed)> _parsedByPath = [];
+
+    /// <summary>Every file's last successful analysis, keyed by absolute path, alongside how long that analysis took - the figure <see cref="Recompile" /> credits itself with when it reuses the entry instead of redoing the work.</summary>
+    private readonly Dictionary<string, (CompiledFile CompiledFile, TimeSpan AnalyzeDuration)> _compiledByPath = [];
+
     public CompilationResult Compile()
     {
+        var stopwatch = Stopwatch.StartNew();
         Globals.Clear();
         AnalyzedModules.Clear();
 
@@ -51,11 +59,18 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         var parsedFiles = ParseAll(failures);
         var compilers = new Dictionary<SourceFile, Compiler>();
         foreach (var (compiler, parsedFile) in parsedFiles)
+        {
             compilers.TryAdd(parsedFile.File, compiler);
+            _parsedByPath[parsedFile.File.AbsolutePath] = (compiler, parsedFile);
+        }
 
         ModuleGraph = BuildModuleGraph(parsedFiles, failures);
         if (ModuleGraph == null)
-            return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions)) { Failures = failures };
+            return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions))
+            {
+                Failures = failures,
+                Elapsed = stopwatch.Elapsed
+            };
 
         // phase two: declaration files first — their top-level symbols become globals that every
         // other file resolves against. Both groups keep the graph's dependency order.
@@ -70,29 +85,181 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         );
 
         if (!diagnostics.ContainsErrors() && !Config.NoEmit)
-            compiledFiles.ForEach(FileManager.WriteCompiledFile);
+            compiledFiles.ForEach(file => FileManager.WriteCompiledFile(file));
 
-        return new CompilationResult(compiledFiles, diagnostics) { Failures = failures };
+        return new CompilationResult(compiledFiles, diagnostics)
+        {
+            Failures = failures,
+            Reanalyzed = compiledFiles.ConvertAll(file => file.SourceFile),
+            Elapsed = stopwatch.Elapsed
+        };
+
+        List<CompiledFile> analyzeAll(Predicate<ParsedFile> predicate)
+        {
+            var files = new List<CompiledFile>();
+            foreach (var parsedFile in ModuleGraph.Order.FindAll(predicate))
+                if (AnalyzeAndCache(compilers[parsedFile.File], parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File), failures) is { } compiledFile)
+                    files.Add(compiledFile);
+
+            return files;
+        }
+    }
+
+    /// <summary>
+    ///     Recompiles only what actually needs it: <paramref name="changedAbsolutePaths" /> and, per file, only
+    ///     the dependents whose own re-analysis found that file's exports actually changed shape - a file
+    ///     touched without changing what it exports never invalidates anything downstream of it. Everything
+    ///     else is reused verbatim from the last successful <see cref="Compile()" /> or <see cref="Recompile" />.
+    ///     Falls back to a full <see cref="Compile()" /> when there is no prior compile to diff against, or when
+    ///     a changed path names a file this unit has never seen (added since construction, or deleted) - this
+    ///     unit's <see cref="SourceFiles" /> is fixed at construction time, so a structural change to the file
+    ///     set needs a new <see cref="CompilationUnit" />, not a recompile of this one.
+    /// </summary>
+    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths)
+    {
+        if (_compiledByPath.Count == 0 || changedAbsolutePaths.Any(path => !_parsedByPath.ContainsKey(path) || !File.Exists(path)))
+            return Compile();
+
+        var stopwatch = Stopwatch.StartNew();
+        Globals.Clear();
+        AnalyzedModules.Clear();
+
+        var failures = new List<FailedFile>();
+        foreach (var path in changedAbsolutePaths)
+        {
+            var file = new SourceFile(path);
+            var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
+            if (index >= 0)
+                SourceFiles[index] = file;
+
+            var compiler = new Compiler(this, file);
+            if (compiler.Parse() is { } parsedFile)
+            {
+                _parsedByPath[path] = (compiler, parsedFile);
+            }
+            else
+            {
+                failures.Add(new FailedFile(file, compiler.Diagnostics));
+                _parsedByPath.Remove(path);
+                _compiledByPath.Remove(path);
+            }
+        }
+
+        var parsedFiles = _parsedByPath.Values.ToList();
+        var compilers = new Dictionary<SourceFile, Compiler>();
+        foreach (var (compiler, parsedFile) in parsedFiles)
+            compilers.TryAdd(parsedFile.File, compiler);
+
+        ModuleGraph = BuildModuleGraph(parsedFiles, failures);
+        if (ModuleGraph == null)
+            return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions))
+            {
+                Failures = failures,
+                Elapsed = stopwatch.Elapsed
+            };
+
+        var dirty = new HashSet<string>(changedAbsolutePaths);
+        var reanalyzed = new List<SourceFile>();
+        var timeSaved = TimeSpan.Zero;
+
+        var compiledDeclarationFiles = analyzeAll(parsedFile => parsedFile.File.IsDeclaration);
+        PopulateGlobals(compiledDeclarationFiles);
+
+        var compiledConcreteFiles = analyzeAll(parsedFile => !parsedFile.File.IsDeclaration);
+        var compiledFiles = compiledDeclarationFiles.Concat(compiledConcreteFiles).ToList();
+        var diagnostics = DiagnosticBag.Concat(
+            [..compiledFiles.ConvertAll(file => file.Diagnostics), ..failures.ConvertAll(failure => failure.Diagnostics)],
+            DiagnosticOptions
+        );
+
+        if (!diagnostics.ContainsErrors() && !Config.NoEmit)
+            foreach (var file in compiledFiles)
+                if (reanalyzed.Contains(file.SourceFile))
+                    FileManager.WriteCompiledFile(file);
+
+        return new CompilationResult(compiledFiles, diagnostics)
+        {
+            Failures = failures,
+            Reanalyzed = reanalyzed,
+            Elapsed = stopwatch.Elapsed,
+            EstimatedTimeSaved = timeSaved
+        };
 
         List<CompiledFile> analyzeAll(Predicate<ParsedFile> predicate)
         {
             var files = new List<CompiledFile>();
             foreach (var parsedFile in ModuleGraph.Order.FindAll(predicate))
             {
-                var compiledFile = compilers[parsedFile.File].Analyze(parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File));
-                if (compiledFile == null)
+                var path = parsedFile.File.AbsolutePath;
+                if (!dirty.Contains(path) && _compiledByPath.TryGetValue(path, out var cached))
                 {
-                    // the file has no semantic model to hand its importers, so it stays out of the unit
-                    failures.Add(new FailedFile(parsedFile.File, compilers[parsedFile.File].Diagnostics));
+                    AnalyzedModules[parsedFile.File] = cached.CompiledFile.SemanticModel;
+                    files.Add(cached.CompiledFile);
+                    timeSaved += cached.AnalyzeDuration;
                     continue;
                 }
 
-                AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+                var previous = _compiledByPath.TryGetValue(path, out var previousEntry) ? previousEntry.CompiledFile : null;
+                var compiledFile = AnalyzeAndCache(compilers[parsedFile.File], parsedFile, ModuleGraph.GetDiagnostics(parsedFile.File), failures);
+                var dependents = ModuleGraph.Dependents.GetValueOrDefault(parsedFile.File, []);
+                if (compiledFile == null)
+                {
+                    foreach (var dependent in dependents)
+                        dirty.Add(dependent.AbsolutePath);
+
+                    continue;
+                }
+
                 files.Add(compiledFile);
+                reanalyzed.Add(parsedFile.File);
+                if (!ExportsMatch(previous, compiledFile))
+                    foreach (var dependent in dependents)
+                        dirty.Add(dependent.AbsolutePath);
             }
 
             return files;
         }
+    }
+
+    private CompiledFile? AnalyzeAndCache(Compiler compiler, ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics, List<FailedFile> failures)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        var compiledFile = compiler.Analyze(parsedFile, moduleDiagnostics);
+        stopwatch.Stop();
+
+        var path = parsedFile.File.AbsolutePath;
+        if (compiledFile == null)
+        {
+            // the file has no semantic model to hand its importers, so it stays out of the unit
+            failures.Add(new FailedFile(parsedFile.File, compiler.Diagnostics));
+            _compiledByPath.Remove(path);
+            return null;
+        }
+
+        AnalyzedModules[parsedFile.File] = compiledFile.SemanticModel;
+        _compiledByPath[path] = (compiledFile, stopwatch.Elapsed);
+        return compiledFile;
+    }
+
+    /// <summary>Whether every export the file previously had is still there, under the same name, with the same type - the signal that nothing importing this file needs to be re-analyzed on its account.</summary>
+    private static bool ExportsMatch(CompiledFile? previous, CompiledFile current)
+    {
+        if (previous == null || previous.SemanticModel.Exports.Count != current.SemanticModel.Exports.Count)
+            return false;
+
+        foreach (var currentExport in current.SemanticModel.Exports)
+        {
+            var previousExport = previous.SemanticModel.Exports.Find(export => export.Name == currentExport.Name);
+            if (previousExport == null)
+                return false;
+
+            var previousType = previous.SemanticModel.GetType(previousExport.Symbol.Declaration);
+            var currentType = current.SemanticModel.GetType(currentExport.Symbol.Declaration);
+            if (!previousType.Equals(currentType))
+                return false;
+        }
+
+        return true;
     }
 
     /// <summary>

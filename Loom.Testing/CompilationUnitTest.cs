@@ -241,4 +241,83 @@ public class CompilationUnitTest
 
         return config;
     }
+
+    #region Recompile
+    [Fact]
+    public void Recompile_WithNoChanges_ReusesEveryCompiledFile() =>
+        Utility.WithTempProject(
+            [("math.loom", "export let value: number = 1;"), ("main.loom", "import { value } from \"./math\"\nlet doubled: number = value;")],
+            (unit, first) =>
+            {
+                var second = unit.Recompile(new HashSet<string>());
+
+                Utility.AssertNoErrors(second);
+                Assert.Empty(second.Reanalyzed);
+                Assert.True(second.EstimatedTimeSaved > TimeSpan.Zero);
+                foreach (var file in first.Files)
+                {
+                    var reused = second.Files.Find(f => f.SourceFile.Name == file.SourceFile.Name);
+                    Assert.Same(file, reused);
+                }
+            }
+        );
+
+    [Fact]
+    public void Recompile_DependencyChange_WithUnchangedExportedShape_SkipsDependent() =>
+        Utility.WithTempProject(
+            [("math.loom", "export let value: number = 1;"), ("main.loom", "import { value } from \"./math\"\nlet doubled: number = value;")],
+            (unit, first) =>
+            {
+                var mathFile = unit.SourceFiles.Find(f => f.Name == "math.loom")!;
+                var mainFileBefore = first.Files.Find(f => f.SourceFile.Name == "main.loom")!;
+                File.WriteAllText(mathFile.AbsolutePath, "export let value: number = 2;");
+
+                var second = unit.Recompile(new HashSet<string> { mathFile.AbsolutePath });
+
+                Utility.AssertNoErrors(second);
+                Assert.Contains(second.Reanalyzed, f => f.Name == "math.loom");
+                Assert.DoesNotContain(second.Reanalyzed, f => f.Name == "main.loom");
+                Assert.True(second.EstimatedTimeSaved > TimeSpan.Zero);
+
+                var mainFileAfter = second.Files.Find(f => f.SourceFile.Name == "main.loom");
+                Assert.Same(mainFileBefore, mainFileAfter);
+            }
+        );
+
+    [Fact]
+    public void Recompile_DependencyChange_WithChangedExportedShape_ReanalyzesDependent() =>
+        Utility.WithTempProject(
+            [("math.loom", "export let value: number = 1;"), ("main.loom", "import { value } from \"./math\"\nlet doubled: number = value;")],
+            (unit, first) =>
+            {
+                var mathFile = unit.SourceFiles.Find(f => f.Name == "math.loom")!;
+                var mainFileBefore = first.Files.Find(f => f.SourceFile.Name == "main.loom")!;
+                File.WriteAllText(mathFile.AbsolutePath, "export let value: string = \"hi\";");
+
+                var second = unit.Recompile(new HashSet<string> { mathFile.AbsolutePath });
+
+                Assert.Contains(second.Reanalyzed, f => f.Name == "math.loom");
+                Assert.Contains(second.Reanalyzed, f => f.Name == "main.loom");
+
+                var mainFileAfter = second.Files.Find(f => f.SourceFile.Name == "main.loom");
+                Assert.NotSame(mainFileBefore, mainFileAfter);
+                Utility.AssertDiagnostic(second.Diagnostics, InternalCodes.TypeMismatch, "Type 'string' is not assignable to type 'number'.");
+            }
+        );
+
+    [Fact]
+    public void Recompile_UnknownChangedPath_FallsBackToFullCompile() =>
+        Utility.WithTempProject(
+            [("main.loom", "let x = 1;")],
+            (unit, first) =>
+            {
+                var unknownPath = Path.Combine(Path.GetTempPath(), "does-not-exist-" + Guid.NewGuid() + ".loom");
+                var second = unit.Recompile(new HashSet<string> { unknownPath });
+
+                Utility.AssertNoErrors(second);
+                Assert.Equal(first.Files.Count, second.Reanalyzed.Count);
+                Assert.Equal(TimeSpan.Zero, second.EstimatedTimeSaved);
+            }
+        );
+    #endregion Recompile
 }
