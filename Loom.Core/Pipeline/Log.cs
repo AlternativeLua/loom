@@ -4,8 +4,12 @@ namespace Loom.Core.Pipeline;
 
 public static class Log
 {
-    public static void Info(string message) => Console.WriteLine($"[Info] {message}");
-    
+    public static void Fatal(string message) =>
+        Console.Error.WriteLine($"{Colors.Dim}[{Colors.Reset}{Colors.Bold}{Colors.Red}fatal{Colors.Reset}{Colors.Dim}]{Colors.Reset} {message}");
+
+    public static void Info(string message) =>
+        Console.WriteLine($"{Colors.Dim}[{Colors.Reset}{Colors.Bold}{Colors.Blue}info{Colors.Reset}{Colors.Dim}]{Colors.Reset} {message}");
+
     public static void OutputResult(CompilationResult result)
     {
         var diagnosticInfo = result.Files
@@ -25,10 +29,10 @@ public static class Log
         if (lines.Count > 0)
             Console.WriteLine(string.Join(Environment.NewLine, lines));
 
-        var timingLine = $"[Info] Compiled in {result.Elapsed.TotalSeconds:F3} seconds.";
+        var timingLine = $"Compiled in {Colors.Bold}{Colors.Green}{result.Elapsed.TotalSeconds * 1000:N0} ms{Colors.Reset}.";
         if (result.EstimatedTimeSaved > TimeSpan.Zero)
-            timingLine += $" Time saved by heuristics: {result.EstimatedTimeSaved.TotalSeconds:F3} seconds.";
+            timingLine += $" Saved {Colors.Bold}{Colors.Green}{result.EstimatedTimeSaved.TotalSeconds * 1000:N0} ms{Colors.Reset} with heuristics.";
 
-        Console.WriteLine(timingLine);
+        Info(timingLine);
     }
 }

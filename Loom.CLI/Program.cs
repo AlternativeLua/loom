@@ -1,31 +1,65 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using CommandLine;
 using Loom.CLI;
 using Loom.Config;
 using Loom.Core.Diagnostics;
 using Loom.Core.Pipeline;
 
-Console.OutputEncoding = Encoding.UTF8;
+var cliParser = new Parser(settings =>
+    {
+        settings.CaseInsensitiveEnumValues = true;
+        settings.HelpWriter = Console.Out;
+        settings.AutoHelp = true;
+        settings.AutoVersion = false;
+    }
+);
 
-var watch = args.Any(a => a is "-w" or "--watch");
-var directory = Path.GetFullPath(args.FirstOrDefault(a => !a.StartsWith('-')) ?? ".");
-var diagnosticOptions = new DiagnosticOptions { FailFast = !watch };
+return cliParser
+    .ParseArguments<BuildOptions, WatchOptions>(args)
+    .MapResult(
+        (BuildOptions options) => compile(options.Directory, watch: false),
+        (WatchOptions options) => compile(options.Directory, watch: true),
+        handleParseError
+    );
 
-var config = ConfigReader.LocateFromDirectory(directory, out var configDiagnostics);
-if (config == null)
+static bool tryGetConfig(string directory, [NotNullWhen(true)] out LoomConfig? config)
 {
-    if (configDiagnostics.Count == 0)
-        throw new ArgumentException($"Could not locate Loom configuration file in directory '{directory}'.");
+    config = ConfigReader.LocateFromDirectory(directory, out var configDiagnostics);
+    if (config != null)
+        return true;
 
-    Console.WriteLine(string.Join(Environment.NewLine, configDiagnostics.Select(diagnostic => $"{ConfigReader.ConfigFileName} {diagnostic}")));
+    if (configDiagnostics.Count == 0)
+        Log.Fatal($"could not locate Loom configuration file in directory '{directory}'.");
+
+    Console.WriteLine(string.Join(Environment.NewLine, configDiagnostics.Select(diagnostic => $"({ConfigReader.ConfigFileName}) {diagnostic}")));
+    return false;
+}
+
+static int compile(string directory, bool watch)
+{
+    Console.OutputEncoding = Encoding.UTF8;
+
+    var diagnosticOptions = new DiagnosticOptions { FailFast = !watch };
+    if (!tryGetConfig(directory, out var config))
+        return 1;
+
+    FileManager.WriteIncludeFolder(config.ProjectDirectory);
+    if (!watch)
+    {
+        Log.OutputResult(new CompilationUnit(config, diagnosticOptions).Compile());
+        return 0;
+    }
+
+    var watcher = new Watcher(diagnosticOptions);
+    return watcher.Start(config);
+}
+
+static int handleParseError(IEnumerable<Error> errors)
+{
+    if (errors.IsHelp())
+        return 0;
+
+    Log.Fatal("invalid command");
     return 1;
 }
-
-FileManager.WriteIncludeFolder(config.ProjectDirectory);
-if (!watch)
-{
-    Log.OutputResult(new CompilationUnit(config, diagnosticOptions).Compile());
-    return 0;
-}
-
-var watcher = new Watcher(diagnosticOptions);
-return watcher.Start(config);

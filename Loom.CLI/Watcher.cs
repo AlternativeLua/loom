@@ -15,6 +15,7 @@ internal sealed class Watcher(DiagnosticOptions diagnosticOptions)
 
     public int Start(LoomConfig config)
     {
+        Log.Info("Starting watch mode...");
         while (true)
         {
             var nextConfig = Watch(config);
@@ -44,7 +45,7 @@ internal sealed class Watcher(DiagnosticOptions diagnosticOptions)
         Console.CancelKeyPress += cancelHandler;
         try
         {
-            Log.Info("Watching for changes. Press Ctrl+C to stop.");
+            Log.Info($"Watching for changes. Press {Colors.Pink}Ctrl+C{Colors.Reset} to stop.");
 
             var restartNeeded = false;
             while (!events.IsCompleted)
