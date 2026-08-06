@@ -16,10 +16,11 @@ var cliParser = new Parser(settings =>
 );
 
 return cliParser
-    .ParseArguments<BuildOptions, WatchOptions>(args)
+    .ParseArguments<BuildOptions, WatchOptions, NewOptions>(args)
     .MapResult(
         (BuildOptions options) => compile(options.Directory, watch: false),
         (WatchOptions options) => compile(options.Directory, watch: true),
+        (NewOptions options) => Scaffolder.NewProject(options.Directory),
         handleParseError
     );
 

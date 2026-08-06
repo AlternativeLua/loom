@@ -14,7 +14,7 @@
     "ReplicatedStorage": {
       "$className": "ReplicatedStorage",
       "include": {
-        "$path": "../Loom.CLI/Include"
+        "$path": "include"
       }
     }
   }
