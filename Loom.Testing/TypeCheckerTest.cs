@@ -8596,6 +8596,92 @@ public class TypeCheckerTest
                 """
             )
         );
+
+    [Fact]
+    public void Checks_MetadataOnlyDecorator_OnFunction_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [metadata_only]
+                fn replicated(): void {}
+
+                [replicated]
+                fn greet(name: string) {
+                    print(name);
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void Checks_MetadataOnlyDecoratorFactory_OnFunction_NoErrors() =>
+        Utility.AssertNoErrors(
+            Utility.GetTypeCheckerDiagnostics(
+                """
+                [metadata_only]
+                fn tag(name: string): void {}
+
+                [tag("admin")]
+                fn greet(name: string) {
+                    print(name);
+                }
+                """
+            )
+        );
+
+    [Fact]
+    public void ThrowsFor_MetadataOnlyDecorator_NonVoidReturn()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [metadata_only]
+            fn tag(x: number): number { return x; }
+
+            [tag(1)]
+            fn greet(name: string) {
+                print(name);
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorator must return 'void', but returns 'number'.");
+    }
+
+    [Fact]
+    public void ThrowsFor_MetadataOnlyDecorator_NonConstantArgument()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            [metadata_only]
+            fn tag(x: string): void {}
+
+            let value = "hi";
+            [tag(value)]
+            fn greet(name: string) {
+                print(name);
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.DecoratorArgumentNotConstant, "Decorator arguments must be compile-time constants.");
+    }
+
+    [Fact]
+    public void Checks_NonMetadataOnlyDecorator_StillRequiresWrapShape()
+    {
+        var diagnostics = Utility.GetTypeCheckerDiagnostics(
+            """
+            fn tag(): void {}
+
+            [tag]
+            fn greet(name: string) {
+                print(name);
+            }
+            """
+        );
+
+        Utility.AssertDiagnostic(diagnostics, InternalCodes.InvalidDecorator, "Decorators must accept the decorated value and its name as arguments.");
+    }
     #endregion Decorators
 
     #region SizedTypeArguments

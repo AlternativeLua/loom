@@ -27,6 +27,8 @@ enum CFrameType {
 }
 
 declare fn attribute_usage(targets: AttributeTargets): void;
+[attribute_usage(AttributeTargets.Function)]
+declare fn metadata_only: void;
 
 type LuauMetamethod = 
     "__add"

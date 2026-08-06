@@ -1331,6 +1331,26 @@ const function greet(name: string)
 end
 ```
 
+A function decorator can opt out of wrapping by marking its own declaration `[metadata_only]`. Applied to a function this way, it behaves exactly like a decorator on an interface, property, or event: purely passive metadata, compile-time-constant arguments only, nothing emitted for it, no thunk required.
+
+```rs
+[metadata_only]
+fn replicated(): void {}
+
+[replicated]
+fn greet(name: string) {
+    print($"hi, {name}");
+}
+```
+
+```luau
+const function replicated(): ()
+end
+const function greet(name: string)
+  print(`hi, {name}`)
+end
+```
+
 On an interface, a property, or an interface-nested event, a decorator is purely passive metadata — it never runs, never wraps anything, and costs nothing at runtime. Its arguments must be compile-time constants, and nothing is emitted for it anywhere except at an actual query. `get_metadata` resolves entirely at compile time, folding straight to the matched attribute's arguments (or `none` if it isn't present); `has_attribute` folds the same way to a plain `true`/`false`.
 
 ```rs

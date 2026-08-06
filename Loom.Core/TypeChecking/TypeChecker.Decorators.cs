@@ -19,6 +19,10 @@ public sealed partial class TypeChecker
 
     private bool IsIntrinsicAttribute(Attribute attribute) => _semanticModel.GetSymbol(attribute.Expression)?.IsIntrinsic == true;
 
+    private bool IsMetadataOnlyDecorator(Attribute attribute) =>
+        _semanticModel.GetSymbol(attribute.Expression)?.Declaration is IWithAttributes { Attributes: { } declaredAttributes }
+        && declaredAttributes.AttributeList.Exists(a => _semanticModel.GetSymbol(a.Expression) is { Name: "metadata_only", IsIntrinsic: true });
+
     private void CheckDecoratorAttribute(Attribute attribute, string valueName, Type valueType)
     {
         if (_resolvingHoisted.Count > 0)

@@ -38,7 +38,11 @@ public sealed partial class TypeChecker
         if (functionDeclaration.Attributes != null)
             foreach (var attribute in functionDeclaration.Attributes.AttributeList)
             {
-                CheckDecoratorAttribute(attribute, functionDeclaration.Name.Text, functionType.ReturnType);
+                if (IsMetadataOnlyDecorator(attribute))
+                    CheckPassiveDecorator(attribute);
+                else
+                    CheckDecoratorAttribute(attribute, functionDeclaration.Name.Text, functionType.ReturnType);
+
                 CheckAttributeUsage(attribute, AttributeTargetsFlag.Function);
             }
 

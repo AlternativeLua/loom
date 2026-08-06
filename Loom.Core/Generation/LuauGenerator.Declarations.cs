@@ -83,8 +83,8 @@ public sealed partial class LuauGenerator
     // only that cached reference is embedded in the wrapper body that actually runs per-call.
     private LuauExpression ApplyDecorators(Attributes attributes, Chunk originalBody, string name)
     {
-        var nonIntrinsicAttributes = attributes.AttributeList.Where(a => !IsIntrinsicAttribute(a)).ToList();
-        var decorators = nonIntrinsicAttributes.ConvertAll(attribute => _state.PushToVariable($"_{name}_decorator", Visit<LuauExpression>(attribute)));
+        var wrappingAttributes = attributes.AttributeList.Where(a => !IsIntrinsicAttribute(a) && !IsMetadataOnlyDecorator(a)).ToList();
+        var decorators = wrappingAttributes.ConvertAll(attribute => _state.PushToVariable($"_{name}_decorator", Visit<LuauExpression>(attribute)));
 
         LuauExpression value = new Call(decorators[0], [new AnonymousFunction(null, [], null, originalBody), new StringLiteral(name)]);
         foreach (var decorator in decorators.Skip(1))
@@ -96,9 +96,13 @@ public sealed partial class LuauGenerator
         return value;
     }
 
-    private bool HasDecoratorAttributes(Attributes attributes) => attributes.AttributeList.Exists(a => !IsIntrinsicAttribute(a));
+    private bool HasDecoratorAttributes(Attributes attributes) => attributes.AttributeList.Exists(a => !IsIntrinsicAttribute(a) && !IsMetadataOnlyDecorator(a));
 
     private bool IsIntrinsicAttribute(Attribute attribute) => _semanticModel.GetSymbol(attribute.Expression)?.IsIntrinsic == true;
+
+    private bool IsMetadataOnlyDecorator(Attribute attribute) =>
+        _semanticModel.GetSymbol(attribute.Expression)?.Declaration is IWithAttributes { Attributes: { } declaredAttributes }
+        && declaredAttributes.AttributeList.Exists(a => _semanticModel.GetSymbol(a.Expression) is { Name: "metadata_only", IsIntrinsic: true });
 
     public override LuauNode VisitFunctionExpression(FunctionExpression functionExpression)
     {

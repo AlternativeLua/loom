@@ -5332,6 +5332,49 @@ public class LuauGeneratorTest
     }
 
     [Fact]
+    public void Generates_MetadataOnlyDecorator_OnFunction_IsNotWrapped()
+    {
+        var luauTree = Utility.GetLuauAST(
+            """
+            [metadata_only]
+            fn replicated(): void {}
+
+            [replicated]
+            fn greet(name: string) {
+                print(name);
+            }
+            """,
+            true
+        );
+
+        var wrapper = luauTree.Statements.OfType<Function>().Single(f => f.Name == "greet");
+        Assert.DoesNotContain(wrapper.Body.Statements, s => s is Return { Expression: Call });
+        var printCall = Assert.IsType<Call>(Assert.IsType<ExpressionStatement>(Assert.Single(wrapper.Body.Statements)).Expression);
+        Assert.Equal("print", Assert.IsType<Identifier>(printCall.Callee).Name);
+    }
+
+    [Fact]
+    public void Generates_MixedDecorators_OnlyWrapsWithNonMetadataOnlyOne()
+    {
+        var rendered = Utility.GetLuauAST(
+            """
+            [metadata_only]
+            fn replicated(): void {}
+
+            fn log(f: fn(): void, name: string): void { f(); }
+
+            [replicated, log]
+            fn mixed() { print("mixed"); }
+            """,
+            true
+        ).Render();
+
+        Assert.Contains("const function mixed()", rendered);
+        Assert.Contains("return log(function()", rendered);
+        Assert.DoesNotContain("replicated(function()", rendered);
+    }
+
+    [Fact]
     public void Generates_GetMetadata_FoldsToConstantArgsArray()
     {
         var luauTree = Utility.GetLuauAST(
