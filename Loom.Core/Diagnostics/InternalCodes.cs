@@ -130,6 +130,7 @@ public static class InternalCodes
     public const string ErrorPropagationOutsideResultFunction = "L406";
     public const string ErrorPropagationErrorTypeMismatch = "L407";
     public const string InvalidMetamethodAttribute = "L408";
+    public const string NumberOutOfRange = "L409";
 
     public const string SimplifiableCode = "L500";
 }

@@ -1,6 +1,7 @@
 using Loom.Core.Diagnostics;
 using Loom.Core.FlowAnalysis;
 using Loom.Core.Parsing.AST;
+using Loom.Core.TypeChecking.Serialization;
 using Loom.Core.Text;
 using ArrayType = Loom.Core.TypeChecking.Types.ArrayType;
 using PrimitiveType = Loom.Core.TypeChecking.Types.PrimitiveType;
@@ -100,11 +101,49 @@ public sealed partial class TypeChecker
         if (TryInstantiateGenericFunctionArgument(expression, actual, expected, out var instantiated))
             actual = instantiated;
 
+        CheckSizedNumberRange(expression, expected);
+
         if (actual.IsAssignableTo(expected))
             return actual;
 
         constraint = _semanticModel.TypeSolver.AddConstraint(actual, expected, expression);
         return actual;
+    }
+
+    private void CheckSizedNumberRange(Expression expression, Type expected)
+    {
+        if (expected.NonNullable() is not Types.SizedNumberType sizedNumberType || !TryGetNumericLiteralValue(expression, out var value))
+            return;
+
+        var (minimum, maximum) = sizedNumberType.NumberType.Range();
+        if (value < minimum || value > maximum)
+            _diagnostics.Warn(
+                expression,
+                InternalCodes.NumberOutOfRange,
+                $"'{value}' is out of range for '{sizedNumberType}' ({minimum} to {maximum})."
+            );
+    }
+
+    private static bool TryGetNumericLiteralValue(Expression expression, out double value)
+    {
+        switch (expression)
+        {
+            case Literal { Value: long longValue }:
+                value = longValue;
+                return true;
+            case Literal { Value: int intValue }:
+                value = intValue;
+                return true;
+            case Literal { Value: double doubleValue }:
+                value = doubleValue;
+                return true;
+            case UnaryOperator { Operator.Kind: SyntaxKind.Minus } unaryOperator when TryGetNumericLiteralValue(unaryOperator.Operand, out var operandValue):
+                value = -operandValue;
+                return true;
+            default:
+                value = 0;
+                return false;
+        }
     }
 
     private ArrayType CheckArrayLiteral(ArrayLiteral arrayLiteral, ArrayType expected, FlowState state)
