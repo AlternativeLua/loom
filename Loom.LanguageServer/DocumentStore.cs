@@ -30,8 +30,12 @@ public sealed class DocumentStore
 
     private CompilationResult? Recompile(DocumentUri uri, string text)
     {
-        var path = uri.GetFileSystemPath();
-        if (path == null || GetOrCreateUnit(path) is not { } unit)
+        var rawPath = uri.GetFileSystemPath();
+        if (rawPath == null)
+            return null;
+
+        var path = Path.GetFullPath(rawPath);
+        if (GetOrCreateUnit(path) is not { } unit)
             return null;
 
         return unit.Recompile(new Dictionary<string, string> { [path] = text });
@@ -55,7 +59,7 @@ public sealed class DocumentStore
 
     private static LoomConfig? LocateProjectConfig(string filePath)
     {
-        var directory = Path.GetDirectoryName(Path.GetFullPath(filePath));
+        var directory = Path.GetDirectoryName(filePath);
         while (directory != null)
         {
             var config = ConfigReader.LocateFromDirectory(directory, out _);

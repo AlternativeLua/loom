@@ -46,10 +46,10 @@ public sealed class TextDocumentSyncHandler(ILanguageServerFacade server, Docume
         if (result == null)
             return;
 
-        var path = uri.GetFileSystemPath();
-        var diagnostics = path == null
+        var rawPath = uri.GetFileSystemPath();
+        var diagnostics = rawPath == null
             ? []
-            : result.Diagnostics.Set.Where(d => d.Span.File.AbsolutePath == path).Select(Conversion.ToDiagnostic).ToArray();
+            : result.Diagnostics.Set.Where(d => d.Span.File.AbsolutePath == Path.GetFullPath(rawPath)).Select(Conversion.ToDiagnostic).ToArray();
 
         server.TextDocument.PublishDiagnostics(new PublishDiagnosticsParams { Uri = uri, Diagnostics = diagnostics });
     }
