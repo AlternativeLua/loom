@@ -408,6 +408,63 @@ public class SourceRootTest
             packageFiles: [("init.loom", "export let pi = 3;\nprint(\"package\");")]
         );
 
+    /// <remarks>
+    ///     An unused import in a package is a fact about the package's own code, which the reader of this
+    ///     build cannot edit and did not write.
+    /// </remarks>
+    [Fact]
+    public void Reports_NothingOfADependencysWarnings()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+
+                Assert.Empty(result.Diagnostics.Set);
+                Assert.Empty(result.Files.Single(file => file.SourceFile.Name == "init.loom").Diagnostics.Set);
+            },
+            packageFiles:
+            [
+                ("init.loom", "import { zero } from \"./vector\"\nexport let pi = 3;"),
+                ("vector.loom", "export let zero = 0;")
+            ]
+        );
+
+    [Fact]
+    public void Reports_ADependencysWarnings_WhenTheBuildAsksForThem()
+        => WithWorkspace((_, unit) => Utility.AssertDiagnostic(
+                unit.Compile().Diagnostics,
+                InternalCodes.UnusedImport,
+                "'zero' is imported but never used."
+            ),
+            packageFiles:
+            [
+                ("init.loom", "import { zero } from \"./vector\"\nexport let pi = 3;"),
+                ("vector.loom", "export let zero = 0;")
+            ],
+            diagnosticOptions: new DiagnosticOptions { ReportDependencyDiagnostics = true }
+        );
+
+    /// <remarks>
+    ///     The consumer cannot fix the package's error, but nothing can be built on a package that did not
+    ///     compile — so it is reported, framed as the package's, while their own file still reports its own.
+    /// </remarks>
+    [Fact]
+    public void Attributes_ADependencysError_ToThePackage_WhileTheConsumersOwnFilesReportTheirOwn()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+
+                var attributed = Assert.Single(result.Diagnostics.Set, diagnostic => diagnostic.Code == InternalCodes.PackageFailedToCompile);
+                Assert.StartsWith("Package 'math' failed to compile: Cannot find name 'missing'.", attributed.Message);
+                Assert.Equal("init.loom", attributed.Span.File.Name);
+
+                // the consumer's own diagnostic is theirs, reported exactly as raised
+                Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.CannotFindName, "Cannot find name 'also_missing'.");
+            },
+            appFiles: [("main.loom", "print(also_missing);")],
+            packageFiles: [("init.loom", "export let pi = missing;")]
+        );
+
+    /// <remarks>Read with a build asking for its dependencies' diagnostics in full, since a consumer is only told the package failed.</remarks>
     [Fact]
     public void Names_ADependencysFiles_ByItsPackage_WhenReportingACycle()
         => WithWorkspace((_, unit) =>
@@ -423,7 +480,8 @@ public class SourceRootTest
             [
                 ("init.loom", "import { helper } from \"./util\"\nexport let pi = helper;"),
                 ("util.loom", "import { pi } from \"./init\"\nexport let helper = pi;")
-            ]
+            ],
+            diagnosticOptions: new DiagnosticOptions { ReportDependencyDiagnostics = true }
         );
 
     /// <remarks>
@@ -482,6 +540,7 @@ public class SourceRootTest
         string? rojoProject = null,
         string? appManifest = null,
         string? packageManifest = null,
+        DiagnosticOptions? diagnosticOptions = null,
         Action<Workspace>? configure = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
@@ -501,7 +560,7 @@ public class SourceRootTest
             var workspace = new Workspace(directory, app, package);
             configure?.Invoke(workspace);
 
-            assert(workspace, new CompilationUnit(new SourceRootSet(new SourceRoot(app), new SourceRoot(package))));
+            assert(workspace, new CompilationUnit(new SourceRootSet(new SourceRoot(app), new SourceRoot(package)), diagnosticOptions));
         }
         finally
         {

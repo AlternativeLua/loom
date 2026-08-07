@@ -27,10 +27,10 @@ public sealed class ModuleGraph
     private sealed record ModuleEdge(Node ModuleReference, ParsedFile Target);
 
     /// <summary>
-    ///     The module diagnostics of a build, one bag per file, all reporting with the unit's
+    ///     The module diagnostics of a build, one bag per file, each reporting with that file's own
     ///     <see cref="DiagnosticOptions" /> so they behave like the bags of every other stage.
     /// </summary>
-    private sealed class ModuleDiagnostics(DiagnosticOptions options)
+    private sealed class ModuleDiagnostics(Func<SourceFile, DiagnosticOptions> optionsOf)
     {
         private readonly Dictionary<SourceFile, DiagnosticBag> _bags = [];
 
@@ -39,7 +39,7 @@ public sealed class ModuleGraph
         public DiagnosticBag Of(SourceFile file)
         {
             if (!_bags.TryGetValue(file, out var bag))
-                _bags[file] = bag = new DiagnosticBag(options: options);
+                _bags[file] = bag = new DiagnosticBag(options: optionsOf(file));
 
             return bag;
         }
@@ -68,7 +68,8 @@ public sealed class ModuleGraph
     /// <summary>Module diagnostics belonging to <paramref name="file" />, reported at its import sites.</summary>
     public DiagnosticBag? GetDiagnostics(SourceFile file) => _diagnostics.Get(file);
 
-    public static ModuleGraph Build(List<ParsedFile> parsedFiles, SourceRootSet roots, DiagnosticOptions? diagnosticOptions = null)
+    /// <param name="diagnosticOptionsOf">Reporting behavior per file, the unit's for every file when unspecified.</param>
+    public static ModuleGraph Build(List<ParsedFile> parsedFiles, SourceRootSet roots, Func<SourceFile, DiagnosticOptions>? diagnosticOptionsOf = null)
     {
         var resolver = new ModuleResolver(parsedFiles.ConvertAll(parsedFile => parsedFile.File), roots);
         var parsedFilesByFile = new Dictionary<SourceFile, ParsedFile>();
@@ -76,7 +77,7 @@ public sealed class ModuleGraph
             parsedFilesByFile.TryAdd(parsedFile.File, parsedFile);
 
         var resolvedModules = new Dictionary<NodeId, SourceFile>();
-        var diagnostics = new ModuleDiagnostics(diagnosticOptions ?? DiagnosticOptions.Default);
+        var diagnostics = new ModuleDiagnostics(diagnosticOptionsOf ?? (_ => DiagnosticOptions.Default));
         var dependencies = new Dictionary<SourceFile, List<ModuleEdge>>();
         foreach (var parsedFile in parsedFiles)
         {

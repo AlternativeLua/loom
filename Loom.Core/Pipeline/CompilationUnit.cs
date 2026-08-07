@@ -38,6 +38,31 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
     /// <summary>Every root's files, entry project first.</summary>
     public IEnumerable<SourceFile> SourceFiles => Roots.Files;
 
+    /// <summary>
+    ///     The package <paramref name="file" />'s diagnostics are the consumer's to read about rather than to
+    ///     fix, or <see langword="null" /> when they are the entry project's own — the files whose diagnostics
+    ///     are reported exactly as raised.
+    /// </summary>
+    /// <seealso cref="DiagnosticBag.AttributedTo" />
+    public string? PackageAttributionOf(SourceFile file)
+    {
+        // a unit spanning one project has no dependencies to attribute anything to, so it need not ask which
+        // root owns the file - the question every file of every compile would otherwise be paying for
+        if (DiagnosticOptions.ReportDependencyDiagnostics || Roots.Count == 1)
+            return null;
+
+        var root = Roots.Of(file);
+        return root == Roots.Entry ? null : root.ToString();
+    }
+
+    /// <summary>
+    ///     Reporting behavior for <paramref name="file" />'s own stages. A dependency's files never fail fast,
+    ///     however the unit was configured: the error worth stopping on is the one naming the package, and the
+    ///     process has to survive long enough to raise it.
+    /// </summary>
+    public DiagnosticOptions DiagnosticOptionsFor(SourceFile file) =>
+        PackageAttributionOf(file) == null ? DiagnosticOptions : DiagnosticOptions with { FailFast = false };
+
     /// <summary>Every root's ambient declarations, each visible only to the files of the root that declared them.</summary>
     public GlobalSymbols Globals { get; } = new(roots);
 
@@ -332,7 +357,7 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
     {
         try
         {
-            return ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Roots, DiagnosticOptions);
+            return ModuleGraph.Build(parsedFiles.ConvertAll(parsed => parsed.ParsedFile), Roots, DiagnosticOptionsFor);
         }
         catch (Exception e)
         {

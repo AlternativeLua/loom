@@ -10,8 +10,12 @@ const string configFileName = "loom-config.toml";
 Console.OutputEncoding = Encoding.UTF8;
 
 var watch = args.Any(a => a is "-w" or "--watch");
+
+// a dependency's diagnostics are about code the user cannot fix, so a build reports only that the package
+// failed; this asks for them in full, for debugging a package from a project that consumes it
+var dependencyDiagnostics = args.Any(a => a is "--dependency-diagnostics");
 var directory = Path.GetFullPath(args.FirstOrDefault(a => !a.StartsWith('-')) ?? ".");
-var diagnosticOptions = new DiagnosticOptions { FailFast = !watch };
+var diagnosticOptions = new DiagnosticOptions { FailFast = !watch, ReportDependencyDiagnostics = dependencyDiagnostics };
 
 var config = ConfigReader.LocateFromDirectory(directory, out var configDiagnostics);
 if (config == null)

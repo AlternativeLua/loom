@@ -91,7 +91,12 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 
 - Testing imports both plus `Type = Loom.TypeChecking.Types.Type` alias to dodge `System.Type` clash.
 - `DiagnosticOptions.FailFast` (per `CompilationUnit`, threaded into every stage's `DiagnosticBag`) prints the first error and exits the process. Off by
-  default; only `Loom.CLI` opts in.
+  default; only `Loom.CLI` opts in. Options are handed out per file by `CompilationUnit.DiagnosticOptionsFor` — a dependency's files never fail fast, so the
+  error the build stops on is the one naming the package.
+- A dependency's diagnostics are not the consumer's to fix: `Compiler` runs every dependency file's bag through `DiagnosticBag.AttributedTo`, which drops
+  warnings and info and collapses errors into one `PackageFailedToCompile` per file carrying the first underlying error. `DiagnosticOptions
+  .ReportDependencyDiagnostics` (CLI: `--dependency-diagnostics`) turns that off for debugging a package from a project consuming it. Opening a package's own
+  files in the LSP needs no flag — the package is the entry root of its own unit there.
 - The resolver keeps ambient names (intrinsics + `.d.loom` globals) in a scope below the file's own, so a module declaration shadows them instead of
   colliding. Scope depth is therefore not a test for "top level of a module" — use `AtModuleScope()`. Imports resolve ahead of the file's statements, so a name
   may be used above the import that brings it in.
