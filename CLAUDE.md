@@ -50,7 +50,9 @@ before claiming done.
 - `Loom.Config/` — `loom-config.toml` reader (Tomlyn). `ProjectType` (default `game`), `Debug` (default `false`, for emitting debug diagnostics) `FilesConfig`:
   `SourceDirectory` (default `src`) → `OutputDirectory` (default `dist`). Package identity lives here too: `[package]` (`PackageConfig`, with `PackageName` and
   semver `Version` value types, plus `Realm`), `[dependencies]` (`Dependency`), `[registry]` (`RegistryConfig`). `ConfigReader` never throws on a manifest
-  problem — malformed manifests come back as `null` plus `ConfigDiagnostic`s out of `LocateFromDirectory`
+  problem — malformed manifests come back as `null` plus `ConfigDiagnostic`s out of `LocateFromDirectory`. `[files]` directories are validated there too
+  (non-empty, relative, path-legal), since nothing downstream can report one that isn't: they are resolved as real paths and a stage throwing is the
+  compiler-bug path
 - `Loom.CLI/` — entry point; locates config, compiles unit, prints debug info. `Include/loom_runtime.luau` = runtime support emitted alongside output
 - `Loom.TypeGenerator/` — Loom code generator to define types for the Roblox API; tests depend on these types to be generated to pass
 - `Loom.Tools/` — dev tooling (AST dump, snapshot generation)
