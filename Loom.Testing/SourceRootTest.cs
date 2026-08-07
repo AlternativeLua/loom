@@ -213,6 +213,59 @@ public class SourceRootTest
             packageFiles: [("init.loom", "export let pi = 3;"), ("vector.loom", "export let zero = 0;")]
         );
 
+    /// <remarks>
+    ///     A package's public surface is what it exports: exports are versioned, named at the import site and
+    ///     shadowable, none of which is true of a name that simply turns up in scope. Its declaration files
+    ///     furnish the package itself and stop there.
+    /// </remarks>
+    [Fact]
+    public void Keeps_ADependencysAmbientDeclarations_OutOfTheConsumersScope()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertDiagnostic(result.Diagnostics, InternalCodes.CannotFindName, "Cannot find name 'physics_step'.");
+
+                // the package's own files still see it, and no name of the package's leaked into the app
+                var main = unit.SourceFiles.First(file => file.Name == "main.loom");
+                var package = unit.SourceFiles.First(file => file.Name == "init.loom");
+
+                Assert.Contains(unit.Globals.Of(package).Keys, symbol => symbol.Name == "physics_step");
+                Assert.Empty(unit.Globals.Of(main));
+            },
+            appFiles: [("main.loom", "print(physics_step);")],
+            packageFiles: [("init.loom", "export let pi = physics_step;"), ("globals.d.loom", "declare let physics_step: number;")]
+        );
+
+    /// <remarks>Each root's ambient scope is its own, so the same name in two of them is two declarations, not a collision.</remarks>
+    [Fact]
+    public void Compiles_TwoRoots_DeclaringTheSameAmbientName()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                var main = unit.SourceFiles.First(file => file.Name == "main.loom");
+                var package = unit.SourceFiles.First(file => file.Name == "init.loom");
+
+                var appGlobal = Assert.Single(unit.Globals.Of(main).Keys, symbol => symbol.Name == "version");
+                var packageGlobal = Assert.Single(unit.Globals.Of(package).Keys, symbol => symbol.Name == "version");
+
+                Assert.NotSame(appGlobal, packageGlobal);
+                Assert.Equal("globals.d.loom", appGlobal.File.Name);
+                Assert.Equal("package-globals.d.loom", packageGlobal.File.Name);
+            },
+            appFiles: [("main.loom", "print(version);"), ("globals.d.loom", "declare let version: string;")],
+            packageFiles: [("init.loom", "export let pi = version;"), ("package-globals.d.loom", "declare let version: number;")]
+        );
+
+    /// <remarks>Intrinsics belong to the language rather than to a project, so partitioning globals by root does not reach them.</remarks>
+    [Fact]
+    public void Resolves_Intrinsics_FromEveryRoot()
+        => WithWorkspace((_, unit) => Utility.AssertNoErrors(unit.Compile()),
+            appFiles: [("main.loom", "print(\"app\");")],
+            packageFiles: [("init.loom", "export let pi = 3;\nprint(\"package\");")]
+        );
+
     [Fact]
     public void Names_ADependencysFiles_ByItsPackage_WhenReportingACycle()
         => WithWorkspace((_, unit) =>

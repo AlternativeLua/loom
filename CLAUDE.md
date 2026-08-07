@@ -91,6 +91,9 @@ AND generator — not just parse + emit (see CONTRIBUTING.md).
 - The resolver keeps ambient names (intrinsics + `.d.loom` globals) in a scope below the file's own, so a module declaration shadows them instead of
   colliding. Scope depth is therefore not a test for "top level of a module" — use `AtModuleScope()`. Imports resolve ahead of the file's statements, so a name
   may be used above the import that brings it in.
+- `.d.loom` globals are scoped to the root that declared them (`GlobalSymbols`, keyed by name *and* namespace): a package cannot put ambient names in a
+  consumer's scope — its public surface is its exports — and one name declared by two of a root's declaration files is an error. Intrinsics are not
+  root-scoped; they reach every file of every root.
 - Output path derived via `Path.GetRelativePath` from the source directory, then re-rooted under the output directory
   ([FileManager.cs:19](Loom.Core/Pipeline/FileManager.cs)).
 - `Loom.TypeGenerator` generates intrinsic types from the Roblox API that the test suite relies on to pass. The intrinsics are stored in

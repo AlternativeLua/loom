@@ -115,9 +115,13 @@ public sealed partial class Resolver(ParserResult parserResult, CompilationUnit 
         return false;
     }
 
+    /// <summary>
+    ///     Ambient names of this file's own project. A dependency's declaration files are none of this file's
+    ///     business, so a package cannot put names in the scope of the projects that depend on it.
+    /// </summary>
     private void DeclareGlobalSymbols()
     {
-        foreach (var (symbol, type) in compilationUnit.Globals)
+        foreach (var (symbol, type) in compilationUnit.Globals.Of(parserResult.Tree.File))
         {
             DeclareSymbol(symbol);
             _semanticModel.TypeSolver.SetType(symbol.Declaration, type);

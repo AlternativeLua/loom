@@ -38,7 +38,8 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
     /// <summary>Every root's files, entry project first.</summary>
     public IEnumerable<SourceFile> SourceFiles => Roots.Files;
 
-    public Dictionary<Symbol, Type> Globals { get; } = [];
+    /// <summary>Every root's ambient declarations, each visible only to the files of the root that declared them.</summary>
+    public GlobalSymbols Globals { get; } = new(roots);
 
     /// <summary>
     ///     Where the runtime library lives in the instance tree. One per unit, resolved from the entry
@@ -363,6 +364,11 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
         return parsedFiles;
     }
 
+    /// <summary>
+    ///     Hoists every declaration file's top-level symbols into the ambient scope of the root that declared
+    ///     them. Two files of one root declaring the same ambient name is an error rather than a silent
+    ///     first-one-wins, since nothing at the use site would say which of the two a name resolved to.
+    /// </summary>
     private void PopulateGlobals(List<CompiledFile> compiledDeclarationFiles)
     {
         foreach (var compiledFile in compiledDeclarationFiles)
@@ -370,7 +376,15 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
             foreach (var symbol in compiledFile.Tree.Statements.Select(statement => compiledFile.SemanticModel.GetDeclarationSymbol(statement)).OfType<Symbol>())
             {
                 var type = compiledFile.SemanticModel.GetType(symbol.Declaration);
-                Globals.Add(symbol, type);
+                if (Globals.Declare(compiledFile.Root, symbol, type) is not { } existing)
+                    continue;
+
+                compiledFile.Diagnostics.Error(
+                    symbol.Declaration,
+                    InternalCodes.DuplicateGlobal,
+                    $"'{symbol.Name}' is already declared by '{compiledFile.Root.Describe(existing.File)}'.",
+                    "a project's declaration files share one ambient scope, so each name may only be declared once across them"
+                );
             }
         }
     }
