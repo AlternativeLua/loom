@@ -36,7 +36,7 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
     public DiagnosticOptions DiagnosticOptions { get; } = diagnosticOptions ?? DiagnosticOptions.Default;
 
     /// <summary>Every root's files, entry project first.</summary>
-    public IEnumerable<SourceFile> SourceFiles => Roots.Files;
+    public IReadOnlyList<SourceFile> SourceFiles => Roots.Files;
 
     /// <summary>
     ///     The package <paramref name="file" />'s diagnostics are the consumer's to read about rather than to
@@ -88,11 +88,10 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
     /// </summary>
     public ModuleGraph? ModuleGraph { get; private set; }
 
-    /// <summary>Every file's parsed form, keyed by absolute path, from the last successful <see cref="Compile()" /> or <see cref="Recompile" />. Lets <see cref="Recompile" /> rebuild the module graph without re-parsing files that did not change.</summary>
-    private readonly Dictionary<string, (Compiler Compiler, ParsedFile Parsed)> _parsedByPath = [];
+    private readonly Dictionary<string, (Compiler Compiler, ParsedFile Parsed)> _parsedByPath = new(_pathComparer);
+    private readonly Dictionary<string, (CompiledFile CompiledFile, TimeSpan AnalyzeDuration)> _compiledByPath = new(_pathComparer);
 
-    /// <summary>Every file's last successful analysis, keyed by absolute path, alongside how long that analysis took - the figure <see cref="Recompile" /> credits itself with when it reuses the entry instead of redoing the work.</summary>
-    private readonly Dictionary<string, (CompiledFile CompiledFile, TimeSpan AnalyzeDuration)> _compiledByPath = [];
+    private static readonly StringComparer _pathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     public CompilationResult Compile()
     {
@@ -116,8 +115,7 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
         if (ModuleGraph == null)
             return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions))
             {
-                Failures = failures,
-                Elapsed = stopwatch.Elapsed
+                Failures = failures, Elapsed = stopwatch.Elapsed
             };
 
         // phase two: declaration files first — their top-level symbols become globals that every
@@ -137,9 +135,7 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
 
         return new CompilationResult(compiledFiles, diagnostics)
         {
-            Failures = failures,
-            Reanalyzed = compiledFiles.ConvertAll(file => file.SourceFile),
-            Elapsed = stopwatch.Elapsed
+            Failures = failures, Reanalyzed = compiledFiles.ConvertAll(file => file.SourceFile), Elapsed = stopwatch.Elapsed
         };
 
         List<CompiledFile> analyzeAll(Predicate<ParsedFile> predicate)
@@ -153,23 +149,23 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
         }
     }
 
-    /// <summary>
-    ///     Recompiles only what actually needs it: <paramref name="changedAbsolutePaths" /> and, per file, only
-    ///     the dependents whose own re-analysis found that file's exports actually changed shape - a file
-    ///     touched without changing what it exports never invalidates anything downstream of it. Everything
-    ///     else is reused verbatim from the last successful <see cref="Compile()" /> or <see cref="Recompile" />.
-    ///     Falls back to a full <see cref="Compile()" /> when there is no prior compile to diff against, or when
-    ///     a changed path names a file this unit has never seen (added since construction, or deleted) - this
-    ///     unit's <see cref="SourceFiles" /> is fixed at construction time, so a structural change to the file
-    ///     set needs a new <see cref="CompilationUnit" />, not a recompile of this one.
-    /// </summary>
-    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths) => Recompile(changedAbsolutePaths, static _ => null);
+    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths) => Recompile(NormalizePaths(changedAbsolutePaths), static _ => null);
 
-    public CompilationResult Recompile(IReadOnlyDictionary<string, string> changedContents) =>
-        Recompile(changedContents.Keys.ToHashSet(), path => changedContents[path]);
+    public CompilationResult Recompile(IReadOnlyDictionary<string, string> changedContents)
+    {
+        var normalizedContents = new Dictionary<string, string>(_pathComparer);
+        foreach (var (path, content) in changedContents)
+            normalizedContents[NormalizePath(path)] = content;
+
+        return Recompile(
+            normalizedContents.Keys.ToHashSet(),
+            path => normalizedContents[path]
+        );
+    }
 
     private CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths, Func<string, string?> resolveContent)
     {
+        changedAbsolutePaths = NormalizePaths(changedAbsolutePaths);
         foreach (var path in changedAbsolutePaths)
             if (resolveContent(path) is { } content)
                 Roots.Replace(new SourceFile(path, content));
@@ -210,8 +206,7 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
         if (ModuleGraph == null)
             return new CompilationResult([], DiagnosticBag.Concat(failures.ConvertAll(failure => failure.Diagnostics), DiagnosticOptions))
             {
-                Failures = failures,
-                Elapsed = stopwatch.Elapsed
+                Failures = failures, Elapsed = stopwatch.Elapsed
             };
 
         var dirty = new HashSet<string>(changedAbsolutePaths);
@@ -233,10 +228,7 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
 
         return new CompilationResult(compiledFiles, diagnostics)
         {
-            Failures = failures,
-            Reanalyzed = reanalyzed,
-            Elapsed = stopwatch.Elapsed,
-            EstimatedTimeSaved = timeSaved
+            Failures = failures, Reanalyzed = reanalyzed, Elapsed = stopwatch.Elapsed, EstimatedTimeSaved = timeSaved
         };
 
         List<CompiledFile> analyzeAll(Predicate<ParsedFile> predicate)
@@ -266,9 +258,10 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
 
                 files.Add(compiledFile);
                 reanalyzed.Add(parsedFile.File);
-                if (!ExportsMatch(previous, compiledFile))
-                    foreach (var dependent in dependents)
-                        dirty.Add(dependent.AbsolutePath);
+                if (ExportsMatch(previous, compiledFile)) continue;
+
+                foreach (var dependent in dependents)
+                    dirty.Add(dependent.AbsolutePath);
             }
 
             return files;
@@ -415,5 +408,14 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
                 );
             }
         }
+    }
+
+    private static string NormalizePath(string path) => Path.GetFullPath(path);
+
+    private static HashSet<string> NormalizePaths(IEnumerable<string> paths)
+    {
+        var normalized = new HashSet<string>(_pathComparer);
+        foreach (var path in paths) normalized.Add(NormalizePath(path));
+        return normalized;
     }
 }

@@ -12,7 +12,7 @@ namespace Loom.Core.Pipeline;
 /// </summary>
 public sealed class SourceRootSet : IReadOnlyList<SourceRoot>
 {
-    private readonly List<SourceRoot> _roots;
+    private readonly IReadOnlyList<SourceRoot> _roots;
 
     public SourceRootSet(SourceRoot entry, params IEnumerable<SourceRoot> dependencies)
     {
@@ -22,10 +22,10 @@ public sealed class SourceRootSet : IReadOnlyList<SourceRoot>
     }
 
     /// <summary>The project the unit was started for, and the root that owns every file no other root claims.</summary>
-    public SourceRoot Entry => _roots[0];
+    public SourceRoot Entry => field ??= _roots[0];
 
     /// <summary>Every root's files, entry project first.</summary>
-    public IEnumerable<SourceFile> Files => _roots.SelectMany(root => root.Files);
+    public IReadOnlyList<SourceFile> Files => field ??= _roots.SelectMany(root => root.Files).ToArray();
 
     public int Count => _roots.Count;
     public SourceRoot this[int index] => _roots[index];
