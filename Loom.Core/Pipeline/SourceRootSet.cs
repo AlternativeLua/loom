@@ -62,7 +62,7 @@ public sealed class SourceRootSet : IReadOnlyList<SourceRoot>
     ///     The root publishing <paramref name="package" />, which is the root a specifier naming that package
     ///     resolves in, or <see langword="null" /> when the unit compiles no such package.
     /// </summary>
-    public SourceRoot? WithPackage(PackageName package) => _roots.Find(root => package.Equals(root.Package?.Name));
+    public SourceRoot? WithPackage(PackageName package) => _roots.FirstOrDefault(root => package.Equals(root.Package?.Name));
 
     /// <summary>
     ///     Where <paramref name="file" />'s Luau is written. The entry project's own files mirror its source

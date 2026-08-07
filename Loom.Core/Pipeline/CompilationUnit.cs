@@ -6,7 +6,6 @@ using Loom.Core.Modules;
 using Loom.Core.Resolving;
 using Loom.Core.Resolving.Symbols;
 using Loom.Core.Text;
-using Type = Loom.Core.TypeChecking.Types.Type;
 
 namespace Loom.Core.Pipeline;
 
