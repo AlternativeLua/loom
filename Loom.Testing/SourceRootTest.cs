@@ -21,14 +21,30 @@ public class SourceRootTest
 
     private const string PackageManifest = "project_type = \"library\"\n[package]\nname = \"math\"\nversion = \"1.0.0\"\n";
 
-    /// <summary>Maps both projects' output directories into the tree, each under a name of its own.</summary>
+    /// <summary>The same pair under a name no intrinsic has, for the tests that read the generated locals.</summary>
+    private const string GeometryAppManifest = "project_type = \"game\"\n[dependencies]\ngeometry = \"^1.0\"\n";
+
+    private const string GeometryPackageManifest = "project_type = \"library\"\n[package]\nname = \"geometry\"\nversion = \"1.0.0\"\n";
+
+    /// <summary>Maps the app's output directory, which is where its dependencies' output is written too.</summary>
     private const string AppRojoProject = """
         {
           "tree": {
             "$className": "DataModel",
             "ReplicatedStorage": {
-              "Shared": { "$path": "dist" },
-              "Packages": { "$path": "../packages/math/dist" }
+              "Shared": { "$path": "dist" }
+            }
+          }
+        }
+        """;
+
+    /// <summary>Maps the app's own code but nothing of the packages folder beneath it.</summary>
+    private const string AppRojoProjectWithoutPackages = """
+        {
+          "tree": {
+            "$className": "DataModel",
+            "ReplicatedStorage": {
+              "Shared": { "$path": "dist/main.luau" }
             }
           }
         }
@@ -54,8 +70,13 @@ public class SourceRootTest
             }
         );
 
+    /// <remarks>
+    ///     A dependency's Luau is part of the build consuming it, so it is written into the consumer's output
+    ///     directory rather than into the dependency's own — under a packages folder, in a folder named by the
+    ///     package. The dependency's own output directory is what it uses when it is built by itself.
+    /// </remarks>
     [Fact]
-    public void Compiles_EveryRoot_IntoItsOwnOutputDirectory()
+    public void Compiles_ADependency_IntoTheEntryProjectsPackagesFolder()
         => WithWorkspace((workspace, unit) =>
             {
                 var result = unit.Compile();
@@ -66,23 +87,53 @@ public class SourceRootTest
                 var package = result.Files.Single(file => file.SourceFile.Name == "init.loom");
 
                 Assert.Equal(Path.Combine(workspace.App.Files.OutputDirectory, "main.luau"), main.Path);
-                Assert.Equal(Path.Combine(workspace.Package.Files.OutputDirectory, "init.luau"), package.Path);
+                Assert.Equal(Path.Combine(workspace.App.Files.OutputDirectory, "packages", "math", "init.luau"), package.Path);
                 Assert.True(File.Exists(main.Path));
                 Assert.True(File.Exists(package.Path));
+                Assert.False(Directory.Exists(workspace.Package.Files.OutputDirectory));
             }
         );
 
+    /// <remarks>A scope is a folder above the name, which is the one layout that cannot collide with a package named for the scope.</remarks>
     [Fact]
-    public void Emits_OnlyTheRoots_WhoseOwnConfigAsksForOutput()
+    public void Compiles_AScopedDependency_IntoAFolderPerScope()
         => WithWorkspace((workspace, unit) =>
             {
                 var result = unit.Compile();
                 Utility.AssertNoErrors(result);
 
+                var package = result.Files.Single(file => file.SourceFile.Name == "init.loom");
+                Assert.Equal(Path.Combine(workspace.App.Files.OutputDirectory, "packages", "acme", "math", "init.luau"), package.Path);
+            },
+            appManifest: "project_type = \"game\"\n[dependencies]\n\"acme/math\" = \"^1.0\"\n",
+            packageManifest: "project_type = \"library\"\n[package]\nname = \"acme/math\"\nversion = \"1.0.0\"\n"
+        );
+
+    /// <remarks>
+    ///     Emission is the entry project's call for the whole unit: a library author's own <c>no_emit</c> is
+    ///     about building that library alone, and must not leave a consumer's build missing the files its own
+    ///     output tree is supposed to contain.
+    /// </remarks>
+    [Fact]
+    public void Emits_EveryRoot_WhenTheEntryProjectAsksForOutput()
+        => WithWorkspace((workspace, unit) =>
+            {
+                Utility.AssertNoErrors(unit.Compile());
+
                 Assert.True(File.Exists(Path.Combine(workspace.App.Files.OutputDirectory, "main.luau")));
-                Assert.False(Directory.Exists(workspace.Package.Files.OutputDirectory));
+                Assert.True(File.Exists(Path.Combine(workspace.App.Files.OutputDirectory, "packages", "math", "init.luau")));
             },
             configure: workspace => workspace.Package.NoEmit = true
+        );
+
+    [Fact]
+    public void Emits_Nothing_WhenTheEntryProjectSetsNoEmit()
+        => WithWorkspace((workspace, unit) =>
+            {
+                Utility.AssertNoErrors(unit.Compile());
+                Assert.False(Directory.Exists(workspace.App.Files.OutputDirectory));
+            },
+            configure: workspace => workspace.App.NoEmit = true
         );
 
     /// <remarks>
@@ -105,8 +156,9 @@ public class SourceRootTest
 
     /// <remarks>
     ///     The entry project's Rojo tree names every module of the unit, dependencies included: it is the one
-    ///     describing the place the compiled game runs in. What differs per root is the output path being
-    ///     looked up, since that is where the root wrote its Luau.
+    ///     describing the place the compiled game runs in. Because a dependency's output lands inside that
+    ///     project's own output directory, the mapping covering the project's code covers its packages too —
+    ///     the package's entry module being the folder itself, since Rojo folds an <c>init</c> into its folder.
     /// </remarks>
     [Fact]
     public void Names_ADependencyModule_ThroughTheEntryProjectsRojoTree()
@@ -117,15 +169,103 @@ public class SourceRootTest
 
                 Assert.Equal(
                     new ModuleRequirePath(ModuleRequirePathStatus.Resolved, "@game/ReplicatedStorage/Shared/main"),
-                    unit.ModuleRequirePaths.Resolve(main, "./main")
+                    unit.ModuleRequirePaths.Resolve(main, main, "./main")
                 );
 
                 Assert.Equal(
-                    new ModuleRequirePath(ModuleRequirePathStatus.Resolved, "@game/ReplicatedStorage/Packages"),
-                    unit.ModuleRequirePaths.Resolve(package, "math")
+                    new ModuleRequirePath(ModuleRequirePathStatus.Resolved, "@game/ReplicatedStorage/Shared/packages/math"),
+                    unit.ModuleRequirePaths.Resolve(main, package, "math")
                 );
             },
             rojoProject: AppRojoProject
+        );
+
+    [Fact]
+    public void Requires_ADependencysModule_ByItsInstancePath()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                Assert.Equal(
+                    """
+                    const geometry = require("@game/ReplicatedStorage/Shared/packages/geometry")
+                    const pi = geometry.pi
+                    print(pi)
+
+                    """.Replace(Environment.NewLine, "\n"),
+                    result.Files.Single(file => file.SourceFile.Name == "main.loom").RenderedLuau.Replace(Environment.NewLine, "\n")
+                );
+            },
+            appFiles: [("main.loom", "import { pi } from \"geometry\"\nprint(pi);")],
+            appManifest: GeometryAppManifest,
+            packageManifest: GeometryPackageManifest,
+            rojoProject: AppRojoProject
+        );
+
+    /// <remarks>
+    ///     <c>math</c> is an intrinsic global, and a local of that name would shadow it for the rest of the
+    ///     file, so the require takes a name of its own — the numbering is for names nothing in the specifier
+    ///     can tell apart.
+    /// </remarks>
+    [Fact]
+    public void Names_ARequire_WithoutShadowing_AnIntrinsicOfTheSameName()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                var main = result.Files.Single(file => file.SourceFile.Name == "main.loom").RenderedLuau;
+                Assert.Contains("const math_1 = require(\"@game/ReplicatedStorage/Shared/packages/math\")", main);
+                Assert.Contains("math.floor", main);
+            },
+            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(math.floor(pi));")],
+            rojoProject: AppRojoProject
+        );
+
+    [Fact]
+    public void Requires_AModuleInsideADependency_ByItsInstancePath()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                Assert.Contains(
+                    "require(\"@game/ReplicatedStorage/Shared/packages/math/vector\")",
+                    result.Files.Single(file => file.SourceFile.Name == "main.loom").RenderedLuau
+                );
+            },
+            appFiles: [("main.loom", "import { zero } from \"math/vector\"\nprint(zero);")],
+            packageFiles: [("init.loom", "export let pi = 3;"), ("vector.loom", "export let zero = 0;")],
+            rojoProject: AppRojoProject
+        );
+
+    /// <remarks>
+    ///     Within a project the fallback relative require works, because output mirrors source. Across a
+    ///     package boundary it is a guess at where the consumer's Rojo project put two separate projects'
+    ///     output, so emitting one would trade a build error for a runtime one.
+    /// </remarks>
+    [Fact]
+    public void Rejects_ARequireIntoAPackage_ThatTheRojoProjectDoesNotMap()
+        => WithWorkspace((_, unit) => Utility.AssertDiagnostic(
+                unit.Compile().Diagnostics,
+                InternalCodes.ModuleNotFoundInRojo,
+                "Could not locate package 'math' through the Rojo project; its compiled output at 'dist/packages' is not mapped.",
+                "add a $path mapping to your default.project.json covering 'dist/packages'"
+            ),
+            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(pi);")],
+            rojoProject: AppRojoProjectWithoutPackages
+        );
+
+    /// <remarks>A project with no Rojo tree at all has no instance path to name a package by either, so it fails the same way.</remarks>
+    [Fact]
+    public void Rejects_ARequireIntoAPackage_WhenThereIsNoRojoProject()
+        => WithWorkspace((_, unit) => Utility.AssertDiagnostic(
+                unit.Compile().Diagnostics,
+                InternalCodes.ModuleNotFoundInRojo,
+                "Could not locate package 'math' through the Rojo project; its compiled output at 'dist/packages' is not mapped."
+            ),
+            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(pi);")]
         );
 
     /// <remarks>
@@ -141,7 +281,8 @@ public class SourceRootTest
 
                 Assert.Equal("init.loom", ResolvedModuleOf(unit, "main.loom")?.Name);
             },
-            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(pi);")]
+            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(pi);")],
+            rojoProject: AppRojoProject
         );
 
     [Fact]
@@ -154,7 +295,8 @@ public class SourceRootTest
                 Assert.Equal("vector.loom", ResolvedModuleOf(unit, "main.loom")?.Name);
             },
             appFiles: [("main.loom", "import { zero } from \"math/vector\"\nprint(zero);")],
-            packageFiles: [("init.loom", "export let pi = 3;"), ("vector.loom", "export let zero = 0;")]
+            packageFiles: [("init.loom", "export let pi = 3;"), ("vector.loom", "export let zero = 0;")],
+            rojoProject: AppRojoProject
         );
 
     /// <remarks>A package refers to its own modules by its own name too, without depending on itself to do it.</remarks>
@@ -287,6 +429,8 @@ public class SourceRootTest
     /// <remarks>
     ///     A vendored package sits under the source directory of the project depending on it, so both roots
     ///     load its files. The innermost root owns them, and no file is left compiled twice into two places.
+    ///     Where its output lands does not depend on that: a package is written to the same place whether the
+    ///     package manager vendored its sources or left them in a cache elsewhere.
     /// </remarks>
     [Fact]
     public void Owns_AVendoredPackage_OverTheProjectItSitsInside()
@@ -307,7 +451,10 @@ public class SourceRootTest
             var result = unit.Compile();
             Utility.AssertNoErrors(result);
             Assert.Equal(2, result.Files.Count);
-            Assert.Equal(Path.Combine(package.Files.OutputDirectory, "init.luau"), result.Files.Single(file => file.SourceFile.Name == "init.loom").Path);
+            Assert.Equal(
+                Path.Combine(app.Files.OutputDirectory, "packages", "math", "init.luau"),
+                result.Files.Single(file => file.SourceFile.Name == "init.loom").Path
+            );
         }
         finally
         {
@@ -334,6 +481,7 @@ public class SourceRootTest
         IEnumerable<(string Path, string Source)>? packageFiles = null,
         string? rojoProject = null,
         string? appManifest = null,
+        string? packageManifest = null,
         Action<Workspace>? configure = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
@@ -343,7 +491,7 @@ public class SourceRootTest
             var app = WriteProject(appDirectory, appManifest ?? AppManifest, appFiles ?? [("main.loom", "let x = 1;")]);
             var package = WriteProject(
                 Path.Combine(directory, "packages", "math"),
-                PackageManifest,
+                packageManifest ?? PackageManifest,
                 packageFiles ?? [("init.loom", "export let pi = 3;")]
             );
 

@@ -251,15 +251,18 @@ public sealed class CompilationUnit(SourceRootSet roots, DiagnosticOptions? diag
     }
 
     /// <summary>
-    ///     Writes every file whose own project asked for output. <see cref="LoomConfig.NoEmit" /> is a
-    ///     per-project setting, so a unit can emit its entry project while leaving the output of a dependency
-    ///     it only compiled to type-check against exactly as it found it.
+    ///     Writes every compiled file, dependencies included, when the entry project asked for output.
+    ///     <see cref="LoomConfig.NoEmit" /> is read off that project alone: a dependency's compiled output is
+    ///     part of the build consuming it — written into its output directory, and required from its instance
+    ///     tree — so a library author's own choice not to emit cannot leave a consumer's build missing files.
     /// </summary>
-    private static void Emit(IEnumerable<CompiledFile> compiledFiles)
+    private void Emit(IEnumerable<CompiledFile> compiledFiles)
     {
+        if (Config.NoEmit)
+            return;
+
         foreach (var file in compiledFiles)
-            if (!file.Root.Config.NoEmit)
-                FileManager.WriteCompiledFile(file);
+            FileManager.WriteCompiledFile(file);
     }
 
     private CompiledFile? AnalyzeAndCache(Compiler compiler, ParsedFile parsedFile, DiagnosticBag? moduleDiagnostics, List<FailedFile> failures)

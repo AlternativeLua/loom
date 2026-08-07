@@ -40,8 +40,12 @@ before claiming done.
       compiler bug path).
     - `Pipeline/` — `Compiler.cs` pipeline orchestration; `CompilationUnit.cs` multi-file compile with a two-phase parse-analyze step to support modules.
       A unit spans a `SourceRootSet`: one `SourceRoot` (a `LoomConfig` plus the files under its source directory) per project it compiles — the entry
-      project, plus one per source-distributed dependency. Output path, `no_emit` and the boundary a relative import may not cross come from
-      `Roots.Of(file)`, never from the unit's own `Config`
+      project, plus one per source-distributed dependency. The boundary a relative import may not cross comes from `Roots.Of(file)`, never from the unit's
+      own `Config`; where a file's Luau goes is `Roots.OutputPathOf(file)`'s single answer, used by both the writer and the require-path resolver.
+      **Install-location contract:** a dependency's output is written into the *entry* project's output directory, under
+      `<output>/packages/<scope>/<name>` — compiled output is consumer-specific (it names the entry project's runtime and is checked against its project
+      type's intrinsics), so it cannot live beside sources a package manager may share. One `$path` covering the project's output therefore covers every
+      package, whatever the PM did with the sources. `no_emit` is read off the entry project alone for the same reason
 - `Loom.Luau/` — Luau output AST + renderer (`LuauFactory`, `RenderState`, `AST/`)
 - `Loom.Config/` — `loom-config.toml` reader (Tomlyn). `ProjectType` (default `game`), `Debug` (default `false`, for emitting debug diagnostics) `FilesConfig`:
   `SourceDirectory` (default `src`) → `OutputDirectory` (default `dist`). Package identity lives here too: `[package]` (`PackageConfig`, with `PackageName` and
