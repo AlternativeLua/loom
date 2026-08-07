@@ -110,7 +110,7 @@ internal sealed class Watcher(DiagnosticOptions diagnosticOptions)
     // path is just its new content, not a structural change.
     private void OnSourceCreatedOrChanged(BlockingCollection<string?> events, FileSystemEventArgs e) =>
         events.Add(
-            _unit.SourceFiles.Exists(file => file.AbsolutePath == e.FullPath)
+            _unit.SourceFiles.FirstOrDefault(file => file.AbsolutePath == e.FullPath) != null
                 ? e.FullPath
                 : null
         );

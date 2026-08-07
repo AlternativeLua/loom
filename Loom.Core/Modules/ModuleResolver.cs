@@ -12,6 +12,8 @@ namespace Loom.Core.Modules;
 /// <remarks>
 ///     Paths are compared case-sensitively even where the file system is not, because Roblox requires are.
 ///     Declaration files are ambient globals rather than modules, so they are never importable.
+///     A relative specifier may not leave the importing file's own root: reaching out of one project and into
+///     another is what a package specifier is for, not what <c>"../"</c> is for.
 /// </remarks>
 public sealed class ModuleResolver
 {
@@ -22,9 +24,9 @@ public sealed class ModuleResolver
     /// <summary>The same modules keyed without regard to case, to tell a typo from a casing mistake.</summary>
     private readonly Dictionary<string, SourceFile> _modulesByPathIgnoringCase;
 
-    private readonly string _sourceDirectory;
+    private readonly SourceRootSet _roots;
 
-    public ModuleResolver(IEnumerable<SourceFile> files, string sourceDirectory)
+    public ModuleResolver(IEnumerable<SourceFile> files, SourceRootSet roots)
     {
         _modulesByPath = new Dictionary<string, SourceFile>(StringComparer.Ordinal);
         _modulesByPathIgnoringCase = new Dictionary<string, SourceFile>(StringComparer.OrdinalIgnoreCase);
@@ -35,7 +37,7 @@ public sealed class ModuleResolver
             _modulesByPathIgnoringCase.TryAdd(path, file);
         }
 
-        _sourceDirectory = Path.GetFullPath(sourceDirectory);
+        _roots = roots;
     }
 
     public static bool IsRelativeSpecifier(string specifier) =>
@@ -51,7 +53,7 @@ public sealed class ModuleResolver
             return ModuleResolution.Failed(ModuleResolutionStatus.NotFound);
 
         var basePath = Path.GetFullPath(Path.Combine(importingDirectory, specifier));
-        if (!IsInsideSourceDirectory(basePath))
+        if (!_roots.Of(importingFile).Contains(basePath))
             return ModuleResolution.Failed(ModuleResolutionStatus.OutsideSourceDirectory);
 
         SourceFile? caseInsensitiveMatch = null;
@@ -89,8 +91,4 @@ public sealed class ModuleResolver
         yield return basePath + FileManager.LoomExtension;
         yield return Path.Combine(basePath, IndexFileName + FileManager.LoomExtension);
     }
-
-    private bool IsInsideSourceDirectory(string path) =>
-        path == _sourceDirectory
-        || path.StartsWith(_sourceDirectory + Path.DirectorySeparatorChar, StringComparison.Ordinal);
 }

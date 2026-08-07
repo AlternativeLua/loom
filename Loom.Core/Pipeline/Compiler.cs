@@ -66,9 +66,14 @@ public sealed class Compiler(CompilationUnit unit, SourceFile file)
                 var generatorResult = TrackDiagnostics(generator.Generate());
                 var renderedLuau = generatorResult.LuauTree.Render();
 
+                // the file's own project decides where its output goes, which is not the unit's entry project
+                // when the file came from a dependency the unit compiles from source
+                var root = unit.Roots.Of(SourceFile);
+
                 return new CompiledFile(SourceFile)
                 {
-                    Path = FileManager.GetOutputPath(SourceFile, unit.Config),
+                    Root = root,
+                    Path = FileManager.GetOutputPath(SourceFile, root.Config),
                     Diagnostics = DiagnosticBag.Concat(_pipelineDiagnostics, unit.DiagnosticOptions),
                     RenderedLuau = renderedLuau,
                     LuauTree = generatorResult.LuauTree,

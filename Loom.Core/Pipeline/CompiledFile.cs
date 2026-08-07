@@ -10,6 +10,10 @@ namespace Loom.Core.Pipeline;
 public sealed class CompiledFile(SourceFile sourceFile)
 {
     public SourceFile SourceFile { get; } = sourceFile;
+
+    /// <summary>The project the file came from, whose config decided <see cref="Path" /> and whether the file is written at all.</summary>
+    public required SourceRoot Root { get; init; }
+
     public required string Path { get; init; }
     public required DiagnosticBag Diagnostics { get; init; }
     public required string RenderedLuau { get; init; }
