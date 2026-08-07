@@ -122,10 +122,10 @@ public sealed class ModuleGraph
     ///     in case is the likeliest thing the author meant and is worth naming — the bare "could not find it"
     ///     reads like a typo hunt on a file system that does not care about case.
     /// </remarks>
-    private static string? NotFoundHint(SourceFile importingFile, string specifier, SourceFile? caseInsensitiveMatch)
+    private static string? NotFoundHint(ModuleResolver resolver, SourceFile importingFile, string specifier, SourceFile? caseInsensitiveMatch)
     {
         if (caseInsensitiveMatch != null)
-            return $"did you mean '{ModuleResolver.SpecifierOf(importingFile, caseInsensitiveMatch)}'? module paths are case-sensitive";
+            return $"did you mean '{resolver.SpecifierOf(importingFile, caseInsensitiveMatch)}'? module paths are case-sensitive";
 
         return FileManager.IsLoomFile(specifier) ? $"drop the '{FileManager.LoomExtension}' extension from the path" : null;
     }
@@ -181,8 +181,34 @@ public sealed class ModuleGraph
                     parsedFile.File,
                     moduleSpecifier,
                     InternalCodes.UnsupportedModuleSpecifier,
-                    $"Module '{specifier}' is not a relative path.",
-                    "package imports are not supported yet; start the path with './' or '../'"
+                    $"Module '{specifier}' is neither a relative path nor a package name.",
+                    FileManager.IsLoomFile(specifier)
+                        ? $"drop the '{FileManager.LoomExtension}' extension from the path"
+                        : "start the path with './' or '../', or name a package you depend on"
+                );
+
+                return null;
+
+            case ModuleResolutionStatus.PackageNotFound:
+                Report(
+                    diagnostics,
+                    parsedFile.File,
+                    moduleSpecifier,
+                    InternalCodes.PackageNotFound,
+                    $"Cannot find package '{resolution.Package}'.",
+                    $"add '{resolution.Package}' to [dependencies] and install it before importing from it"
+                );
+
+                return null;
+
+            case ModuleResolutionStatus.UndeclaredDependency:
+                Report(
+                    diagnostics,
+                    parsedFile.File,
+                    moduleSpecifier,
+                    InternalCodes.UndeclaredDependency,
+                    $"Package '{resolution.Package}' is not a dependency of this project.",
+                    $"it is only in this build because something else depends on it; add '{resolution.Package}' to [dependencies] to import it yourself"
                 );
 
                 return null;
@@ -217,7 +243,7 @@ public sealed class ModuleGraph
                     moduleSpecifier,
                     InternalCodes.ModuleNotFound,
                     $"Could not find module '{specifier}'.",
-                    NotFoundHint(parsedFile.File, specifier, resolution.CaseInsensitiveMatch)
+                    NotFoundHint(resolver, parsedFile.File, specifier, resolution.CaseInsensitiveMatch)
                 );
 
                 return null;

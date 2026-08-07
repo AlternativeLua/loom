@@ -58,6 +58,12 @@ public sealed class SourceRootSet : IReadOnlyList<SourceRoot>
     /// <summary>The config governing <paramref name="file" />, which is its own root's rather than the unit's.</summary>
     public LoomConfig ConfigOf(SourceFile file) => Of(file).Config;
 
+    /// <summary>
+    ///     The root publishing <paramref name="package" />, which is the root a specifier naming that package
+    ///     resolves in, or <see langword="null" /> when the unit compiles no such package.
+    /// </summary>
+    public SourceRoot? WithPackage(PackageName package) => _roots.Find(root => package.Equals(root.Package?.Name));
+
     /// <summary>Swaps the file already held at <paramref name="file" />'s path for <paramref name="file" /> itself, in whichever root holds it.</summary>
     /// <returns>Whether any root held a file at that path.</returns>
     public bool Replace(SourceFile file)

@@ -32,7 +32,10 @@ before claiming done.
     - `Generation/` — `LuauGenerator` (partial: `.Declarations`, `.Events`, `.Expressions`, `.Interfaces`, `.Match`, `.Statements`, `.Types`),
       `LuauOperatorMap.cs`, `Macros/` with `IMacroProvider` implementations under `Macros/Providers/` (Array, Range, Number, Result, Instance, global
       invocations)
-    - `Modules/` — import/export graphing, resolution, and Luau require() path resolution
+    - `Modules/` — import/export graphing, resolution, and Luau require() path resolution. A relative specifier
+      resolves inside the importing file's own root; a bare one (`math`, `scope/math`, `math/vector`) names the root
+      publishing that package — its `init.loom` when no subpath follows — and only a package the importing root
+      declares in `[dependencies]` is importable
     - `Diagnostics/` — `DiagnosticBag`, severities, `InternalCodes.cs`. Errors flow through diagnostics, never exceptions (top-level `Compiler.Compile` catch =
       compiler bug path).
     - `Pipeline/` — `Compiler.cs` pipeline orchestration; `CompilationUnit.cs` multi-file compile with a two-phase parse-analyze step to support modules.

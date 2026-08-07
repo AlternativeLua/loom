@@ -2,6 +2,7 @@ using Loom.Config;
 using Loom.Core.Diagnostics;
 using Loom.Core.Modules;
 using Loom.Core.Pipeline;
+using Loom.Core.Text;
 
 namespace Loom.Testing;
 
@@ -13,7 +14,11 @@ namespace Loom.Testing;
 [Collection("Assembly")]
 public class SourceRootTest
 {
-    private const string AppManifest = "project_type = \"game\"\n";
+    private const string AppManifest = "project_type = \"game\"\n[dependencies]\nmath = \"^1.0\"\n";
+
+    /// <summary>An app that compiles the package without depending on it, as it would a dependency of a dependency.</summary>
+    private const string AppManifestWithoutDependencies = "project_type = \"game\"\n";
+
     private const string PackageManifest = "project_type = \"library\"\n[package]\nname = \"math\"\nversion = \"1.0.0\"\n";
 
     /// <summary>Maps both projects' output directories into the tree, each under a name of its own.</summary>
@@ -123,6 +128,91 @@ public class SourceRootTest
             rojoProject: AppRojoProject
         );
 
+    /// <remarks>
+    ///     A bare specifier names the package's entry module — the <c>init.loom</c> at the top of its source
+    ///     directory — the way a relative specifier names the <c>init.loom</c> of a folder.
+    /// </remarks>
+    [Fact]
+    public void Resolves_ABareSpecifier_ToTheDependencysEntryModule()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                Assert.Equal("init.loom", ResolvedModuleOf(unit, "main.loom")?.Name);
+            },
+            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(pi);")]
+        );
+
+    [Fact]
+    public void Resolves_ABareSpecifier_WithASubpath_ToAModuleInsideTheDependency()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                Assert.Equal("vector.loom", ResolvedModuleOf(unit, "main.loom")?.Name);
+            },
+            appFiles: [("main.loom", "import { zero } from \"math/vector\"\nprint(zero);")],
+            packageFiles: [("init.loom", "export let pi = 3;"), ("vector.loom", "export let zero = 0;")]
+        );
+
+    /// <remarks>A package refers to its own modules by its own name too, without depending on itself to do it.</remarks>
+    [Fact]
+    public void Resolves_ABareSpecifier_NamingThePackageItIsWrittenIn()
+        => WithWorkspace((_, unit) =>
+            {
+                var result = unit.Compile();
+                Utility.AssertNoErrors(result);
+
+                Assert.Equal("vector.loom", ResolvedModuleOf(unit, "init.loom")?.Name);
+            },
+            packageFiles: [("init.loom", "import { zero } from \"math/vector\"\nexport let pi = zero;"), ("vector.loom", "export let zero = 0;")]
+        );
+
+    /// <remarks>
+    ///     Everything the build compiles is reachable by name, so a package pulled in only because something
+    ///     else depends on it would otherwise be importable by a project that never asked for it — and would
+    ///     vanish the day that other project stopped depending on it.
+    /// </remarks>
+    [Fact]
+    public void Rejects_AnImport_OfAPackage_TheProjectDoesNotDependOn()
+        => WithWorkspace((_, unit) => Utility.AssertDiagnostic(
+                unit.Compile().Diagnostics,
+                InternalCodes.UndeclaredDependency,
+                "Package 'math' is not a dependency of this project.",
+                "it is only in this build because something else depends on it; add 'math' to [dependencies] to import it yourself"
+            ),
+            appFiles: [("main.loom", "import { pi } from \"math\"\nprint(pi);")],
+            appManifest: AppManifestWithoutDependencies
+        );
+
+    [Fact]
+    public void Rejects_APackageSubpath_ThatClimbsOutOfThatPackage()
+        => WithWorkspace((_, unit) => Utility.AssertDiagnostic(
+                unit.Compile().Diagnostics,
+                InternalCodes.ModuleOutsideSourceDirectory,
+                "Module 'math/../../../app/src/main' is outside the source directory."
+            ),
+            appFiles: [("main.loom", "import { pi } from \"math/../../../app/src/main\"\nprint(pi);")]
+        );
+
+    /// <remarks>
+    ///     No relative path reaches into another root, so the module a casing mistake meant has to be named the
+    ///     only way the importing file could have written it: by its package.
+    /// </remarks>
+    [Fact]
+    public void Names_ADependencysModule_ByItsPackage_WhenHintingAtACasingMistake()
+        => WithWorkspace((_, unit) => Utility.AssertDiagnostic(
+                unit.Compile().Diagnostics,
+                InternalCodes.ModuleNotFound,
+                "Could not find module 'math/Vector'.",
+                "did you mean 'math/vector'? module paths are case-sensitive"
+            ),
+            appFiles: [("main.loom", "import { zero } from \"math/Vector\"\nprint(zero);")],
+            packageFiles: [("init.loom", "export let pi = 3;"), ("vector.loom", "export let zero = 0;")]
+        );
+
     [Fact]
     public void Names_ADependencysFiles_ByItsPackage_WhenReportingACycle()
         => WithWorkspace((_, unit) =>
@@ -172,6 +262,15 @@ public class SourceRootTest
         }
     }
 
+    /// <summary>The module the single import of <paramref name="fileName" /> resolved to.</summary>
+    private static SourceFile? ResolvedModuleOf(CompilationUnit unit, string fileName)
+    {
+        var graph = Assert.IsType<ModuleGraph>(unit.ModuleGraph);
+        var file = graph.Order.First(parsed => parsed.File.Name == fileName);
+
+        return graph.GetResolvedModule(Assert.Single(file.Imports));
+    }
+
     /// <summary>
     ///     Runs <paramref name="assert" /> against a unit spanning a throwaway workspace's two projects: the
     ///     entry app in <c>app/</c>, and the <c>math</c> package it depends on in <c>packages/math/</c>.
@@ -181,13 +280,14 @@ public class SourceRootTest
         IEnumerable<(string Path, string Source)>? appFiles = null,
         IEnumerable<(string Path, string Source)>? packageFiles = null,
         string? rojoProject = null,
+        string? appManifest = null,
         Action<Workspace>? configure = null)
     {
         var directory = Path.Combine(Path.GetTempPath(), "loom-test-" + Guid.NewGuid());
         try
         {
             var appDirectory = Path.Combine(directory, "app");
-            var app = WriteProject(appDirectory, AppManifest, appFiles ?? [("main.loom", "let x = 1;")]);
+            var app = WriteProject(appDirectory, appManifest ?? AppManifest, appFiles ?? [("main.loom", "let x = 1;")]);
             var package = WriteProject(
                 Path.Combine(directory, "packages", "math"),
                 PackageManifest,
