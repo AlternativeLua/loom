@@ -60,7 +60,7 @@ internal sealed class Watcher(DiagnosticOptions diagnosticOptions)
                     var changed = _pending.ToHashSet();
                     _pending.Clear();
 
-                    Log.OutputResult(_unit.Recompile(changed));
+                    Log.OutputResult(_unit.Recompile(changed.ToDictionary(k => k, File.ReadAllText)));
                     continue;
                 }
 
@@ -99,9 +99,9 @@ internal sealed class Watcher(DiagnosticOptions diagnosticOptions)
     private static FileSystemWatcher CreateProjectWatcher(LoomConfig config, BlockingCollection<string?> events)
     {
         var watcher = new FileSystemWatcher(config.ProjectDirectory) { NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName, EnableRaisingEvents = true };
-
         watcher.Changed += (_, e) => OnProjectFileChanged(events, e);
         watcher.Created += (_, e) => OnProjectFileChanged(events, e);
+        
         return watcher;
     }
 

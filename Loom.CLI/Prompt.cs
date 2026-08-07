@@ -60,7 +60,6 @@ internal static class Prompt
 
             var option = options[i];
             var selected = i == selectedIndex;
-
             var pointer = selected
                 ? $"{Colors.Bold}{Colors.Pink}❯{Colors.Reset}"
                 : " ";
@@ -72,7 +71,6 @@ internal static class Prompt
             Console.Write(pointer);
             Console.Write(' ');
             Console.Write(label);
-
             if (!string.IsNullOrEmpty(option.Description))
             {
                 Console.Write("  ");
@@ -120,25 +118,6 @@ internal static class Prompt
             return options[choice - 1].Value;
 
         return options[0].Value;
-    }
-
-    private static void Render<T>(IReadOnlyList<PromptOption<T>> options, int selectedIndex, int top)
-    {
-        Console.SetCursorPosition(0, top);
-        for (var i = 0; i < options.Count; i++)
-        {
-            var option = options[i];
-            var pointer = i == selectedIndex ? $"{Colors.Bold}{Colors.Pink}❯{Colors.Reset}" : " ";
-            var label = i == selectedIndex ? $"{Colors.Bold}{Colors.White}{option.Label}{Colors.Reset}" : $"{Colors.Gray}{option.Label}{Colors.Reset}";
-            var description = option.Description == null ? "" : $"  {Colors.Dim}{option.Description}{Colors.Reset}";
-
-            Console.Write($"{pointer} {label}{description}");
-            Console.Write(new string(' ', Math.Max(0, Console.WindowWidth - 1 - VisibleLength(option, pointer))));
-            Console.WriteLine();
-        }
-
-        Console.WriteLine($"{Colors.Dim}(use ↑/↓ then Enter){Colors.Reset}");
-        Console.SetCursorPosition(0, top);
     }
 
     private static int VisibleLength<T>(PromptOption<T> option, string pointer) =>

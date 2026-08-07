@@ -12,13 +12,12 @@ namespace Loom.Core.Pipeline;
 
 public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagnosticOptions = null)
 {
-    public LoomConfig Config { get; } = config;
-
     /// <summary>
     ///     Reporting behavior handed to every <see cref="DiagnosticBag" /> the unit's stages create. Defaults
     ///     to <see cref="DiagnosticOptions.Default" />, so a unit only fails fast when its creator asks for it.
     /// </summary>
     public DiagnosticOptions DiagnosticOptions { get; } = diagnosticOptions ?? DiagnosticOptions.Default;
+    public LoomConfig Config { get; } = config;
 
     public List<SourceFile> SourceFiles { get; } = FileManager.LoadDirectory(config.Files.SourceDirectory);
     public Dictionary<Symbol, Type> Globals { get; } = [];
@@ -40,11 +39,10 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
     /// </summary>
     public ModuleGraph? ModuleGraph { get; private set; }
 
-    /// <summary>Every file's parsed form, keyed by absolute path, from the last successful <see cref="Compile()" /> or <see cref="Recompile(IReadOnlySet{string})" />. Lets <see cref="Recompile(IReadOnlySet{string})" /> rebuild the module graph without re-parsing files that did not change.</summary>
-    private readonly Dictionary<string, (Compiler Compiler, ParsedFile Parsed)> _parsedByPath = [];
+    private readonly Dictionary<string, (Compiler Compiler, ParsedFile Parsed)> _parsedByPath = new(PathComparer);
+    private readonly Dictionary<string, (CompiledFile CompiledFile, TimeSpan AnalyzeDuration)> _compiledByPath = new(PathComparer);
 
-    /// <summary>Every file's last successful analysis, keyed by absolute path, alongside how long that analysis took - the figure <see cref="Recompile(IReadOnlySet{string})" /> credits itself with when it reuses the entry instead of redoing the work.</summary>
-    private readonly Dictionary<string, (CompiledFile CompiledFile, TimeSpan AnalyzeDuration)> _compiledByPath = [];
+    private static readonly StringComparer PathComparer = OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     public CompilationResult Compile()
     {
@@ -102,30 +100,32 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         }
     }
 
-    /// <summary>
-    ///     Recompiles only what actually needs it: <paramref name="changedAbsolutePaths" /> and, per file, only
-    ///     the dependents whose own re-analysis found that file's exports actually changed shape - a file
-    ///     touched without changing what it exports never invalidates anything downstream of it. Everything
-    ///     else is reused verbatim from the last successful <see cref="Compile()" /> or <see cref="Recompile(IReadOnlySet{string})" />.
-    ///     Falls back to a full <see cref="Compile()" /> when there is no prior compile to diff against, or when
-    ///     a changed path names a file this unit has never seen (added since construction, or deleted) - this
-    ///     unit's <see cref="SourceFiles" /> is fixed at construction time, so a structural change to the file
-    ///     set needs a new <see cref="CompilationUnit" />, not a recompile of this one.
-    /// </summary>
-    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths) => Recompile(changedAbsolutePaths, static _ => null);
+    public CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths) => Recompile(NormalizePaths(changedAbsolutePaths), static _ => null);
 
-    public CompilationResult Recompile(IReadOnlyDictionary<string, string> changedContents) =>
-        Recompile(changedContents.Keys.ToHashSet(), path => changedContents[path]);
+    public CompilationResult Recompile(IReadOnlyDictionary<string, string> changedContents)
+    {
+        var normalizedContents = new Dictionary<string, string>(PathComparer);
+        foreach (var (path, content) in changedContents)
+            normalizedContents[NormalizePath(path)] = content;
+
+        return Recompile(
+            normalizedContents.Keys.ToHashSet(),
+            path => normalizedContents[path]
+        );
+    }
 
     private CompilationResult Recompile(IReadOnlySet<string> changedAbsolutePaths, Func<string, string?> resolveContent)
     {
+        changedAbsolutePaths = NormalizePaths(changedAbsolutePaths);
+
         foreach (var path in changedAbsolutePaths)
         {
             var content = resolveContent(path);
             if (content == null)
                 continue;
 
-            var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
+            var index = SourceFiles.FindIndex(existing => PathComparer.Equals(existing.AbsolutePath, path));
+
             if (index >= 0)
                 SourceFiles[index] = new SourceFile(path, content);
         }
@@ -142,7 +142,7 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         foreach (var path in changedAbsolutePaths)
         {
             var file = new SourceFile(path, resolveContent(path));
-            var index = SourceFiles.FindIndex(existing => existing.AbsolutePath == path);
+            var index = SourceFiles.FindIndex(existing => PathComparer.Equals(existing.AbsolutePath, path));
             if (index >= 0)
                 SourceFiles[index] = file;
 
@@ -174,7 +174,6 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
         var dirty = new HashSet<string>(changedAbsolutePaths);
         var reanalyzed = new List<SourceFile>();
         var timeSaved = TimeSpan.Zero;
-
         var compiledDeclarationFiles = analyzeAll(parsedFile => parsedFile.File.IsDeclaration);
         PopulateGlobals(compiledDeclarationFiles);
 
@@ -185,10 +184,14 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
             DiagnosticOptions
         );
 
-        if (!diagnostics.ContainsErrors() && !Config.NoEmit)
-            foreach (var file in compiledFiles)
-                if (reanalyzed.Contains(file.SourceFile))
-                    FileManager.WriteCompiledFile(file);
+        if (diagnostics.ContainsErrors() || Config.NoEmit)
+            return new CompilationResult(compiledFiles, diagnostics)
+            {
+                Failures = failures, Reanalyzed = reanalyzed, Elapsed = stopwatch.Elapsed, EstimatedTimeSaved = timeSaved
+            };
+
+        foreach (var file in compiledFiles.Where(file => reanalyzed.Contains(file.SourceFile)))
+            FileManager.WriteCompiledFile(file);
 
         return new CompilationResult(compiledFiles, diagnostics)
         {
@@ -222,9 +225,10 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
 
                 files.Add(compiledFile);
                 reanalyzed.Add(parsedFile.File);
-                if (!ExportsMatch(previous, compiledFile))
-                    foreach (var dependent in dependents)
-                        dirty.Add(dependent.AbsolutePath);
+                if (ExportsMatch(previous, compiledFile)) continue;
+
+                foreach (var dependent in dependents)
+                    dirty.Add(dependent.AbsolutePath);
             }
 
             return files;
@@ -286,7 +290,6 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
             return null;
 
         ModuleGraph = BuildModuleGraph([(compiler, parsedFile)], []);
-
         return compiler.Analyze(parsedFile, ModuleGraph?.GetDiagnostics(file));
     }
 
@@ -343,5 +346,14 @@ public sealed class CompilationUnit(LoomConfig config, DiagnosticOptions? diagno
                 Globals.Add(symbol, type);
             }
         }
+    }
+
+    private static string NormalizePath(string path) => Path.GetFullPath(path);
+
+    private static HashSet<string> NormalizePaths(IEnumerable<string> paths)
+    {
+        var normalized = new HashSet<string>(PathComparer);
+        foreach (var path in paths) normalized.Add(NormalizePath(path));
+        return normalized;
     }
 }
